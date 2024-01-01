@@ -1,0 +1,70 @@
+module a (
+inp3,
+inp2,
+inp1,
+out1
+);
+
+// Start PIs
+input inp3;
+input inp2;
+input inp1;
+
+// Start POs
+output out1;
+
+// Start wires
+wire n3;
+wire n2;
+wire n1;
+wire out1;
+wire inp3;
+wire inp2;
+wire inp1;
+
+// Start cells
+INVX1 u3 ( .Y(n3) .A(n1) );
+NOR2X1 u4 ( .Y(out1) .B(n3) .A(n2) );
+OR2X1 u2 ( .Y(n1) .B(inp3) .A(inp2) );
+AND2X1 u1 ( .Y(n2) .B(n1) .A(inp1) );
+
+endmodule
+digraph TimingGraph {
+  "u4:A";
+  "inp2";
+  "u2:B";
+  "inp3";
+  "u1:Y";
+  "u3:A";
+  "u1:B";
+  "out1";
+  "u1:A";
+  "u2:Y";
+  "u4:B";
+  "inp1";
+  "u3:Y";
+  "u4:Y";
+  "u2:A";
+  "u1:Y" -> "u4:A";
+  "u3:Y" -> "u4:B";
+  "u4:Y" -> "out1";
+  "u4:B" -> "u4:Y";
+  "u4:A" -> "u4:Y";
+  "u4:B" -> "u4:Y";
+  "u4:A" -> "u4:Y";
+  "u2:Y" -> "u3:A";
+  "u3:A" -> "u3:Y";
+  "u3:A" -> "u3:Y";
+  "inp2" -> "u2:A";
+  "inp3" -> "u2:B";
+  "u2:Y" -> "u1:B";
+  "u2:B" -> "u2:Y";
+  "u2:A" -> "u2:Y";
+  "u2:B" -> "u2:Y";
+  "u2:A" -> "u2:Y";
+  "inp1" -> "u1:A";
+  "u1:B" -> "u1:Y";
+  "u1:A" -> "u1:Y";
+  "u1:B" -> "u1:Y";
+  "u1:A" -> "u1:Y";
+}
