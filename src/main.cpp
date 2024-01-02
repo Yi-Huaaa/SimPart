@@ -29,6 +29,11 @@ int main(int argc, char* argv[]){
     Gate **gates = construct_graph(input_file_circuit, num_gate+num_PIs+num_POs, num_wire, num_PIs, num_POs);
     fclose(input_file_circuit);
 
+/**
+ * todo: faults, and patterns need to handle the re-order index. 
+ * 
+*/
+
     /* Readin data - faults*/ 
     FILE *input_file_faults = fopen(argv[2], "r");
     assert(input_file_faults != NULL);
@@ -52,15 +57,24 @@ int main(int argc, char* argv[]){
     fclose(input_file_patterns);
 
 
-    // Good cases
-    
 
-    // /* PPSFP */
-    // for (auto f = 0; f < faults; f++) {
-    //     for (auto p = 0; p < patterns; p++) {
-    //         PPSFP ();
-    //     }
-    // }
+    // Good cases
+    unsigned int team = (num_pattern+deal_bits-1)/deal_bits;
+    printf("team = %d\n", team);
+    // 
+    for (unsigned int i = 0; i < team; i++) {
+        // good cases
+        // Note: if num_PIs < 32, the redundant bits's answer may be wrong but won't affect the correct answer, no need to handle it.
+        unsigned int *good_results = good_case(gates, faults, patterns[i], num_PIs, num_POs, num_PIs+num_POs+num_gate, num_wire, num_fault, num_pattern);
+        // /* PPSFP */
+        // for (auto f = 0; f < faults; f++) {
+        //     for (auto p = 0; p < patterns; p++) {
+        //         PPSFP ();
+        //     }
+        // }
+    }
+
+
 
 
     /* Free data */
@@ -69,6 +83,11 @@ int main(int argc, char* argv[]){
     }
     free(gates);
     free(faults);
+    for (unsigned int i = 0; i < team; i++) {
+        free_pattern(patterns[i]);
+    }
+    free(patterns);
+
 
     return 0;
 }

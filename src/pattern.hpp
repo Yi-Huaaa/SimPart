@@ -14,7 +14,7 @@ typedef struct Pattern {
 // Functions 
 Pattern ** construct_pattern (FILE *input_file, int num_of_PIs, int num_patterns);
 void print_pattern (Pattern **patterns, unsigned int team, int num_PIs);
-
+void free_pattern (Pattern *patterns);
 
 
 

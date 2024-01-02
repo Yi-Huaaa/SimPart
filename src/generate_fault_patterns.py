@@ -127,9 +127,28 @@ def write_patterns_to_file_new(num_of_PIs, num_of_patterns, patterns, output_fil
         file.write('\n')
 
 
+def write_simple_testcase_to_file(output_flst_file, output_ptn_file):
+    with open(output_flst_file, 'w') as file:
+        file.write("2" + '\n')
+        file.write("0 1" + '\n')
+        file.write("5 0" + '\n')
+        file.write('\n')
+
+    with open(output_ptn_file, 'w') as file:
+        file.write("3 3" + '\n')
+        file.write("2" + '\n')
+        file.write("4" + '\n')
+        file.write("1" + '\n')
+        file.write('\n')
+        file.write("010" + '\n')
+        file.write("100" + '\n')
+        file.write("001" + '\n')
+        file.write('\n')
+
 
 def main():
     parser = argparse.ArgumentParser(description='Generate unique fault patterns and write them to a file.')
+    parser.add_argument('simple', type=int, help='Generate simple testcase')
     parser.add_argument('num_of_wires', type=int, help='Number of wires')
     parser.add_argument('num_of_faults', type=int, help='Number of fault patterns to generate')
     parser.add_argument('output_flst_file', type=str, help='Output file to write the fault patterns')
@@ -138,19 +157,21 @@ def main():
     parser.add_argument('output_ptn_file', type=str, help='Output file to write the patterns')
     args = parser.parse_args()
 
-    print("Generate faults file: benchmark/simple.flst")
-    fault_patterns = generate_fault_patterns(args.num_of_wires, args.num_of_faults)
-    write_fault_patterns_to_file(args.num_of_faults, fault_patterns, args.output_flst_file)
+    if (args.simple == 1):
+        write_simple_testcase_to_file(args.output_flst_file, args.output_ptn_file)
+    else:
+        print("Generate faults file: benchmark/simple.flst")
+        fault_patterns = generate_fault_patterns(args.num_of_wires, args.num_of_faults)
+        write_fault_patterns_to_file(args.num_of_faults, fault_patterns, args.output_flst_file)
 
+        # print("Generate patterns file: benchmark/simple.ptn")
+        # generated_patterns = generate_patterns(args.num_of_PIs, args.num_of_output_patterns)
+        # # write_patterns_to_file(args.num_of_output_patterns, generated_patterns, args.output_ptn_file)
+        # write_patterns_to_file_new(args.num_of_PIs, args.num_of_output_patterns, generated_patterns, args.output_ptn_file)
 
-    # print("Generate patterns file: benchmark/simple.ptn")
-    # generated_patterns = generate_patterns(args.num_of_PIs, args.num_of_output_patterns)
-    # # write_patterns_to_file(args.num_of_output_patterns, generated_patterns, args.output_ptn_file)
-    # write_patterns_to_file_new(args.num_of_PIs, args.num_of_output_patterns, generated_patterns, args.output_ptn_file)
-
-    print("Generate patterns file:", args.output_ptn_file)
-    generated_patterns = generate_patterns(args.num_of_PIs, args.num_of_output_patterns)
-    write_patterns_to_file_new(args.num_of_PIs, args.num_of_output_patterns, generated_patterns, args.output_ptn_file)
+        print("Generate patterns file:", args.output_ptn_file)
+        generated_patterns = generate_patterns(args.num_of_PIs, args.num_of_output_patterns)
+        write_patterns_to_file_new(args.num_of_PIs, args.num_of_output_patterns, generated_patterns, args.output_ptn_file)
 
 
 

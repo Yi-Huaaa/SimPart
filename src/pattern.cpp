@@ -12,7 +12,7 @@ Pattern *new_pattern (FILE *input_file, int num_PIs) {
     pattern->value = (unsigned int *)malloc(num_PIs*sizeof(unsigned int));
     for (int i = 0; i < num_PIs; i++) {
         assert(fscanf(input_file, "%u", &(pattern->value[i])) == 1);
-        printf("debug: %u\n", pattern->value[i]);
+        printf("debug_%d: %u\n", i, pattern->value[i]);
     }
     return pattern;
 }
@@ -31,6 +31,10 @@ Pattern **construct_pattern (FILE *input_file, int num_PIs, int num_pattern) {
     return patterns;
 }
 
+void free_pattern (Pattern *patterns) {
+    free(patterns->value);
+    free(patterns);
+}
 
 void print_pattern (Pattern **patterns, unsigned int team, int num_PIs) {
     for (unsigned int i = 0; i < team; i++) {

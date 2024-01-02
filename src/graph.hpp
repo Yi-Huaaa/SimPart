@@ -17,7 +17,7 @@ typedef struct Gate {
 
     int num_of_inputs;
     Gate **input_gates; // 該 gate 的 input gates, 屬於下家存上家
-    int output_value; // 該 Gate 的 output value
+    unsigned int output_value; // 該 Gate 的 output value
 
 } Gate;
 

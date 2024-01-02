@@ -166,5 +166,5 @@ void print_gate(Gate *gate) {
         printf("%p, ", gate->input_gates[i]);
     }
     printf("]\n");
-    printf("output_value: %d\n", gate->output_value);
+    printf("output_value: %u\n", gate->output_value);
 }
