@@ -7,7 +7,7 @@
 
 #include "graph.hpp"
 #include "fault.hpp"
-// #include "pattern.hpp"
+#include "pattern.hpp"
 #include "simulation.hpp"
 
 
@@ -40,20 +40,20 @@ int main(int argc, char* argv[]){
     fclose(input_file_faults);    
 
 
-    // /* Readin data - patterns */ 
-    // FILE *input_file_patterns = fopen(argv[3], "r");
-    // assert(input_file_patterns != NULL);
-    // int num_pattern;
-    // assert(fscanf(input_file_patterns, "%d", &num_pattern) == 1);
+    /* Readin data - patterns */ 
+    FILE *input_file_patterns = fopen(argv[3], "r");
+    assert(input_file_patterns != NULL);
+    // todo: delete the num_of_PIs here
+    int num_of_PIs, num_pattern;
+    assert(fscanf(input_file_patterns, "%d%d", &num_of_PIs, &num_pattern) == 2);
 
-    // /* Constrcut faults */
-    // construt_pattern (input_file_patterns, num_pattern);
-
-    // fclose(input_file_patterns);
+    /* Constrcut faults */
+    Pattern** patterns = construct_pattern(input_file_patterns, num_of_PIs, num_pattern);
+    fclose(input_file_patterns);
 
 
     // Good cases
-
+    
 
     // /* PPSFP */
     // for (auto f = 0; f < faults; f++) {

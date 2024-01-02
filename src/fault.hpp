@@ -1,6 +1,8 @@
 #ifndef FAULT_H
 #define FAULT_H
 
+#include <stdio.h>
+
 typedef struct Fault {
     int wire;
     int SA_fault;

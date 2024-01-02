@@ -44,8 +44,6 @@ def write_fault_patterns_to_file(num_of_faults, fault_patterns, output_file):
             file.write(f"{wire_index} {fault_value}\n")
 
 
-
-
 # generate patterns 
 def generate_patterns(num_of_PIs, num_of_output_patterns):
     if num_of_PIs <= 0 or num_of_output_patterns <= 0:
@@ -69,6 +67,67 @@ def write_patterns_to_file(num_of_patterns, patterns, output_file):
         for pattern in patterns:
             file.write("".join(map(str, pattern)) + '\n')
 
+# def write_patterns_to_file_new(num_of_PIs, num_of_patterns, patterns, output_file):
+#     with open(output_file, 'w') as file:
+#         file.write(str(num_of_PIs) + ' ' + str(num_of_patterns) + '\n')
+#         for b in range(num_of_PIs):
+#             file.write(''.join(str(pattern[b]) for pattern in patterns) + '\n')
+#             # file.write(' '.join(str(pattern[b]) for pattern in patterns) + '\n')
+            
+def write_patterns_to_file_new(num_of_PIs, num_of_patterns, patterns, output_file):
+    with open(output_file, 'w') as file:
+        file.write(f"{num_of_PIs} {num_of_patterns}\n")
+
+        # # Iterate over each bit position
+        # for b in range(num_of_PIs):
+        #     # Extract the bits for the current bit position from all patterns
+        #     bits_for_position = [str(pattern[b]) for pattern in patterns]
+            
+        #     # Break the continuous string of bits into chunks of 32 bits
+        #     chunks_of_32_bits = ["".join(bits_for_position[i:i+32]) for i in range(0, len(bits_for_position), 32)]
+            
+        #     # Write the chunks for the current bit position
+        #     file.write(" ".join(chunks_of_32_bits) + '\n')
+            
+        # file.write('\n')
+
+        # Iterate over each bit position
+        team = 1
+        if num_of_patterns/32 > 1:
+            team = int(num_of_patterns/32)
+        
+        # print decimal format
+        for t in range(team):
+            for b in range(num_of_PIs):
+                # Extract the bits for the current bit position from all patterns
+                bits_for_position = [str(pattern[b]) for pattern in patterns]
+                
+                accum_bits = t*32
+                # Break the continuous string of bits into chunks of 32 bits
+                chunks_of_32_bits = ["".join(bits_for_position[accum_bits:accum_bits+32])]
+                
+                # Write the chunks for the current bit position
+                file.write(str(int(" ".join(chunks_of_32_bits), 2)) + ' ')
+            file.write('\n')
+        file.write('\n')
+
+        # print binary format
+        for t in range(team):
+            for b in range(num_of_PIs):
+                # Extract the bits for the current bit position from all patterns
+                bits_for_position = [str(pattern[b]) for pattern in patterns]
+                
+                accum_bits = t*32
+                # Break the continuous string of bits into chunks of 32 bits
+                chunks_of_32_bits = ["".join(bits_for_position[accum_bits:accum_bits+32])]
+                
+                # Write the chunks for the current bit position
+                file.write(" ".join(chunks_of_32_bits) + ' ')
+            file.write('\n')
+        file.write('\n')
+
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate unique fault patterns and write them to a file.')
     parser.add_argument('num_of_wires', type=int, help='Number of wires')
@@ -84,9 +143,16 @@ def main():
     write_fault_patterns_to_file(args.num_of_faults, fault_patterns, args.output_flst_file)
 
 
-    print("Generate patterns file: benchmark/simple.ptn")
+    # print("Generate patterns file: benchmark/simple.ptn")
+    # generated_patterns = generate_patterns(args.num_of_PIs, args.num_of_output_patterns)
+    # # write_patterns_to_file(args.num_of_output_patterns, generated_patterns, args.output_ptn_file)
+    # write_patterns_to_file_new(args.num_of_PIs, args.num_of_output_patterns, generated_patterns, args.output_ptn_file)
+
+    print("Generate patterns file:", args.output_ptn_file)
     generated_patterns = generate_patterns(args.num_of_PIs, args.num_of_output_patterns)
-    write_patterns_to_file(args.num_of_output_patterns, generated_patterns, args.output_ptn_file)
+    write_patterns_to_file_new(args.num_of_PIs, args.num_of_output_patterns, generated_patterns, args.output_ptn_file)
+
+
 
 if __name__ == "__main__":
     main()

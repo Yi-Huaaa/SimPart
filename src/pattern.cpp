@@ -1,11 +1,58 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <assert.h>
 
 #include "pattern.hpp"
 
-using namespace std;
 
-void construt_pattern (FILE *input_file, int num_patterns) {
+Pattern *new_pattern (FILE *input_file, int num_PIs) {
+    Pattern *pattern = (Pattern *)malloc(sizeof(Pattern));
+    pattern->num_PIs = num_PIs;
+    pattern->value = (unsigned int *)malloc(num_PIs*sizeof(unsigned int));
+    for (int i = 0; i < num_PIs; i++) {
+        assert(fscanf(input_file, "%u", &(pattern->value[i])) == 1);
+        printf("debug: %u\n", pattern->value[i]);
+    }
+    return pattern;
+}
+
+Pattern **construct_pattern (FILE *input_file, int num_PIs, int num_pattern) {
+    unsigned int team = (num_pattern+deal_bits-1)/deal_bits; // ceiling
+    Pattern **patterns = (Pattern **)malloc(team*sizeof(Pattern *));
+    for (unsigned int i = 0; i < team; i++) {
+        patterns[i] = new_pattern(input_file, num_PIs);
+    }
+
+#ifdef print_patterns    
+    print_pattern(patterns, team, num_PIs);
+#endif
     
+    return patterns;
+}
+
+
+void print_pattern (Pattern **patterns, unsigned int team, int num_PIs) {
+    for (unsigned int i = 0; i < team; i++) {
+        printf("[%u, %u] bits = [", deal_bits*i, deal_bits*(i+1));
+        for (int j = 0; j < num_PIs; j++) {
+            // printf("%b, ", (patterns[i]->value[j]));
+            printBits_stack(sizeof(patterns[i]->value[j]), &patterns[i]->value[j]);
+        }
+        printf("]\n");
+    }    
+}
+
+void printBits_stack(size_t const size, void const * const ptr) {
+    unsigned char *b = (unsigned char*) ptr;
+    unsigned char byte;
+    int i, j;
+    
+    for (i = size-1; i >= 0; i--) {
+        for (j = 7; j >= 0; j--) {
+            byte = (b[i] >> j) & 1;
+            printf("%u", byte);
+        }
+    }
+    puts("");
 }
