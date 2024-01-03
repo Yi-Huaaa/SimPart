@@ -5,16 +5,13 @@
 #include <assert.h>
 // #include <omp.h>
 
+#include "print_check.hpp"
 #include "graph.hpp"
 #include "fault.hpp"
 #include "pattern.hpp"
 #include "simulation.hpp"
 
-
-
-void PPSFP () {
-
-}
+#define simple_testcase_bits 3
 
 
 int main(int argc, char* argv[]){
@@ -24,9 +21,10 @@ int main(int argc, char* argv[]){
     assert(input_file_circuit != NULL);
     int num_PIs, num_POs, num_gate, num_wire;
     assert(fscanf(input_file_circuit, "%d%d%d%d", &num_PIs, &num_POs, &num_gate, &num_wire) == 4);
-    
+    int total_gates = num_PIs+num_POs+num_gate;
+
     /* Constrcut graph (gate) */
-    Gate **gates = construct_graph(input_file_circuit, num_gate+num_PIs+num_POs, num_wire, num_PIs, num_POs);
+    Gate **gates = construct_graph(input_file_circuit, total_gates, num_wire, num_PIs, num_POs);
     fclose(input_file_circuit);
 
 /**
@@ -41,7 +39,7 @@ int main(int argc, char* argv[]){
     assert(fscanf(input_file_faults, "%d", &num_fault) == 1);
 
     /* Constrcut faults */
-    Fault *faults = construct_fault(input_file_faults, num_wire, num_fault);
+    Fault *faults = construct_fault(input_file_faults, num_fault);
     fclose(input_file_faults);    
 
 
@@ -58,24 +56,25 @@ int main(int argc, char* argv[]){
 
 
 
-    // Good cases
+    // Simulation
     unsigned int team = (num_pattern+deal_bits-1)/deal_bits;
-    printf("team = %d\n", team);
-    // 
+    int *found_fault_table = (int *)malloc((2*num_fault)*sizeof(int)); memset(found_fault_table, 0, (2*num_fault)*sizeof(int));
+    
     for (unsigned int i = 0; i < team; i++) {
-        // good cases
-        // Note: if num_PIs < 32, the redundant bits's answer may be wrong but won't affect the correct answer, no need to handle it.
-        unsigned int *good_results = good_case(gates, faults, patterns[i], num_PIs, num_POs, num_PIs+num_POs+num_gate, num_wire, num_fault, num_pattern);
-        // /* PPSFP */
-        // for (auto f = 0; f < faults; f++) {
-        //     for (auto p = 0; p < patterns; p++) {
-        //         PPSFP ();
-        //     }
-        // }
+        // good simulation
+        unsigned int *good_results = good_case(gates, patterns[i], total_gates, simple_testcase_bits);
+        // Faults simulation 
+        for (int j = 0; j < num_fault; j++) {
+            // record whether the fault can be found
+            found_fault_table[2*j] = SA_faults(gates, faults[j], patterns[i], total_gates, num_POs, good_results, simple_testcase_bits);
+            // record which pattern found the fault
+            found_fault_table[2*j+1] = i;
+        }
     }
 
-
-
+#ifdef print_found_fault_table
+    printf_found_fault_table (found_fault_table, num_fault);
+#endif
 
     /* Free data */
     for (int i = 0; i < num_gate; i++) {
@@ -91,3 +90,4 @@ int main(int argc, char* argv[]){
 
     return 0;
 }
+

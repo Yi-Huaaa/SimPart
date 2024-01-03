@@ -130,8 +130,13 @@ def write_patterns_to_file_new(num_of_PIs, num_of_patterns, patterns, output_fil
 def write_simple_testcase_to_file(output_flst_file, output_ptn_file):
     with open(output_flst_file, 'w') as file:
         file.write("2" + '\n')
-        file.write("0 1" + '\n')
+        file.write("2 1" + '\n')
         file.write("5 0" + '\n')
+        file.write('\n')
+        file.write('File structure:' + '\n')
+        file.write("2: num_of_faults" + '\n')
+        file.write("2 1: PI_A: SA_1" + '\n')
+        file.write("5 0: G3: SA_0" + '\n')
         file.write('\n')
 
     with open(output_ptn_file, 'w') as file:
@@ -140,9 +145,11 @@ def write_simple_testcase_to_file(output_flst_file, output_ptn_file):
         file.write("4" + '\n')
         file.write("1" + '\n')
         file.write('\n')
-        file.write("010" + '\n')
-        file.write("100" + '\n')
-        file.write("001" + '\n')
+        file.write('File structure:' + '\n')
+        file.write("3 3: num_of_PIs, num_pattern" + '\n')
+        file.write("010: PI_0 (C)'s inputs, here binary" + '\n')
+        file.write("100: PI_1 (B)'s inputs, here binary" + '\n')
+        file.write("001: PI_2 (A)'s inputs, here binary" + '\n')
         file.write('\n')
 
 

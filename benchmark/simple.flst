@@ -1,4 +1,9 @@
 2
-0 1
+2 1
 5 0
+
+File structure:
+2: num_of_faults
+3 1: PI_A: SA_1
+4 0: G3: SA_0
 

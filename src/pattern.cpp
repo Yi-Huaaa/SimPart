@@ -38,7 +38,7 @@ void free_pattern (Pattern *patterns) {
 
 void print_pattern (Pattern **patterns, unsigned int team, int num_PIs) {
     for (unsigned int i = 0; i < team; i++) {
-        printf("[%u, %u] bits = [", deal_bits*i, deal_bits*(i+1));
+        printf("[%u, %u] bits = [\n", deal_bits*i, deal_bits*(i+1));
         for (int j = 0; j < num_PIs; j++) {
             // printf("%b, ", (patterns[i]->value[j]));
             printBits_stack(sizeof(patterns[i]->value[j]), &patterns[i]->value[j]);
@@ -59,4 +59,14 @@ void printBits_stack(size_t const size, void const * const ptr) {
         }
     }
     puts("");
+}
+
+void printf_found_fault_table (int *found_fault_table, int num_fault) {
+    for (int i = 0; i < (2*num_fault); i+=2) {
+        if (found_fault_table[i] == 1) {
+            printf("fault_%d is found, with Pattern_%d\n", i, found_fault_table[i+1]);
+        } else {
+            printf("fault_%d cannot be found\n", i);
+        }
+    }
 }

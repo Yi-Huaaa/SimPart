@@ -66,7 +66,7 @@ Gate **construct_graph (FILE *input_file, int num_gate, int num_wire, int num_PI
         }
     }
     
-#ifdef print_check_graph
+#ifdef print_graph
     print_topological (adj, indegree_orig, order);
 #endif
 
@@ -124,7 +124,7 @@ Gate **construct_graph (FILE *input_file, int num_gate, int num_wire, int num_PI
     free(gate_id_to_order_idx);
     free(input_gates_next_idx);
 
-#ifdef print_check_graph
+#ifdef print_graph
     for (int i = 0; i < num_gate; i++) {
         print_gate(gates[i]);
     }

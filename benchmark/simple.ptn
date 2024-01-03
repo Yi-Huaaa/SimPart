@@ -3,7 +3,9 @@
 4
 1
 
-010
-100
-001
+File structure:
+3 3: num_of_PIs, num_pattern
+010: PI_0 (C)'s inputs, here binary
+100: PI_1 (B)'s inputs, here binary
+001: PI_2 (A)'s inputs, here binary
 

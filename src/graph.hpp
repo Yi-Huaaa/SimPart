@@ -4,6 +4,8 @@
 #include <string.h>
 #include <vector>
 
+#include "print_check.hpp"
+
 using namespace std;
 
 /**
@@ -35,9 +37,7 @@ void free_gate (Gate *gate);
 void print_topological (vector<vector <int>> &adj, vector<int> &indegree, vector<int> &order);
 void print_gate (Gate *gate);
 
-
-// For printf checking
-#define print_check_graph
-
+// Print for check
+#define print_graph
 
 #endif
