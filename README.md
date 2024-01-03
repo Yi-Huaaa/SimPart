@@ -19,3 +19,10 @@ As a starting point, you can create a simple.ckt/simple.flst/simple.ptn benchmar
 	- .ckt: circuit file
 	- .flst: fault list file
 	- .ptn: pattern list file
+
+---
+
+## todo
+* revise code better, with better comment
+* pattern/fault have mapping index problem need to fix
+* make a PPT 
