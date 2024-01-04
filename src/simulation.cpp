@@ -142,78 +142,80 @@ void run_gate (Gate *gate, Pattern *pattern, int P_i, int SA_fault, int fault_va
     }
 }
 
-void shift_to_correct_answer (unsigned int *results, int num_gate, int bits){
-    for (int i = 0; i < num_gate; i++) {
+void shift_to_correct_answer (unsigned int *results, int total_gates, int bits){
+    for (int i = 0; i < total_gates; i++) {
         results[i]<<=(deal_bits-bits);
         results[i]>>=(deal_bits-bits);
     }
 }
 
 
-unsigned int *good_case (Gate **gates, Pattern* pattern, int num_gate, int bits) {
+unsigned int *good_case (Gate **gates, Pattern* pattern, int total_gates, int bits) {
     // Simulation
-    for (int i = 0; i < num_gate; i++) {
+    for (int i = 0; i < total_gates; i++) {
         run_gate(gates[i], pattern, i, 0, 0);
     }
     
     // Duplicated the answer of good_case into a new memory
-    unsigned int *good_results = (unsigned int *)malloc(num_gate*sizeof(unsigned int));
-    for (int i = 0; i < num_gate; i++) {
+    unsigned int *good_results = (unsigned int *)malloc(total_gates*sizeof(unsigned int));
+    for (int i = 0; i < total_gates; i++) {
         good_results[i] = gates[i]->output_value;
     }
 
     if (bits < deal_bits){
-        shift_to_correct_answer(good_results, num_gate, bits);
+        shift_to_correct_answer(good_results, total_gates, bits);
     }
     
 #ifdef print_simulation
     printf("GOOD resutls\n");
-    print_check_simulation(good_results, num_gate);
+    print_check_simulation(good_results, total_gates);
 #endif
     
     return good_results;
 }
 
 
-int SA_faults (Gate **gates, Fault faults, Pattern* pattern, int num_gate, int num_POs, unsigned int *good_results, int bits) {
+int SA_faults (Gate **gates, Fault faults, Pattern* pattern, int total_gates, int num_POs, unsigned int *good_results, int bits) {
     
     int wrong_gate = faults.w_gate;
     int fault_val = faults.SA_fault_value;
     // Simulation
-    for (int i = 0; i < num_gate; i++) {
+    for (int i = 0; i < total_gates; i++) {
         int SA_fault = (i == wrong_gate);
         // printf("debug1:i = %d, SA_fault = %d\n", i, SA_fault);
         run_gate(gates[i], pattern, i, SA_fault, fault_val);
     }
     // Duplicated the answer of BAD_case into a new memory
-    unsigned int *bad_results = (unsigned int *)malloc(num_gate*sizeof(unsigned int));
-    for (int i = 0; i < num_gate; i++) {
+    unsigned int *bad_results = (unsigned int *)malloc(total_gates*sizeof(unsigned int));
+    for (int i = 0; i < total_gates; i++) {
         bad_results[i] = gates[i]->output_value;
     }
     
     if (bits < deal_bits){
-        shift_to_correct_answer(bad_results, num_gate, bits);
+        shift_to_correct_answer(bad_results, total_gates, bits);
     }
 
 #ifdef print_simulation
     printf("BAD resutls\n");
-    print_check_simulation(bad_results, num_gate);
+    print_check_simulation(bad_results, total_gates);
 #endif
 
     // Record whether fault can be found
     int found_fault = 0;
-    for (int i = (num_gate-1); i > (num_gate-num_POs-1); i--) {
+    for (int i = (total_gates-1); i > (total_gates-num_POs-1); i--) {
         if (good_results[i] != bad_results[i]) {
             found_fault = 1;
         }
     }
-    printf("found_fault = %d\n", found_fault);
+    // printf("found_fault = %d\n", found_fault);
+
+    free(bad_results);
     return found_fault;
 }
 
 
-void print_check_simulation(unsigned int *results, int num_gate) {
-    for (int i = 0; i < num_gate; i++) {
+void print_check_simulation(unsigned int *results, int total_gates) {
+    for (int i = 0; i < total_gates; i++) {
         printf("gate_%d.output = %u\n", i, results[i]);
     }
 }

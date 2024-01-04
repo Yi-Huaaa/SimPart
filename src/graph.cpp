@@ -23,18 +23,18 @@ void free_gate (Gate *gate) {
     free(gate);
 }
 
-Gate **construct_graph (FILE *input_file, int num_gate, int num_wire, int num_PIs, int num_POs) {
+Gate **construct_graph (FILE *input_file, int total_gates, int num_wire, int num_PIs, int num_POs, int *gate_id_to_order_idx) {
     vector<vector <int>> adj;
-    adj.resize(num_gate);
+    adj.resize(total_gates);
     vector<int> indegree, indegree_orig;
-    indegree.resize(num_gate);
+    indegree.resize(total_gates);
     
     /** Levelized the input gates before constructing the circuit graph */
     // read file, constrcut adjacent list, construct indegree array
     for (int i = 0; i < num_wire; i++) {
-        int gate_0, pin_Y, post_num_gates;
-        assert(fscanf(input_file, "%d%d%d", &gate_0, &pin_Y, &post_num_gates) == 3);
-        for (int j = 0; j < post_num_gates; j++) {
+        int gate_0, pin_Y, num_post_gates;
+        assert(fscanf(input_file, "%d%d%d", &gate_0, &pin_Y, &num_post_gates) == 3);
+        for (int j = 0; j < num_post_gates; j++) {
             int gate_tmp, pin_tmp;
             assert(fscanf(input_file, "%d%d", &gate_tmp, &pin_tmp) == 2);
             adj[gate_0].push_back(gate_tmp);
@@ -72,14 +72,14 @@ Gate **construct_graph (FILE *input_file, int num_gate, int num_wire, int num_PI
 
     /** Constructing circuit graph */
     // scanf gate type array
-    int *gate_type = (int*)malloc(num_gate*sizeof(int));
+    int *gate_type = (int*)malloc(total_gates*sizeof(int));
     for (int i = 0; i < num_PIs; i++) {
         gate_type[i] = PI_type_enum;
     }
     for (int i = num_PIs; i < (num_PIs+num_POs); i++) {
         gate_type[i] = PO_type_enum;
     }
-    for (int i = (num_PIs+num_POs); i < (num_gate); i++) {
+    for (int i = (num_PIs+num_POs); i < (total_gates); i++) {
         assert(fscanf(input_file, "%d", &gate_type[i]) == 1);
     }    
     
@@ -90,15 +90,13 @@ Gate **construct_graph (FILE *input_file, int num_gate, int num_wire, int num_PI
      * gate_id_to_order_idx[6] = 3
      * gate_id_to_order_idx: 0, 1, 2, 7, 5, 6, 3, 4
      * */ 
-
-    int *gate_id_to_order_idx = (int*)malloc(num_gate*sizeof(int));
     for (size_t i = 0; i < order.size(); i++) {
         gate_id_to_order_idx[order[i]] = i;
     }
 
     // gates are stored in the order specified by the `order` array
-    Gate **gates = (Gate **)malloc(num_gate*sizeof(Gate *));
-    for (int i = 0; i < num_gate; i++) {
+    Gate **gates = (Gate **)malloc(total_gates*sizeof(Gate *));
+    for (int i = 0; i < total_gates; i++) {
         // `gate_id` is the ID assigned in the input file
         int gate_id = order[i];
         int type = gate_type[gate_id];
@@ -107,8 +105,8 @@ Gate **construct_graph (FILE *input_file, int num_gate, int num_wire, int num_PI
     }
 
     // keep track of the next index for the `input_gates` array, given a gate ID
-    int *input_gates_next_idx = (int*)malloc(num_gate*sizeof(int));
-    memset(input_gates_next_idx, 0, num_gate*sizeof(int));
+    int *input_gates_next_idx = (int*)malloc(total_gates*sizeof(int));
+    memset(input_gates_next_idx, 0, total_gates*sizeof(int));
 
     for (size_t i = 0; i < adj.size(); i++) {
         for (size_t j = 0; j < adj[i].size(); j++) {
@@ -121,11 +119,10 @@ Gate **construct_graph (FILE *input_file, int num_gate, int num_wire, int num_PI
 
     // free everything
     free(gate_type);
-    free(gate_id_to_order_idx);
     free(input_gates_next_idx);
 
 #ifdef print_graph
-    for (int i = 0; i < num_gate; i++) {
+    for (int i = 0; i < total_gates; i++) {
         print_gate(gates[i]);
     }
 #endif
@@ -135,6 +132,7 @@ Gate **construct_graph (FILE *input_file, int num_gate, int num_wire, int num_PI
 
 
 void print_topological (vector<vector <int>> &adj, vector<int> &indegree, vector<int> &order) {
+    printf("\n=====\n\n");
     printf("adj:\n");
     for (size_t i = 0; i < adj.size(); i++) {
         printf("%ld = [", i);
@@ -156,7 +154,7 @@ void print_topological (vector<vector <int>> &adj, vector<int> &indegree, vector
 
 
 void print_gate(Gate *gate) {
-    printf("=====\n");
+    printf("\n=====\n\n");
     printf("id: %p\n", gate);
     printf("type: %d\n", gate->type);
     printf("level: %d\n", gate->level);

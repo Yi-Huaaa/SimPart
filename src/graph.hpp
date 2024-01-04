@@ -4,7 +4,6 @@
 #include <string.h>
 #include <vector>
 
-#include "print_check.hpp"
 
 using namespace std;
 
@@ -31,7 +30,7 @@ typedef struct Gate {
 // functions
 
 Gate *new_gate (int type, int num_of_inputs);
-Gate **construct_graph (FILE *input_file, int num_gate, int num_wire, int num_PIs, int num_POs);
+Gate **construct_graph (FILE *input_file, int total_gates, int num_wire, int num_PIs, int num_POs, int *gate_id_to_order_idx);
 void free_gate (Gate *gate);
 
 void print_topological (vector<vector <int>> &adj, vector<int> &indegree, vector<int> &order);

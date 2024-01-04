@@ -3,8 +3,6 @@
 
 #include <stdio.h>
 
-#include "print_check.hpp"
-
 #define deal_bits 32
 
 typedef struct Pattern {
@@ -14,7 +12,7 @@ typedef struct Pattern {
 } Pattern;
 
 // Functions 
-Pattern ** construct_pattern (FILE *input_file, int num_of_PIs, int num_patterns);
+Pattern ** construct_pattern (FILE *input_file, int num_of_PIs, int num_patterns, int *gate_id_to_order_idx);
 void print_pattern (Pattern **patterns, unsigned int team, int num_PIs);
 void free_pattern (Pattern *patterns);
 void printf_found_fault_table (int *found_fault_table, int num_fault);

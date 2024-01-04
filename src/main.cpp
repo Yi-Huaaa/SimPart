@@ -5,7 +5,6 @@
 #include <assert.h>
 // #include <omp.h>
 
-#include "print_check.hpp"
 #include "graph.hpp"
 #include "fault.hpp"
 #include "pattern.hpp"
@@ -24,13 +23,11 @@ int main(int argc, char* argv[]){
     int total_gates = num_PIs+num_POs+num_gate;
 
     /* Constrcut graph (gate) */
-    Gate **gates = construct_graph(input_file_circuit, total_gates, num_wire, num_PIs, num_POs);
+    int *gate_id_to_order_idx = (int*)malloc(total_gates*sizeof(int));
+    Gate **gates = construct_graph(input_file_circuit, total_gates, num_wire, num_PIs, num_POs, gate_id_to_order_idx);
     fclose(input_file_circuit);
 
-/**
- * todo: faults, and patterns need to handle the re-order index. 
- * 
-*/
+
 
     /* Readin data - faults*/ 
     FILE *input_file_faults = fopen(argv[2], "r");
@@ -39,8 +36,9 @@ int main(int argc, char* argv[]){
     assert(fscanf(input_file_faults, "%d", &num_fault) == 1);
 
     /* Constrcut faults */
-    Fault *faults = construct_fault(input_file_faults, num_fault);
+    Fault *faults = construct_fault(input_file_faults, num_fault, gate_id_to_order_idx);
     fclose(input_file_faults);    
+
 
 
     /* Readin data - patterns */ 
@@ -51,7 +49,7 @@ int main(int argc, char* argv[]){
     assert(fscanf(input_file_patterns, "%d%d", &num_of_PIs, &num_pattern) == 2);
 
     /* Constrcut faults */
-    Pattern** patterns = construct_pattern(input_file_patterns, num_of_PIs, num_pattern);
+    Pattern** patterns = construct_pattern(input_file_patterns, num_of_PIs, num_pattern, gate_id_to_order_idx);
     fclose(input_file_patterns);
 
 
@@ -70,6 +68,7 @@ int main(int argc, char* argv[]){
             // record which pattern found the fault
             found_fault_table[2*j+1] = i;
         }
+        free(good_results);
     }
 
 #ifdef print_found_fault_table
@@ -77,7 +76,7 @@ int main(int argc, char* argv[]){
 #endif
 
     /* Free data */
-    for (int i = 0; i < num_gate; i++) {
+    for (int i = 0; i < total_gates; i++) {
         free_gate(gates[i]);
     }
     free(gates);
@@ -86,6 +85,8 @@ int main(int argc, char* argv[]){
         free_pattern(patterns[i]);
     }
     free(patterns);
+    free(gate_id_to_order_idx);
+    free(found_fault_table);
 
 
     return 0;
