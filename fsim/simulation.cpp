@@ -6,9 +6,10 @@
 #include <string>
 #include <vector>
 #include <queue>
+#include <climits>
 
 #include "simulation.hpp"
-
+#define SIZE_T_BITS (sizeof(size_t) * CHAR_BIT)
 
 
 // void INV (Gate *gate, int SA_fault, int fault_val) {
@@ -230,21 +231,37 @@ void print_check_simulation(unsigned int *results, int total_gates) {
 // -----
 
 
-void fsim::Simulator::read(const std::string& ckt_path, const std::string& flst, const std::string& ptn) {
-  // std::cout << "execute simulation.read()" << std::endl;
+void fsim::Simulator::read(const std::string& ckt_path, const std::string& flst_path, const std::string& ptn_path) {
+  // gate
+  std::cout << "Read and construct ckt" << std::endl;
   std::ifstream ckt(ckt_path);
-
   ckt >> _num_PIs >> _num_POs >> _num_gate >> _num_wire;
   _total_gates = _num_PIs+_num_POs+_num_gate;
   std::cout << _num_PIs << ", " << _num_POs << ", " << _num_gate << ", " << _num_wire << ", " << _total_gates << std::endl;
   construct_graph(ckt);
 
+  // fault
+  std::cout << "Read and construct flst" << std::endl;
+  std::ifstream flst(flst_path);
+  flst >> _num_fault;
+  std::cout << _num_fault << std::endl;
+  construct_fault(flst);
+
+  // pattern
+  std::cout << "Read and construct ptn" << std::endl;
+  std::ifstream ptn(ptn_path);
+  ptn >> _num_pattern;
+  std::cout << _num_pattern << std::endl;
+  construct_pattern(ptn);
+
 }
 
 void fsim::Simulator::run() {
-  // std::cout << "execute simulation.run()" << std::endl;
+  std::cout << "execute simulation.run()" << std::endl;
 }
 
+
+// Construct functions
 
 void fsim::Simulator::construct_graph(std::ifstream &ckt) {
   std::vector<std::vector <size_t>> adj;
@@ -347,12 +364,53 @@ void fsim::Simulator::construct_graph(std::ifstream &ckt) {
 
 #ifdef print_graph
   for (size_t i = 0; i < _total_gates; i++) {
-      print_gate(_gates[i]);
+    print_gate(_gates[i]);
   }
+#endif
+
+} 
+
+void fsim::Simulator::construct_fault(std::ifstream &flst){
+  _faults.resize(_num_fault);
+  for (size_t i = 0; i < _num_fault; i++) {
+    size_t wrong_gate, fault_value;
+    flst >> wrong_gate >> fault_value;
+    std::cout << wrong_gate << ", " << fault_value << std::endl;
+    _faults[i]._gate_with_fault = _gate_id_to_order_idx[wrong_gate];
+    _faults[i]._gate_SA_fault_val = (fault_value) ? (SIZE_MAX) : (0);
+  }  
+
+#ifdef print_faults 
+  print_fault(_faults);
 #endif
 
 }
 
+// #define deal_bits 32
+
+
+void fsim::Simulator::construct_pattern(std::ifstream &ptn){
+  size_t round = (_num_pattern+SIZE_T_BITS-1)/SIZE_T_BITS; // ceiling
+  
+  _pattern.resize(round);
+  for (size_t i = 0; i < round; i++) {
+    _pattern[i]._value.resize(_num_PIs);
+    for (size_t pi = 0; pi < _num_PIs; pi++) {
+      size_t idx = _gate_id_to_order_idx[i];
+      ptn >> _pattern[i]._value[pi];
+    }
+  }
+
+#ifdef print_patterns    
+  print_pattern(_pattern, round, _num_PIs);
+#endif
+  
+}
+
+
+
+
+// Print functions
 void fsim::Simulator::print_topological (std::vector<std::vector <size_t>> &adj, std::vector<size_t> &indegree, std::vector<size_t> &order) {
   printf("\n=====\n\n");
   printf("adj:\n");
@@ -374,7 +432,6 @@ void fsim::Simulator::print_topological (std::vector<std::vector <size_t>> &adj,
   } printf("\n");
 }
 
-
 void fsim::Simulator::print_gate(Gate& gate) {
   printf("\n=====\n\n");
   printf("id: %p\n", &gate);
@@ -386,4 +443,37 @@ void fsim::Simulator::print_gate(Gate& gate) {
   }
   printf("]\n");
   printf("output_value: %ld\n", gate._output_value);
+}
+
+void fsim::Simulator::print_fault (std::vector<Fault> _faults) {
+  std::cout << "\n=====\n\n" << "print_faults" << std::endl;
+  for (size_t i = 0; i < _num_fault; i++) {
+    printf("_gate_with_fault = %ld, SA_%ld\n", _faults[i]._gate_with_fault, _faults[i]._gate_SA_fault_val);
+  }
+  std::cout << "\n=====\n\n" << std::endl;
+}
+
+void fsim::Simulator::print_pattern (std::vector<Pattern> patterns, size_t round, size_t num_PIs) {
+  printf("\n=====\n\n");
+  for (unsigned int i = 0; i < round; i++) {
+    printf("[%ld, %ld] bits = [\n", SIZE_T_BITS*i, SIZE_T_BITS*(i+1));
+    for (int j = 0; j < num_PIs; j++) {
+      printBits_stack(sizeof(patterns[i]._value[j]), &patterns[i]._value[j]);
+    }
+    printf("]\n");
+  }    
+}
+
+void fsim::Simulator::printBits_stack(size_t const size, void const * const ptr) {
+    unsigned char *b = (unsigned char*) ptr;
+    unsigned char byte;
+    int i, j;
+    
+    for (i = size-1; i >= 0; i--) {
+        for (j = 7; j >= 0; j--) {
+            byte = (b[i] >> j) & 1;
+            printf("%u", byte);
+        }
+    }
+    puts("");
 }
