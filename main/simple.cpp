@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     std::string ptn_path(argv[3]);
 
     simulator.read(ckt_path, flst_path, ptn_path);
-    // simulator.run();
+    simulator.run();
 
     // // user to access gates in the simulator
     // for(auto& gate : simulator.gates()) {

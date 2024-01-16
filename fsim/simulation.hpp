@@ -13,6 +13,9 @@
 #include "pattern.hpp"
 #include "gate.hpp"
 
+#define SIZE_T_BITS (sizeof(size_t) * CHAR_BIT)
+#define simple_testcase_bits 3
+
 // Print for check
 #define print_simulation
 #define print_graph
@@ -64,6 +67,7 @@ namespace fsim {
       std::vector<Fault> _faults;
 
       size_t _num_pattern; // total number of patterns that need to be tested
+      size_t _round; // ceiling(_num_pattern/SIZE_T_BITS)
       std::vector<Pattern> _pattern;
       
       // construct
@@ -74,9 +78,28 @@ namespace fsim {
       // print
       void print_topological (std::vector<std::vector <size_t>> &adj, std::vector<size_t> &indegree, std::vector<size_t> &order);
       void print_gate(Gate& gate);
-      void print_fault(std::vector<Fault> _faults);
-      void print_pattern (std::vector<Pattern> patterns, size_t round, size_t num_PIs);
+      void print_fault(std::vector<Fault> &_faults);
+      void print_pattern (std::vector<Pattern> &patterns, size_t round, size_t num_PIs);
       void printBits_stack(size_t const size, void const * const ptr);
+      void print_check_simulation (std::vector<size_t> &results);
+      
+      
+      // simulation
+      size_t _testcase_bits;
+      std::vector<size_t> good_result;
+
+      void good_case (Pattern pattern, size_t bits);
+
+      void INV (Gate &gate, size_t SA_fault, size_t fault_val);
+      void AND (Gate &gate, size_t SA_fault, size_t fault_val);
+      void OR (Gate &gate, size_t SA_fault, size_t fault_val);
+      void XOR (Gate &gate, size_t SA_fault, size_t fault_val);
+      void NAND (Gate &gate, size_t SA_fault, size_t fault_val);
+      void NOR (Gate &gate, size_t SA_fault, size_t fault_val);
+      void PI (Gate &gate, Pattern &pattern, size_t PI_i, size_t SA_fault, size_t fault_val);
+      void PO (Gate &gate);
+      void run_gate (Gate &gate, Pattern &pattern, size_t P_i, size_t SA_fault, size_t fault_val);
+      void shift_to_correct_answer (std::vector<size_t> &results, size_t bits);
   };
 
 
