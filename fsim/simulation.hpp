@@ -64,13 +64,17 @@ namespace fsim {
       void print_pattern (std::vector<Pattern> &patterns, size_t round, size_t num_PIs);
       void printBits_stack(size_t const size, void const * const ptr);
       void print_check_simulation (std::vector<size_t> &results);
+      void printf_found_fault_table (std::vector<size_t> found_fault_table);
       
       
       // simulation
       size_t _testcase_bits;
       std::vector<size_t> good_result;
+      std::vector<size_t> bad_result;
+      std::vector<size_t> found_fault_table;
 
-      void good_case (Pattern pattern, size_t bits);
+      void good_case (Pattern &pattern, size_t bits);
+      void bad_case (Fault &fault, Pattern &pattern, size_t bits);
 
       void INV (Gate &gate, size_t SA_fault, size_t fault_val);
       void AND (Gate &gate, size_t SA_fault, size_t fault_val);
@@ -82,6 +86,7 @@ namespace fsim {
       void PO (Gate &gate);
       void run_gate (Gate &gate, Pattern &pattern, size_t P_i, size_t SA_fault, size_t fault_val);
       void shift_to_correct_answer (std::vector<size_t> &results, size_t bits);
+
   };
 
 

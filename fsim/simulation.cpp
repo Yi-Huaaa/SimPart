@@ -42,9 +42,8 @@ void fsim::Simulator::run() {
   std::cout << "execute simulation.run();" << std::endl;
 
   // Simulation
-  // unsigned int team = (num_pattern+deal_bits-1)/deal_bits;
-  // int *found_fault_table = (int *)malloc((2*num_fault)*sizeof(int)); memset(found_fault_table, 0, (2*num_fault)*sizeof(int));
-    
+  found_fault_table.resize(2*_num_fault);
+
   for (size_t i = 0; i < _round; i++) {
     // todo!!!! -> need to set the _testcase_bits
     size_t _testcase_bits = simple_testcase_bits;
@@ -54,17 +53,28 @@ void fsim::Simulator::run() {
     good_case(_pattern[i], _testcase_bits);
     
     // Faults simulation 
-    for (int j = 0; j < _num_fault; j++) {
-        // // record whether the fault can be found
-        // found_fault_table[2*j] = SA_faults(gates, faults[j], patterns[i], total_gates, num_POs, good_results, simple_testcase_bits);
-        // // record which pattern found the fault
-        // found_fault_table[2*j+1] = i;
+    for (size_t j = 0; j < _num_fault; j++) {
+      bad_case(_faults[j], _pattern[i], _testcase_bits);//SA_faults(gates, faults[j], patterns[i], total_gates, num_POs, good_results, simple_testcase_bits);
+
+      int found_fault = 0;
+      for (size_t i = (_total_gates-1); i > (_total_gates-_num_POs-1); i--) {
+        if (good_result[i] != bad_result[i]) {
+          found_fault = 1;
+        }
+      }
+      // Record whether fault can be found
+      found_fault_table[2*j] = found_fault;
+      // Record which pattern found the fault
+      found_fault_table[2*j+1] = i;
     }
-    // free(good_results);
-  }  
+  }
+
+#ifdef print_found_fault_table
+  printf_found_fault_table (found_fault_table);
+#endif 
 }
 
-void fsim::Simulator::good_case (Pattern pattern, size_t bits) {
+void fsim::Simulator::good_case (Pattern &pattern, size_t bits) {
   // Simulation
   for (size_t i = 0; i < _total_gates; i++) {
     run_gate(_gates[i], pattern, i, 0, 0);
@@ -72,9 +82,8 @@ void fsim::Simulator::good_case (Pattern pattern, size_t bits) {
   
   // Duplicated the answer of good_case into a new memory
   good_result.resize(_total_gates);
-  // size_t *good_results = (size_t *)malloc(_total_gates*sizeof(size_t));
-  for (int i = 0; i < _total_gates; i++) {
-      good_result[i] = _gates[i]._output_value;
+  for (size_t i = 0; i < _total_gates; i++) {
+    good_result[i] = _gates[i]._output_value;
   }
 
   if (bits < SIZE_T_BITS){
@@ -82,12 +91,39 @@ void fsim::Simulator::good_case (Pattern pattern, size_t bits) {
   }
   
 #ifdef print_simulation
-  std::cout << "GOOD resutls\n" << std::endl;
+  std::cout << "GOOD resutls:" << std::endl;
   print_check_simulation(good_result);
 #endif
-    
+  
 }
 
+
+void fsim::Simulator::bad_case (Fault &fault, Pattern &pattern, size_t bits){
+  int wrong_gate = fault._gate_with_fault;
+  int fault_val = fault._gate_SA_fault_val;
+  
+  // fault simulation
+  for (size_t i = 0; i < _total_gates; i++) {
+    int SA_fault = (i == wrong_gate);
+    run_gate(_gates[i], pattern, i, SA_fault, fault_val);
+  }
+
+  // Duplicated the answer of BAD_case into a new memory
+  bad_result.resize(_total_gates);
+  for (size_t i = 0; i < _total_gates; i++) {
+    bad_result[i] = _gates[i]._output_value;
+  }
+  
+  if (bits < SIZE_T_BITS){
+    shift_to_correct_answer(bad_result, bits);
+  }
+
+#ifdef print_simulation
+  std::cout << "BAD resutls:" << std::endl;
+  print_check_simulation(bad_result);
+#endif
+
+}
 
 // Construct functions
 void fsim::Simulator::construct_graph(std::ifstream &ckt) {
@@ -443,8 +479,19 @@ void fsim::Simulator::printBits_stack(size_t const size, void const * const ptr)
 void fsim::Simulator::print_check_simulation (std::vector<size_t> &results) {
   for (size_t i = 0; i < _total_gates; i++) {
     printf("gate_%ld.output = %ld\n", i, results[i]);
-  }
+  } 
+  std::cout << "\n" << std::endl;
 }
 
+void fsim::Simulator::printf_found_fault_table (std::vector<size_t> found_fault_table) {
+    printf("\n=====\n\n");
+    for (size_t i = 0; i < (2*_num_fault); i+=2) {
+        if (found_fault_table[i] == 1) {
+            printf("fault_%ld is found, with Pattern_%ld\n", (i/2), found_fault_table[i+1]);
+        } else {
+            printf("fault_%ld cannot be found\n", i);
+        }
+    }
+}
 
 
