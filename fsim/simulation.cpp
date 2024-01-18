@@ -450,7 +450,7 @@ void fsim::Simulator::print_bits_stack(const size_t size,
   for (i = size - 1; i >= 0; i--) {
     for (j = 7; j >= 0; j--) {
       byte = (b[i] >> j) & 1;
-      std::cout << byte;
+      std::cout << static_cast<unsigned>(byte);
     }
   }
   std::cout << "\n";
