@@ -14,7 +14,7 @@ void fsim::Simulator::read(const std::string &ckt_path,
 
   // gate
   std::cout << "Read and construct ckt" << std::endl;
-  std::ifstream ckt(ckt_path);
+  std::ifstream ckt(ckt_path), flst(flst_path), ptn(ptn_path);
 
   // TODO: exception
   // operator bool (cpp reference)
@@ -22,6 +22,10 @@ void fsim::Simulator::read(const std::string &ckt_path,
     //throw std::runtime_error(std::string("cannot open circut file ") + ckt_path);
     throw std::runtime_error("cannot open circut file "s + ckt_path);
   }
+
+  // TODO: remove below the code to read(istream&, istream&, istream&)
+  // study object slicing 
+  read(ckt, flst, ptn);
 
   ckt >> _num_PIs >> _num_POs >> _num_gate >> _num_wire;
   _total_gates = _num_PIs + _num_POs + _num_gate;
@@ -46,7 +50,16 @@ void fsim::Simulator::read(const std::string &ckt_path,
   construct_pattern(ptn);
 }
 
-void fsim::Simulator::run() {
+void fsim::Simulator::run(Mode mode) {
+
+  // TODO:
+  switch(mode) {
+    case Mode::SEQUENTIAL:
+      _run_sequential();
+    break;
+
+  }
+
   // TODO: go back and study the difference between \n and std::endl;
   std::cout << "execute simulation.run();" << '\n';
 

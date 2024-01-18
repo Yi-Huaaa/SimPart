@@ -29,9 +29,20 @@ constexpr auto SIMPLE_TESTCASE_BITS = 3;
 class Simulator {
 
 public:
+  
+  enum class Mode {
+    SEQUENTIAL = 0,
+    PARALLEL
+  };
+
   void read(const std::string &ckt, const std::string &flst,
             const std::string &ptn);
-  void run();
+  
+  // for testing
+  void read(std::istream& ckt, std::istream& flst, std::istream& pin);
+
+  // TODO: add a level-based parallel simulation
+  void run(Mode mode);
 
   const std::vector<size_t>& g_gate_results() const {
     return _g_gate_results;
