@@ -13,8 +13,7 @@
 
 #include "simulation.hpp"
 
-#define PI_type_enum 6
-#define PO_type_enum 7
+
 #define default_level 0
 #define default_output_value 0
 

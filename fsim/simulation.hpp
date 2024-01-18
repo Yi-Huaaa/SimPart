@@ -1,12 +1,9 @@
 #ifndef SIMULATION_H
 #define SIMULATION_H
-#include <stdio.h>
-#include <stdlib.h>
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <vector>
-#include <queue>
 
 
 #include "fault.hpp"
@@ -14,17 +11,16 @@
 #include "gate.hpp"
 
 #define SIZE_T_BITS (sizeof(size_t) * CHAR_BIT)
-#define simple_testcase_bits 3
+#define SIMPLE_TESTCASE_BITS 3
 
 // Print for check
 #define print_simulation
 #define print_graph
 #define print_faults
 #define print_patterns
-#define print_found_fault_table
+#define print_fault_table
 
 
-// TODO:
 namespace fsim {
 
   class Simulator {
@@ -40,7 +36,7 @@ namespace fsim {
 
     private:
       
-      // 
+      // Read
       size_t _num_PIs, _num_POs, _num_gate, _num_wire, _total_gates;
       std::vector<size_t> _gate_id_to_order_idx;
       std::vector<Gate> _gates;
@@ -52,41 +48,40 @@ namespace fsim {
       size_t _round; // ceiling(_num_pattern/SIZE_T_BITS)
       std::vector<Pattern> _pattern;
       
-      // construct
+      // Construct
       void construct_graph(std::ifstream &ckt);
       void construct_fault(std::ifstream &flst);
       void construct_pattern(std::ifstream &ptn);
 
-      // print
-      void print_topological (std::vector<std::vector <size_t>> &adj, std::vector<size_t> &indegree, std::vector<size_t> &order);
-      void print_gate(Gate& gate);
-      void print_fault(std::vector<Fault> &_faults);
-      void print_pattern (std::vector<Pattern> &patterns, size_t round, size_t num_PIs);
-      void printBits_stack(size_t const size, void const * const ptr);
-      void print_check_simulation (std::vector<size_t> &results);
-      void printf_found_fault_table (std::vector<size_t> found_fault_table);
-      
-      
-      // simulation
+      // Simulation
       size_t _testcase_bits;
-      std::vector<size_t> good_result;
-      std::vector<size_t> bad_result;
-      std::vector<size_t> found_fault_table;
+      std::vector<size_t> _good_result;
+      std::vector<size_t> _bad_result;
+      std::vector<size_t> _found_fault_table;
 
       void good_case (Pattern &pattern, size_t bits);
       void bad_case (Fault &fault, Pattern &pattern, size_t bits);
 
-      void INV (Gate &gate, size_t SA_fault, size_t fault_val);
-      void AND (Gate &gate, size_t SA_fault, size_t fault_val);
-      void OR (Gate &gate, size_t SA_fault, size_t fault_val);
-      void XOR (Gate &gate, size_t SA_fault, size_t fault_val);
-      void NAND (Gate &gate, size_t SA_fault, size_t fault_val);
-      void NOR (Gate &gate, size_t SA_fault, size_t fault_val);
-      void PI (Gate &gate, Pattern &pattern, size_t PI_i, size_t SA_fault, size_t fault_val);
+      void INV (Gate &gate);
+      void AND (Gate &gate);
+      void OR (Gate &gate);
+      void XOR (Gate &gate);
+      void NAND (Gate &gate);
+      void NOR (Gate &gate);
+      void PI (Gate &gate, Pattern &pattern, size_t pi);
       void PO (Gate &gate);
-      void run_gate (Gate &gate, Pattern &pattern, size_t P_i, size_t SA_fault, size_t fault_val);
+      void run_gate (Gate &gate, Pattern &pattern, size_t pi, size_t SA_fault, size_t fault_val);
       void shift_to_correct_answer (std::vector<size_t> &results, size_t bits);
-
+      
+      // print for debug 
+      void print_topological (const std::vector<std::vector <size_t>> &adj, const std::vector<size_t> &indegree, const std::vector<size_t> &order);
+      void print_gate(const Gate& gate);
+      void print_fault(const std::vector<Fault> &_faults);
+      void print_pattern (const std::vector<Pattern> &patterns, const size_t round, const size_t num_PIs);
+      void print_bits_stack(const size_t size, const void* const ptr);
+      void print_check_simulation (const std::vector<size_t> &results);
+      void print_found_fault_table (const std::vector<size_t> &_found_fault_table);
+      
   };
 
 
