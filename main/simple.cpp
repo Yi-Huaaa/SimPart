@@ -14,6 +14,15 @@ int main(int argc, char *argv[]) {
   simulator.read(ckt_path, flst_path, ptn_path);
   simulator.run();
 
+  // TODO:
+  auto& g_gate_results = simulator.g_gate_results();
+
+  for(size_t gid = 0; gid<g_gate_results.size(); gid++) {
+    auto& gate = simulator.gate(gid);
+    std::cout << "G-result of Gate " << gid << " (level=" << gate.level() << "): "
+              << g_gate_results[gid] << '\n';
+  }
+
   // // user to access gates in the simulator
   // for(auto& gate : simulator.gates()) {
   //     // std::cout << gate.output_value() << '\n';

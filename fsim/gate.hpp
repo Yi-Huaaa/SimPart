@@ -44,6 +44,11 @@ public:
   // unsigned output_value() { return _output_value; }
   // size_t level() { return _level; } 
 
+  // plain old data type can simply be returned as a copy
+  size_t level() const {
+    return _level;
+  }
+
 private:
   GateType _type;
   std::vector<Gate *> _inputs;

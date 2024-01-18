@@ -10,9 +10,19 @@
 void fsim::Simulator::read(const std::string &ckt_path,
                            const std::string &flst_path,
                            const std::string &ptn_path) {
+  using std::literals::string_literals;
+
   // gate
   std::cout << "Read and construct ckt" << std::endl;
   std::ifstream ckt(ckt_path);
+
+  // TODO: exception
+  // operator bool (cpp reference)
+  if(!ckt) {
+    //throw std::runtime_error(std::string("cannot open circut file ") + ckt_path);
+    throw std::runtime_error("cannot open circut file "s + ckt_path);
+  }
+
   ckt >> _num_PIs >> _num_POs >> _num_gate >> _num_wire;
   _total_gates = _num_PIs + _num_POs + _num_gate;
   std::cout << _num_PIs << ", " << _num_POs << ", " << _num_gate << ", "
@@ -20,6 +30,7 @@ void fsim::Simulator::read(const std::string &ckt_path,
   construct_graph(ckt);
 
   // fault
+  // TODO: excpetion for failure on opening the file
   std::cout << "Read and construct flst" << std::endl;
   std::ifstream flst(flst_path);
   flst >> _num_fault;
@@ -27,6 +38,7 @@ void fsim::Simulator::read(const std::string &ckt_path,
   construct_fault(flst);
 
   // pattern
+  // TODO: excpetion for failure on opening the file
   std::cout << "Read and construct ptn" << std::endl;
   std::ifstream ptn(ptn_path);
   ptn >> _num_pattern;
@@ -35,7 +47,8 @@ void fsim::Simulator::read(const std::string &ckt_path,
 }
 
 void fsim::Simulator::run() {
-  std::cout << "execute simulation.run();" << std::endl;
+  // TODO: go back and study the difference between \n and std::endl;
+  std::cout << "execute simulation.run();" << '\n';
 
   // Simulation
   _found_fault_table.resize(2 * _num_fault);
@@ -235,7 +248,10 @@ void fsim::Simulator::construct_fault(std::ifstream &flst) {
     std::cout << wrong_gate << ", " << fault_value << std::endl;
 #endif
     _faults[i]._gate_with_fault = _gate_id_to_order_idx[wrong_gate];
-    _faults[i]._gate_SA_fault_val = (fault_value) ? (SIZE_MAX) : (0);
+    // TODO:
+    //_faults[i]._gate_SA_fault_val = (fault_value) ? (SIZE_MAX) : (0);
+    _faults[i]._gate_SA_fault_val = (fault_value) ? std::numeric_limits<size_t>::max() : (0);
+
   }
 
 #ifdef print_faults
