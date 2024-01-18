@@ -1,29 +1,23 @@
 #ifndef PATTERN_H
 #define PATTERN_H
 
-#include <stdio.h>
 #include <iostream>
+#include <stdio.h>
 #include <vector>
 
-
-
 namespace fsim {
-  class Simulator;
+class Simulator;
 }
 
 class Pattern {
 
   friend class fsim::Simulator;
 
-  public:
+public:
+  // accessor
 
-    // accessor
-
-  private:
-    std::vector<size_t> _value;
-
+private:
+  std::vector<size_t> _value;
 };
-
-
 
 #endif
