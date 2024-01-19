@@ -10,12 +10,7 @@
 #include "gate.hpp"
 #include "pattern.hpp"
 
-//#define SIZE_T_BITS (sizeof(size_t) * CHAR_BIT)
-//#define SIMPLE_TESTCASE_BITS 3
-
-// Print for check
-// TODO: rename
-// #define FSIM_DEBUG_PRINT_SIMULATION
+// fsim print for check
 #define FSIM_DEBUG_PRINT_SIMULATION
 #define FSIM_DEBUG_PRINT_GRAPH
 #define FSIM_DEBUG_PRINT_FAULTS
@@ -25,7 +20,6 @@
 namespace fsim {
 
 constexpr auto SIZE_T_BITS  = sizeof(size_t) * CHAR_BIT;
-constexpr auto SIMPLE_TESTCASE_BITS = 3;
 
 class Simulator {
 
@@ -33,7 +27,8 @@ public:
   
   enum class Mode {
     SEQUENTIAL = 0,
-    PARALLEL
+    PARALLEL_TF,
+    PARALLEL_OMP
   };
 
   void read(const std::string &ckt, const std::string &flst,
@@ -42,7 +37,7 @@ public:
   // for testing
   void read(std::istream& ckt, std::istream& flst, std::istream& pin);
 
-  // TODO: add a level-based parallel simulation
+  // TODO (parallel): add a level-based parallel simulation
   void run(Mode mode);
 
   const std::vector<size_t>& g_gate_results() const {
@@ -61,13 +56,13 @@ public:
 private:
   
   // Read
+  void _read_files(std::ifstream &ckt);
+  
   size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires, _total_gates;
   std::vector<size_t> _gate_idx_to_tpg_order_idx;
   std::vector<Gate> _gates;
   
-  // TODO: reduce redundancies (we don't need another data members for _num_fault,
-  // as it can be queried by _faults.size())
-  size_t _num_fault;
+  size_t _num_fault; // for read file
   std::vector<Fault> _faults;
 
   size_t _num_pattern; // total number of patterns that need to be tested
@@ -80,18 +75,16 @@ private:
   void _read_pattern(std::ifstream &ptn);
 
   // Simulation
-  // TODO: local variable for testcase_bit...???
-  size_t _testcase_bits;
   std::vector<size_t> _g_gate_results; 
   std::vector<size_t> _b_gate_results;
   std::vector<size_t> _found_fault_to_pattern;
 
+  // Mode: _run_sequential, _run_parallel
   void _run_sequential();
-  void _run_parallel();
-  // todo: here _run_good_case's Pattern &pattern, size_t pi won't change value -> should be constant
-  void _run_good_case(Pattern &pattern, size_t bits);
-  // todo: here _run_bad_case's Pattern &pattern, size_t pi won't change value -> should be constant
-  void _run_bad_case(Fault &fault, Pattern &pattern, size_t bits);
+  void _run_parallel_tf();
+  void _run_parallel_omp();
+  void _run_good_case(const Pattern pattern, const size_t bits);
+  void _run_bad_case(const Fault &fault, const Pattern pattern, const size_t bits);
 
   void _apply_INV(Gate &gate);
   void _apply_AND(Gate &gate);
@@ -99,25 +92,23 @@ private:
   void _apply_XOR(Gate &gate);
   void _apply_NAND(Gate &gate);
   void _apply_NOR(Gate &gate);
-  // todo: here _apply_PI's Pattern &pattern, size_t pi won't change value -> should be constant
-  void _apply_PI(Gate &gate, Pattern &pattern, size_t pi);
+  void _apply_PI(Gate &gate, const Pattern pattern, const size_t pi);
   void _apply_PO(Gate &gate);
   
-  void _run_gate(Gate &gate, Pattern &pattern, size_t pi, size_t SA_fault,
-                size_t fault_val);
-  void _shift_to_correct_answer(std::vector<size_t> &results, size_t bits);
+  void _run_gate(Gate &gate, const Pattern pattern, const size_t pi, const size_t SA_fault,
+                const size_t fault_val);
+  void _shift_to_correct_answer(std::vector<size_t> &results, const size_t bits);
 
   // print for debug
-  // TODO: define const method if not changing in-class members
   void print_topological(const std::vector<std::vector<size_t>> &adj,
                          const std::vector<size_t> &indegree,
                          const std::vector<size_t> &order) const;
   void print_gate(const Gate &gate) const;
-  void print_fault(const std::vector<Fault> &_faults) const;
-  void print_pattern(const std::vector<Pattern> &patterns, const size_t round,
+  void print_faults(const std::vector<Fault> &_faults) const;
+  void print_patterns(const std::vector<Pattern> &patterns, const size_t round,
                      const size_t num_PIs) const;
   void print_bits_stack(const size_t size, const void *const ptr) const;
-  void print_check_simulation(const std::vector<size_t> &results) const;
+  void print_simulation_results(const std::vector<size_t> &results) const;
   void print_found_fault_to_pattern(const std::vector<size_t> &_found_fault_to_pattern) const;
 };
 

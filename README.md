@@ -1,6 +1,6 @@
 # Fault-simulation
 
-+[] open a github for this project and implement a very simple basic CPU baseline
++ [] open a github for this project and implement a very simple basic CPU baseline
 
 ```
 ~$ cd yhsim
@@ -22,7 +22,9 @@ As a starting point, you can create a simple.ckt/simple.flst/simple.ptn benchmar
 
 ---
 
-## todo
-* revise code better, with better comment
-* pattern/fault have mapping index problem need to fix
-* make a PPT 
+## Record
+* Ask questions (Ask_q) in the `simulation.cpp`
+* `\n` and `std::endl`
+	* Differnece: The only difference is that `std::endl` flushes the output buffer, and `\n` doesn't. If you don't want the buffer flushed frequently, use `\n`. If you do (for example, if you want to get all the output, and the program is unstable), use `std::endl`. [Ref](https://stackoverflow.com/questions/213907/stdendl-vs-n)
+	* Though in some use cases like competitive programming, it is better to use “\n” when the problem is not interactive, as it saves time by not flushing the entire line and thus improves the time complexity of the program.[Ref](https://www.geeksforgeeks.org/endl-vs-n-in-cpp/)
+* 

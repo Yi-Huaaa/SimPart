@@ -4,30 +4,36 @@
 #include <queue>
 #include <string>
 #include <vector>
+#include <limits>
 
 #include "simulation.hpp"
 
 void fsim::Simulator::read(const std::string &ckt_path,
                            const std::string &flst_path,
                            const std::string &ptn_path) {
-  // TODO: this literals has ERROR
-  // using std::literals::string_literals;
+  /* Ref: https://stackoverflow.com/questions/38950008/using-string-literals-without-using-namespace-std*/
+  // using namespace std::literals::string_literals;
+  // using namespace std::literals;
+  using std::string_literals::operator""s;
 
-  // gate
-  std::cout << "Read and construct ckt" << std::endl;
   std::ifstream ckt(ckt_path), flst(flst_path), ptn(ptn_path);
 
-  // TODO: exception
-  // operator bool (cpp reference)
+  // TODO: study operator bool (cpp reference)
   if(!ckt) {
-    throw std::runtime_error(std::string("cannot open circut file ") + ckt_path);
-    // throw std::runtime_error("cannot open circut file "s + ckt_path);
+    throw std::runtime_error("cannot open circut file "s + ckt_path);
+  }
+  if(!flst) {
+    throw std::runtime_error("cannot open fault file "s + flst_path);
+  }
+  if(!ptn) {
+    throw std::runtime_error("cannot open pattern file "s + ptn_path);
   }
 
-  // TODO: remove below the code to read(istream&, istream&, istream&)
-  // study object slicing 
-  // read(ckt, flst, ptn);
-
+  // TODO (for unittest): remove below the code to read(istream&, istream&, istream&)
+  // TODO: study object slicing 
+  
+  // gate
+  std::cout << "Read and construct ckt" << std::endl;
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires;
   _total_gates = _num_PIs + _num_POs + _num_inner_gates;
   std::cout << _num_PIs << ", " << _num_POs << ", " << _num_inner_gates << ", "
@@ -35,31 +41,34 @@ void fsim::Simulator::read(const std::string &ckt_path,
   _read_graph(ckt);
 
   // fault
-  // TODO: excpetion for failure on opening the file
   std::cout << "Read and construct flst" << std::endl;
-  // std::ifstream flst(flst_path);
   flst >> _num_fault;
   std::cout << _num_fault << std::endl;
   _read_fault(flst);
 
   // pattern
-  // TODO: excpetion for failure on opening the file
   std::cout << "Read and construct ptn" << std::endl;
-  // std::ifstream ptn(ptn_path);
   ptn >> _num_pattern;
   std::cout << _num_pattern << std::endl;
   _read_pattern(ptn);
 }
 
+void fsim::Simulator::_read_files(std::ifstream &ckt){
+  // study: ifstream. istream difference
+
+}
+
 void fsim::Simulator::run(Mode mode) {
 
-  // TODO:
   switch(mode) {
     case Mode::SEQUENTIAL:
       _run_sequential();
       break;
-    case Mode::PARALLEL:
-      _run_parallel();
+    case Mode::PARALLEL_TF:
+      _run_parallel_tf();
+      break;
+    case Mode::PARALLEL_OMP:
+      _run_parallel_omp();
       break;
 
   }
@@ -69,23 +78,21 @@ void fsim::Simulator::run(Mode mode) {
 }
 
 void fsim::Simulator::_run_sequential(){
-  // TODO: go back and study the difference between \n and std::endl;
   std::cout << "execute simulation._run_sequential();" << '\n';
 
   // Simulation
-  _found_fault_to_pattern.resize(2 * _num_fault);
+  _found_fault_to_pattern.resize(2 * _faults.size());
 
-  for (size_t i = 0; i < _num_rounds; i++) {
-    // todo!!!! -> need to set the _testcase_bits
-    size_t _testcase_bits = SIMPLE_TESTCASE_BITS;
+  for (size_t rd = 0; rd < _num_rounds; rd++) {
+    size_t num_testcases_this_roud = ((_num_pattern/(SIZE_T_BITS*(rd+1)))) ? (SIZE_T_BITS) : (_num_pattern%SIZE_T_BITS);
 
     // good simulation
     std::cout << "Run Good case" << std::endl;
-    _run_good_case(_pattern[i], _testcase_bits);
+    _run_good_case(_pattern[rd], num_testcases_this_roud);
 
     // bad simulation (fault simulation)
-    for (size_t j = 0; j < _num_fault; j++) {
-      _run_bad_case(_faults[j], _pattern[i], _testcase_bits);
+    for (size_t j = 0; j < _faults.size(); j++) {
+      _run_bad_case(_faults[j], _pattern[rd], num_testcases_this_roud);
 
       size_t found_fault = 0;
       for (size_t i = (_total_gates - 1); i > (_total_gates - _num_POs - 1);
@@ -97,18 +104,29 @@ void fsim::Simulator::_run_sequential(){
       // Record whether fault can be found
       _found_fault_to_pattern[2 * j] = found_fault;
       // Record which pattern found the fault
-      _found_fault_to_pattern[2 * j + 1] = i;
+      _found_fault_to_pattern[2 * j + 1] = rd;
     }
   }
-
 }
 
-void fsim::Simulator::_run_parallel(){
-std::cout << "execute simulation._run_parallel();" << '\n';
+void fsim::Simulator::_shift_to_correct_answer(std::vector<size_t> &results,
+                                              const size_t bits) {
+  for (size_t i = 0; i < _total_gates; i++) {
+    results[i] <<= (SIZE_T_BITS - bits);
+    results[i] >>= (SIZE_T_BITS - bits);
+  }
 }
 
 
-void fsim::Simulator::_run_good_case(Pattern &pattern, size_t bits) {
+void fsim::Simulator::_run_parallel_tf(){
+  std::cout << "execute simulation._run_parallel taskflow();" << '\n';
+}
+
+void fsim::Simulator::_run_parallel_omp(){
+  std::cout << "execute simulation._run_parallel OpenMP();" << '\n';
+}
+
+void fsim::Simulator::_run_good_case(const Pattern pattern, const size_t bits) {
   // Simulation
   for (size_t i = 0; i < _total_gates; i++) {
     _run_gate(_gates[i], pattern, i, 0, 0);
@@ -126,11 +144,11 @@ void fsim::Simulator::_run_good_case(Pattern &pattern, size_t bits) {
 
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   std::cout << "GOOD resutls:" << std::endl;
-  print_check_simulation(_g_gate_results);
+  print_simulation_results(_g_gate_results);
 #endif
 }
 
-void fsim::Simulator::_run_bad_case(Fault &fault, Pattern &pattern, size_t bits) {
+void fsim::Simulator::_run_bad_case(const Fault &fault, const Pattern pattern, const size_t bits) {
   size_t wrong_gate = fault._gate_with_fault;
   size_t fault_val = fault._gate_SA_fault_val;
 
@@ -151,8 +169,8 @@ void fsim::Simulator::_run_bad_case(Fault &fault, Pattern &pattern, size_t bits)
   }
 
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
-  std::cout << "BAD resutls:" << std::endl;
-  print_check_simulation(_b_gate_results);
+  std::cout << "BAD resutls:\n";
+  print_simulation_results(_b_gate_results);
 #endif
 }
 
@@ -209,7 +227,7 @@ void fsim::Simulator::_read_graph(std::ifstream &ckt) {
 #endif
 
   /** Constructing circuit graph */
-  // scanf gate type array
+  // read gate type array
   std::vector<GateType> gate_type;
   gate_type.resize(_total_gates);
   for (size_t i = 0; i < _num_PIs; i++) {
@@ -269,17 +287,17 @@ void fsim::Simulator::_read_fault(std::ifstream &flst) {
     size_t wrong_gate, fault_value;
     flst >> wrong_gate >> fault_value;
 #ifdef FSIM_DEBUG_PRINT_FAULTS
-    std::cout << wrong_gate << ", " << fault_value << std::endl;
+    std::cout << wrong_gate << ", " << fault_value << "\n";
 #endif
     _faults[i]._gate_with_fault = _gate_idx_to_tpg_order_idx[wrong_gate];
-    // TODO:
-    _faults[i]._gate_SA_fault_val = (fault_value) ? (SIZE_MAX) : (0);
-    // _faults[i]._gate_SA_fault_val = (fault_value) ? std::numeric_limits<size_t>::max() : (0);
+    // Ask_q: "numeric_limits" also include a limit lib, whether it ii salso been declared as a macor?
+    // _faults[i]._gate_SA_fault_val = (fault_value) ? (SIZE_MAX) : (0);
+    _faults[i]._gate_SA_fault_val = (fault_value) ? std::numeric_limits<size_t>::max() : (0);
 
   }
 
 #ifdef FSIM_DEBUG_PRINT_FAULTS
-  print_fault(_faults);
+  print_faults(_faults);
 #endif
 }
 
@@ -296,7 +314,7 @@ void fsim::Simulator::_read_pattern(std::ifstream &ptn) {
   }
 
 #ifdef FSIM_DEBUG_PRINT_PATTERNS
-  print_pattern(_pattern, _num_rounds, _num_PIs);
+  print_patterns(_pattern, _num_rounds, _num_PIs);
 #endif
 }
 
@@ -362,7 +380,7 @@ void fsim::Simulator::_apply_NOR(Gate &gate) {
   gate._output_value = ~(ret);
 }
 
-void fsim::Simulator::_apply_PI(Gate &gate, Pattern &pattern, size_t pi) {
+void fsim::Simulator::_apply_PI(Gate &gate, const Pattern pattern, const size_t pi) {
   gate._output_value = pattern._value[pi];
 }
 
@@ -372,8 +390,8 @@ void fsim::Simulator::_apply_PO(Gate &gate) {
   gate._output_value = pre_gate->_output_value;
 }
 
-void fsim::Simulator::_run_gate(Gate &gate, Pattern &pattern, size_t pi,
-                               size_t SA_fault, size_t fault_val) {
+void fsim::Simulator::_run_gate(Gate &gate, const Pattern pattern, const size_t pi,
+                               const size_t SA_fault, const size_t fault_val) {
   if (SA_fault) {
     gate._output_value = fault_val;
     return;
@@ -406,19 +424,12 @@ void fsim::Simulator::_run_gate(Gate &gate, Pattern &pattern, size_t pi,
   }
 }
 
-void fsim::Simulator::_shift_to_correct_answer(std::vector<size_t> &results,
-                                              size_t bits) {
-  for (size_t i = 0; i < _total_gates; i++) {
-    results[i] <<= (SIZE_T_BITS - bits);
-    results[i] >>= (SIZE_T_BITS - bits);
-  }
-}
 
 // debug: print functions
 void fsim::Simulator::print_topological(
     const std::vector<std::vector<size_t>> &adj,
     const std::vector<size_t> &indegree, const std::vector<size_t> &order) const {
-  std::cout << "\n=====\n\nadj:" << std::endl;
+  std::cout << "\n=====\n\nadj:\n";
   for (size_t i = 0; i < adj.size(); i++) {
     std::cout << i << " = [";
     for (size_t v_len = 0; v_len < adj[i].size(); v_len++) {
@@ -430,19 +441,19 @@ void fsim::Simulator::print_topological(
 
   std::cout << "Indegree:\n";
   for (size_t i = 0; i < indegree.size(); i++) {
-    std::cout << i << " = [" << indegree[i] << "]" << std::endl;
+    std::cout << i << " = [" << indegree[i] << "]\n";
   }
 
   std::cout << "Order:\n";
   for (size_t i = 0; i < order.size(); i++) {
     std::cout << order[i] << ", ";
   }
-  std::cout << std::endl;
+  std::cout << "\n";
 }
 
 void fsim::Simulator::print_gate(const Gate &gate) const {
   std::cout << "\n=====\n\n";
-  std::cout << "id: " << &gate << std::endl;
+  std::cout << "id: " << &gate << "\n";
   std::cout << "type: " << static_cast<size_t>(gate._type) << "\n";
   std::cout << "level: " << gate._level << "\n";
   std::cout << "input_gates: [";
@@ -453,19 +464,19 @@ void fsim::Simulator::print_gate(const Gate &gate) const {
   std::cout << "output_value: " << gate._output_value << "\n";
 }
 
-void fsim::Simulator::print_fault(const std::vector<Fault> &_faults) const {
+void fsim::Simulator::print_faults(const std::vector<Fault> &_faults) const {
   std::cout << "\n=====\n\n"
-            << "FSIM_DEBUG_PRINT_FAULTS" << std::endl;
+            << "FSIM_DEBUG_PRINT_FAULTS\n";
   for (size_t i = 0; i < _num_fault; i++) {
     std::cout << "_gate_with_fault = " << _faults[i]._gate_with_fault << ", SA_"
               << _faults[i]._gate_SA_fault_val << "\n";
   }
-  std::cout << "\n=====\n\n" << std::endl;
+  std::cout << "\n=====\n\n";
 }
 
-void fsim::Simulator::print_pattern(const std::vector<Pattern> &patterns,
+void fsim::Simulator::print_patterns(const std::vector<Pattern> &patterns,
                                     const size_t round, const size_t num_PIs) const {
-  std::cout << "\n=====\n\n" << std::endl;
+  std::cout << "\n=====\n\n";
   for (unsigned int i = 0; i < round; i++) {
     std::cout << "[" << SIZE_T_BITS * i << ", " << SIZE_T_BITS * (i + 1)
               << "] bits = [\n";
@@ -496,17 +507,17 @@ void fsim::Simulator::print_bits_stack(const size_t size,
   std::cout << "\n";
 }
 
-void fsim::Simulator::print_check_simulation(
+void fsim::Simulator::print_simulation_results(
     const std::vector<size_t> &results) const {
   for (size_t i = 0; i < _total_gates; i++) {
     std::cout << "gate_" << i << ".output = " << results[i] << "\n";
   }
-  std::cout << "\n" << std::endl;
+  std::cout << "\n\n";
 }
 
 void fsim::Simulator::print_found_fault_to_pattern(
     const std::vector<size_t> &_found_fault_to_pattern) const {
-  std::cout << "\n=====\n\n" << std::endl;
+  std::cout << "\n=====\n\n";
   for (size_t i = 0; i < (2 * _num_fault); i += 2) {
     if (_found_fault_to_pattern[i] == 1) {
       std::cout << "fault_" << (i / 2) << " is found, with Pattern_"
@@ -515,5 +526,5 @@ void fsim::Simulator::print_found_fault_to_pattern(
       std::cout << "fault_" << i << " cannot be found\n";
     }
   }
-  std::cout << "\n=====\n\n" << std::endl;
+  std::cout << "\n=====\n\n";
 }
