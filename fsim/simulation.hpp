@@ -1,5 +1,6 @@
 #ifndef SIMULATION_H
 #define SIMULATION_H
+#include <climits>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -15,11 +16,11 @@
 // Print for check
 // TODO: rename
 // #define FSIM_DEBUG_PRINT_SIMULATION
-#define print_simulation
-#define print_graph
-#define print_faults
-#define print_patterns
-#define print_fault_table
+#define FSIM_DEBUG_PRINT_SIMULATION
+#define FSIM_DEBUG_PRINT_GRAPH
+#define FSIM_DEBUG_PRINT_FAULTS
+#define FSIM_DEBUG_PRINT_PATTERNS
+#define FSIM_DEBUG_PRINT_FAULT_TABLE
 
 namespace fsim {
 
@@ -58,11 +59,10 @@ public:
   // const std::vector<Gate>& gates() const { return _gates; }
 
 private:
+  
   // Read
-
-  // TODO: _num_gates, _num_wires
-  size_t _num_PIs, _num_POs, _num_gate, _num_wire, _total_gates;
-  std::vector<size_t> _gate_id_to_order_idx;  // _gate2tpgorder
+  size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires, _total_gates;
+  std::vector<size_t> _gate_idx_to_tpg_order_idx;
   std::vector<Gate> _gates;
   
   // TODO: reduce redundancies (we don't need another data members for _num_fault,
@@ -70,13 +70,11 @@ private:
   size_t _num_fault;
   std::vector<Fault> _faults;
 
-  // TODO: naming...
   size_t _num_pattern; // total number of patterns that need to be tested
-  size_t _round;       // ceiling(_num_pattern/SIZE_T_BITS) => num_rounds ???1
+  size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
   std::vector<Pattern> _pattern;
 
   // Construct
-  // TODO: rename...
   void _read_graph(std::ifstream &ckt);
   void _read_fault(std::ifstream &flst);
   void _read_pattern(std::ifstream &ptn);
@@ -86,25 +84,28 @@ private:
   size_t _testcase_bits;
   std::vector<size_t> _g_gate_results; 
   std::vector<size_t> _b_gate_results;
-  std::vector<size_t> _found_fault_table; // fault2pattern???
+  std::vector<size_t> _found_fault_to_pattern;
 
-  // TODO: private members and functions should be prefixed with '_'
+  void _run_sequential();
+  void _run_parallel();
+  // todo: here _run_good_case's Pattern &pattern, size_t pi won't change value -> should be constant
   void _run_good_case(Pattern &pattern, size_t bits);
+  // todo: here _run_bad_case's Pattern &pattern, size_t pi won't change value -> should be constant
   void _run_bad_case(Fault &fault, Pattern &pattern, size_t bits);
 
   void _apply_INV(Gate &gate);
-  void AND(Gate &gate);
-  void OR(Gate &gate);
-  void XOR(Gate &gate);
-  void NAND(Gate &gate);
-  void NOR(Gate &gate);
-
-
-  void run_PI(Gate &gate, Pattern &pattern, size_t pi);
-  void run_PO(Gate &gate);
-  void run_gate(Gate &gate, Pattern &pattern, size_t pi, size_t SA_fault,
+  void _apply_AND(Gate &gate);
+  void _apply_OR(Gate &gate);
+  void _apply_XOR(Gate &gate);
+  void _apply_NAND(Gate &gate);
+  void _apply_NOR(Gate &gate);
+  // todo: here _apply_PI's Pattern &pattern, size_t pi won't change value -> should be constant
+  void _apply_PI(Gate &gate, Pattern &pattern, size_t pi);
+  void _apply_PO(Gate &gate);
+  
+  void _run_gate(Gate &gate, Pattern &pattern, size_t pi, size_t SA_fault,
                 size_t fault_val);
-  void shift_to_correct_answer(std::vector<size_t> &results, size_t bits);
+  void _shift_to_correct_answer(std::vector<size_t> &results, size_t bits);
 
   // print for debug
   // TODO: define const method if not changing in-class members
@@ -117,7 +118,7 @@ private:
                      const size_t num_PIs) const;
   void print_bits_stack(const size_t size, const void *const ptr) const;
   void print_check_simulation(const std::vector<size_t> &results) const;
-  void print_found_fault_table(const std::vector<size_t> &_found_fault_table) const;
+  void print_found_fault_to_pattern(const std::vector<size_t> &_found_fault_to_pattern) const;
 };
 
 } // namespace fsim

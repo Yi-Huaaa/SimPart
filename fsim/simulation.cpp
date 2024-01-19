@@ -10,7 +10,8 @@
 void fsim::Simulator::read(const std::string &ckt_path,
                            const std::string &flst_path,
                            const std::string &ptn_path) {
-  using std::literals::string_literals;
+  // TODO: this literals has ERROR
+  // using std::literals::string_literals;
 
   // gate
   std::cout << "Read and construct ckt" << std::endl;
@@ -19,35 +20,35 @@ void fsim::Simulator::read(const std::string &ckt_path,
   // TODO: exception
   // operator bool (cpp reference)
   if(!ckt) {
-    //throw std::runtime_error(std::string("cannot open circut file ") + ckt_path);
-    throw std::runtime_error("cannot open circut file "s + ckt_path);
+    throw std::runtime_error(std::string("cannot open circut file ") + ckt_path);
+    // throw std::runtime_error("cannot open circut file "s + ckt_path);
   }
 
   // TODO: remove below the code to read(istream&, istream&, istream&)
   // study object slicing 
-  read(ckt, flst, ptn);
+  // read(ckt, flst, ptn);
 
-  ckt >> _num_PIs >> _num_POs >> _num_gate >> _num_wire;
-  _total_gates = _num_PIs + _num_POs + _num_gate;
-  std::cout << _num_PIs << ", " << _num_POs << ", " << _num_gate << ", "
-            << _num_wire << ", " << _total_gates << std::endl;
-  construct_graph(ckt);
+  ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires;
+  _total_gates = _num_PIs + _num_POs + _num_inner_gates;
+  std::cout << _num_PIs << ", " << _num_POs << ", " << _num_inner_gates << ", "
+            << _num_wires << ", " << _total_gates << std::endl;
+  _read_graph(ckt);
 
   // fault
   // TODO: excpetion for failure on opening the file
   std::cout << "Read and construct flst" << std::endl;
-  std::ifstream flst(flst_path);
+  // std::ifstream flst(flst_path);
   flst >> _num_fault;
   std::cout << _num_fault << std::endl;
-  construct_fault(flst);
+  _read_fault(flst);
 
   // pattern
   // TODO: excpetion for failure on opening the file
   std::cout << "Read and construct ptn" << std::endl;
-  std::ifstream ptn(ptn_path);
+  // std::ifstream ptn(ptn_path);
   ptn >> _num_pattern;
   std::cout << _num_pattern << std::endl;
-  construct_pattern(ptn);
+  _read_pattern(ptn);
 }
 
 void fsim::Simulator::run(Mode mode) {
@@ -56,97 +57,107 @@ void fsim::Simulator::run(Mode mode) {
   switch(mode) {
     case Mode::SEQUENTIAL:
       _run_sequential();
-    break;
+      break;
+    case Mode::PARALLEL:
+      _run_parallel();
+      break;
 
   }
+#ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
+  print_found_fault_to_pattern(_found_fault_to_pattern);
+#endif
+}
 
+void fsim::Simulator::_run_sequential(){
   // TODO: go back and study the difference between \n and std::endl;
-  std::cout << "execute simulation.run();" << '\n';
+  std::cout << "execute simulation._run_sequential();" << '\n';
 
   // Simulation
-  _found_fault_table.resize(2 * _num_fault);
+  _found_fault_to_pattern.resize(2 * _num_fault);
 
-  for (size_t i = 0; i < _round; i++) {
+  for (size_t i = 0; i < _num_rounds; i++) {
     // todo!!!! -> need to set the _testcase_bits
     size_t _testcase_bits = SIMPLE_TESTCASE_BITS;
 
     // good simulation
     std::cout << "Run Good case" << std::endl;
-    good_case(_pattern[i], _testcase_bits);
+    _run_good_case(_pattern[i], _testcase_bits);
 
-    // Faults simulation
+    // bad simulation (fault simulation)
     for (size_t j = 0; j < _num_fault; j++) {
-      bad_case(_faults[j], _pattern[i], _testcase_bits);
+      _run_bad_case(_faults[j], _pattern[i], _testcase_bits);
 
       size_t found_fault = 0;
       for (size_t i = (_total_gates - 1); i > (_total_gates - _num_POs - 1);
            i--) {
-        if (_good_result[i] != _bad_result[i]) {
+        if (_g_gate_results[i] != _b_gate_results[i]) {
           found_fault = 1;
         }
       }
       // Record whether fault can be found
-      _found_fault_table[2 * j] = found_fault;
+      _found_fault_to_pattern[2 * j] = found_fault;
       // Record which pattern found the fault
-      _found_fault_table[2 * j + 1] = i;
+      _found_fault_to_pattern[2 * j + 1] = i;
     }
   }
 
-#ifdef print_fault_table
-  print_found_fault_table(_found_fault_table);
-#endif
 }
 
-void fsim::Simulator::good_case(Pattern &pattern, size_t bits) {
+void fsim::Simulator::_run_parallel(){
+std::cout << "execute simulation._run_parallel();" << '\n';
+}
+
+
+void fsim::Simulator::_run_good_case(Pattern &pattern, size_t bits) {
   // Simulation
   for (size_t i = 0; i < _total_gates; i++) {
-    run_gate(_gates[i], pattern, i, 0, 0);
+    _run_gate(_gates[i], pattern, i, 0, 0);
   }
 
   // Duplicated the answer of good_case into a new memory
-  _good_result.resize(_total_gates);
+  _g_gate_results.resize(_total_gates);
   for (size_t i = 0; i < _total_gates; i++) {
-    _good_result[i] = _gates[i]._output_value;
+    _g_gate_results[i] = _gates[i]._output_value;
   }
 
   if (bits < SIZE_T_BITS) {
-    shift_to_correct_answer(_good_result, bits);
+    _shift_to_correct_answer(_g_gate_results, bits);
   }
 
-#ifdef print_simulation
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
   std::cout << "GOOD resutls:" << std::endl;
-  print_check_simulation(_good_result);
+  print_check_simulation(_g_gate_results);
 #endif
 }
 
-void fsim::Simulator::bad_case(Fault &fault, Pattern &pattern, size_t bits) {
+void fsim::Simulator::_run_bad_case(Fault &fault, Pattern &pattern, size_t bits) {
   size_t wrong_gate = fault._gate_with_fault;
   size_t fault_val = fault._gate_SA_fault_val;
 
   // fault simulation
   for (size_t i = 0; i < _total_gates; i++) {
     size_t SA_fault = (i == wrong_gate);
-    run_gate(_gates[i], pattern, i, SA_fault, fault_val);
+    _run_gate(_gates[i], pattern, i, SA_fault, fault_val);
   }
 
   // Duplicated the answer of BAD_case into a new memory
-  _bad_result.resize(_total_gates);
+  _b_gate_results.resize(_total_gates);
   for (size_t i = 0; i < _total_gates; i++) {
-    _bad_result[i] = _gates[i]._output_value;
+    _b_gate_results[i] = _gates[i]._output_value;
   }
 
   if (bits < SIZE_T_BITS) {
-    shift_to_correct_answer(_bad_result, bits);
+    _shift_to_correct_answer(_b_gate_results, bits);
   }
 
-#ifdef print_simulation
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
   std::cout << "BAD resutls:" << std::endl;
-  print_check_simulation(_bad_result);
+  print_check_simulation(_b_gate_results);
 #endif
 }
 
 // Construct functions
-void fsim::Simulator::construct_graph(std::ifstream &ckt) {
+void fsim::Simulator::_read_graph(std::ifstream &ckt) {
   std::vector<std::vector<size_t>> adj;
   adj.resize(_total_gates);
   std::vector<size_t> indegree;
@@ -154,7 +165,7 @@ void fsim::Simulator::construct_graph(std::ifstream &ckt) {
 
   /** Levelized the input gates before constructing the circuit graph */
   // read file, constrcut adjacent list, construct indegree array
-  for (size_t i = 0; i < _num_wire; i++) {
+  for (size_t i = 0; i < _num_wires; i++) {
     size_t gate_0, pin_Y, num_post_gates;
     ckt >> gate_0 >> pin_Y >> num_post_gates;
 
@@ -166,7 +177,7 @@ void fsim::Simulator::construct_graph(std::ifstream &ckt) {
     }
   }
 
-#ifdef print_graph
+#ifdef FSIM_DEBUG_PRINT_GRAPH
   // copy `indegree` vector since we need its original value later
   std::vector<size_t> indegree_orig;
   indegree_orig = indegree;
@@ -193,7 +204,7 @@ void fsim::Simulator::construct_graph(std::ifstream &ckt) {
     }
   }
 
-#ifdef print_graph
+#ifdef FSIM_DEBUG_PRINT_GRAPH
   print_topological(adj, indegree_orig, order);
 #endif
 
@@ -217,12 +228,12 @@ void fsim::Simulator::construct_graph(std::ifstream &ckt) {
   /**
    * CML example:
    * order[3] = 6
-   * _gate_id_to_order_idx[6] = 3
-   * _gate_id_to_order_idx: 0, 1, 2, 7, 5, 6, 3, 4
+   * _gate_idx_to_tpg_order_idx[6] = 3
+   * _gate_idx_to_tpg_order_idx: 0, 1, 2, 7, 5, 6, 3, 4
    * */
-  _gate_id_to_order_idx.resize(_total_gates);
+  _gate_idx_to_tpg_order_idx.resize(_total_gates);
   for (size_t i = 0; i < order.size(); i++) {
-    _gate_id_to_order_idx[order[i]] = i;
+    _gate_idx_to_tpg_order_idx[order[i]] = i;
   }
 
   // gates are stored in the order specified by the `order` array
@@ -239,64 +250,64 @@ void fsim::Simulator::construct_graph(std::ifstream &ckt) {
   for (size_t i = 0; i < adj.size(); i++) {
     for (size_t j = 0; j < adj[i].size(); j++) {
       size_t from_gate_id = i, to_gate_id = adj[i][j];
-      Gate &from_gate = _gates[_gate_id_to_order_idx[from_gate_id]];
-      Gate &to_gate = _gates[_gate_id_to_order_idx[to_gate_id]];
+      Gate &from_gate = _gates[_gate_idx_to_tpg_order_idx[from_gate_id]];
+      Gate &to_gate = _gates[_gate_idx_to_tpg_order_idx[to_gate_id]];
       to_gate._inputs.push_back(&from_gate);
     }
   }
 
-#ifdef print_graph
+#ifdef FSIM_DEBUG_PRINT_GRAPH
   for (size_t i = 0; i < _total_gates; i++) {
     print_gate(_gates[i]);
   }
 #endif
 }
 
-void fsim::Simulator::construct_fault(std::ifstream &flst) {
+void fsim::Simulator::_read_fault(std::ifstream &flst) {
   _faults.resize(_num_fault);
   for (size_t i = 0; i < _num_fault; i++) {
     size_t wrong_gate, fault_value;
     flst >> wrong_gate >> fault_value;
-#ifdef print_faults
+#ifdef FSIM_DEBUG_PRINT_FAULTS
     std::cout << wrong_gate << ", " << fault_value << std::endl;
 #endif
-    _faults[i]._gate_with_fault = _gate_id_to_order_idx[wrong_gate];
+    _faults[i]._gate_with_fault = _gate_idx_to_tpg_order_idx[wrong_gate];
     // TODO:
-    //_faults[i]._gate_SA_fault_val = (fault_value) ? (SIZE_MAX) : (0);
-    _faults[i]._gate_SA_fault_val = (fault_value) ? std::numeric_limits<size_t>::max() : (0);
+    _faults[i]._gate_SA_fault_val = (fault_value) ? (SIZE_MAX) : (0);
+    // _faults[i]._gate_SA_fault_val = (fault_value) ? std::numeric_limits<size_t>::max() : (0);
 
   }
 
-#ifdef print_faults
+#ifdef FSIM_DEBUG_PRINT_FAULTS
   print_fault(_faults);
 #endif
 }
 
-void fsim::Simulator::construct_pattern(std::ifstream &ptn) {
-  _round = (_num_pattern + SIZE_T_BITS - 1) / SIZE_T_BITS; // ceiling
+void fsim::Simulator::_read_pattern(std::ifstream &ptn) {
+  _num_rounds = (_num_pattern + SIZE_T_BITS - 1) / SIZE_T_BITS; // ceiling
 
-  _pattern.resize(_round);
-  for (size_t i = 0; i < _round; i++) {
+  _pattern.resize(_num_rounds);
+  for (size_t i = 0; i < _num_rounds; i++) {
     _pattern[i]._value.resize(_num_PIs);
     for (size_t pi = 0; pi < _num_PIs; pi++) {
-      size_t idx = _gate_id_to_order_idx[i];
+      size_t idx = _gate_idx_to_tpg_order_idx[i];
       ptn >> _pattern[i]._value[pi];
     }
   }
 
-#ifdef print_patterns
-  print_pattern(_pattern, _round, _num_PIs);
+#ifdef FSIM_DEBUG_PRINT_PATTERNS
+  print_pattern(_pattern, _num_rounds, _num_PIs);
 #endif
 }
 
 // simulation for gates
-void fsim::Simulator::INV(Gate &gate) {
+void fsim::Simulator::_apply_INV(Gate &gate) {
   Gate *pre_gate = gate._inputs[0];
   size_t ret = pre_gate->_output_value;
   gate._output_value = ~ret;
 }
 
-void fsim::Simulator::AND(Gate &gate) {
+void fsim::Simulator::_apply_AND(Gate &gate) {
   Gate *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
@@ -307,7 +318,7 @@ void fsim::Simulator::AND(Gate &gate) {
   gate._output_value = ret;
 }
 
-void fsim::Simulator::OR(Gate &gate) {
+void fsim::Simulator::_apply_OR(Gate &gate) {
   Gate *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
@@ -318,7 +329,7 @@ void fsim::Simulator::OR(Gate &gate) {
   gate._output_value = ret;
 }
 
-void fsim::Simulator::XOR(Gate &gate) {
+void fsim::Simulator::_apply_XOR(Gate &gate) {
   Gate *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
@@ -329,7 +340,7 @@ void fsim::Simulator::XOR(Gate &gate) {
   gate._output_value = ret;
 }
 
-void fsim::Simulator::NAND(Gate &gate) {
+void fsim::Simulator::_apply_NAND(Gate &gate) {
   Gate *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
@@ -340,7 +351,7 @@ void fsim::Simulator::NAND(Gate &gate) {
   gate._output_value = ~(ret);
 }
 
-void fsim::Simulator::NOR(Gate &gate) {
+void fsim::Simulator::_apply_NOR(Gate &gate) {
   Gate *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
@@ -351,17 +362,17 @@ void fsim::Simulator::NOR(Gate &gate) {
   gate._output_value = ~(ret);
 }
 
-void fsim::Simulator::PI(Gate &gate, Pattern &pattern, size_t pi) {
+void fsim::Simulator::_apply_PI(Gate &gate, Pattern &pattern, size_t pi) {
   gate._output_value = pattern._value[pi];
 }
 
-void fsim::Simulator::PO(Gate &gate) {
+void fsim::Simulator::_apply_PO(Gate &gate) {
   // It outputs its previous gate's output_value if there is no SA fault
   Gate *pre_gate = gate._inputs[0];
   gate._output_value = pre_gate->_output_value;
 }
 
-void fsim::Simulator::run_gate(Gate &gate, Pattern &pattern, size_t pi,
+void fsim::Simulator::_run_gate(Gate &gate, Pattern &pattern, size_t pi,
                                size_t SA_fault, size_t fault_val) {
   if (SA_fault) {
     gate._output_value = fault_val;
@@ -369,33 +380,33 @@ void fsim::Simulator::run_gate(Gate &gate, Pattern &pattern, size_t pi,
   }
   switch (gate._type) {
   case GateType::INV:
-    INV(gate);
+    _apply_INV(gate);
     break;
   case GateType::AND:
-    AND(gate);
+    _apply_AND(gate);
     break;
   case GateType::OR:
-    OR(gate);
+    _apply_OR(gate);
     break;
   case GateType::XOR:
-    XOR(gate);
+    _apply_XOR(gate);
     break;
   case GateType::NAND:
-    NAND(gate);
+    _apply_NAND(gate);
     break;
   case GateType::NOR:
-    NOR(gate);
+    _apply_NOR(gate);
     break;
   case GateType::PI:
-    PI(gate, pattern, pi);
+    _apply_PI(gate, pattern, pi);
     break;
   case GateType::PO:
-    PO(gate);
+    _apply_PO(gate);
     break;
   }
 }
 
-void fsim::Simulator::shift_to_correct_answer(std::vector<size_t> &results,
+void fsim::Simulator::_shift_to_correct_answer(std::vector<size_t> &results,
                                               size_t bits) {
   for (size_t i = 0; i < _total_gates; i++) {
     results[i] <<= (SIZE_T_BITS - bits);
@@ -403,10 +414,10 @@ void fsim::Simulator::shift_to_correct_answer(std::vector<size_t> &results,
   }
 }
 
-// print functions
+// debug: print functions
 void fsim::Simulator::print_topological(
     const std::vector<std::vector<size_t>> &adj,
-    const std::vector<size_t> &indegree, const std::vector<size_t> &order) {
+    const std::vector<size_t> &indegree, const std::vector<size_t> &order) const {
   std::cout << "\n=====\n\nadj:" << std::endl;
   for (size_t i = 0; i < adj.size(); i++) {
     std::cout << i << " = [";
@@ -429,7 +440,7 @@ void fsim::Simulator::print_topological(
   std::cout << std::endl;
 }
 
-void fsim::Simulator::print_gate(const Gate &gate) {
+void fsim::Simulator::print_gate(const Gate &gate) const {
   std::cout << "\n=====\n\n";
   std::cout << "id: " << &gate << std::endl;
   std::cout << "type: " << static_cast<size_t>(gate._type) << "\n";
@@ -442,9 +453,9 @@ void fsim::Simulator::print_gate(const Gate &gate) {
   std::cout << "output_value: " << gate._output_value << "\n";
 }
 
-void fsim::Simulator::print_fault(const std::vector<Fault> &_faults) {
+void fsim::Simulator::print_fault(const std::vector<Fault> &_faults) const {
   std::cout << "\n=====\n\n"
-            << "print_faults" << std::endl;
+            << "FSIM_DEBUG_PRINT_FAULTS" << std::endl;
   for (size_t i = 0; i < _num_fault; i++) {
     std::cout << "_gate_with_fault = " << _faults[i]._gate_with_fault << ", SA_"
               << _faults[i]._gate_SA_fault_val << "\n";
@@ -453,7 +464,7 @@ void fsim::Simulator::print_fault(const std::vector<Fault> &_faults) {
 }
 
 void fsim::Simulator::print_pattern(const std::vector<Pattern> &patterns,
-                                    const size_t round, const size_t num_PIs) {
+                                    const size_t round, const size_t num_PIs) const {
   std::cout << "\n=====\n\n" << std::endl;
   for (unsigned int i = 0; i < round; i++) {
     std::cout << "[" << SIZE_T_BITS * i << ", " << SIZE_T_BITS * (i + 1)
@@ -471,7 +482,7 @@ void fsim::Simulator::print_pattern(const std::vector<Pattern> &patterns,
  */
 
 void fsim::Simulator::print_bits_stack(const size_t size,
-                                       const void *const ptr) {
+                                       const void *const ptr) const {
   unsigned char *b = (unsigned char *)ptr;
   unsigned char byte;
   int i, j;
@@ -486,22 +497,23 @@ void fsim::Simulator::print_bits_stack(const size_t size,
 }
 
 void fsim::Simulator::print_check_simulation(
-    const std::vector<size_t> &results) {
+    const std::vector<size_t> &results) const {
   for (size_t i = 0; i < _total_gates; i++) {
     std::cout << "gate_" << i << ".output = " << results[i] << "\n";
   }
   std::cout << "\n" << std::endl;
 }
 
-void fsim::Simulator::print_found_fault_table(
-    const std::vector<size_t> &_found_fault_table) {
+void fsim::Simulator::print_found_fault_to_pattern(
+    const std::vector<size_t> &_found_fault_to_pattern) const {
   std::cout << "\n=====\n\n" << std::endl;
   for (size_t i = 0; i < (2 * _num_fault); i += 2) {
-    if (_found_fault_table[i] == 1) {
+    if (_found_fault_to_pattern[i] == 1) {
       std::cout << "fault_" << (i / 2) << " is found, with Pattern_"
-                << _found_fault_table[i + 1] << "\n";
+                << _found_fault_to_pattern[i + 1] << "\n";
     } else {
       std::cout << "fault_" << i << " cannot be found\n";
     }
   }
+  std::cout << "\n=====\n\n" << std::endl;
 }
