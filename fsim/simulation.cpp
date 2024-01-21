@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <limits>
+#include <omp.h>
 
 #include "simulation.hpp"
 
@@ -18,7 +19,7 @@ void fsim::Simulator::read(const std::string &ckt_path,
 
   std::ifstream ckt(ckt_path), flst(flst_path), ptn(ptn_path);
 
-  // TODO: study operator bool (cpp reference)
+  // TODO (study): study operator bool (cpp reference)
   if(!ckt) {
     throw std::runtime_error("cannot open circut file "s + ckt_path);
   }
@@ -29,8 +30,8 @@ void fsim::Simulator::read(const std::string &ckt_path,
     throw std::runtime_error("cannot open pattern file "s + ptn_path);
   }
 
-  // TODO (for unittest): remove below the code to read(istream&, istream&, istream&)
-  // TODO: study object slicing 
+  // TODO (unittest): remove below the code to read(istream&, istream&, istream&)
+  // TODO (study): study object slicing 
   
   // gate
   std::cout << "Read and construct ckt" << std::endl;
@@ -54,11 +55,11 @@ void fsim::Simulator::read(const std::string &ckt_path,
 }
 
 void fsim::Simulator::_read_files(std::ifstream &ckt){
-  // study: ifstream. istream difference
+  // TODO (studey/unittest): ifstream. istream difference
 
 }
 
-void fsim::Simulator::run(Mode mode) {
+void fsim::Simulator::run(Mode mode, const size_t num_threads) {
 
   switch(mode) {
     case Mode::SEQUENTIAL:
@@ -68,11 +69,13 @@ void fsim::Simulator::run(Mode mode) {
       _run_parallel_tf();
       break;
     case Mode::PARALLEL_OMP:
-      _run_parallel_omp();
+      _run_parallel_omp(num_threads);
       break;
 
   }
 #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
+  size_t m = static_cast<size_t>(mode);
+  std::cout << "Mode: " << m << std::endl;
   print_found_fault_to_pattern(_found_fault_to_pattern);
 #endif
 }
@@ -120,10 +123,12 @@ void fsim::Simulator::_shift_to_correct_answer(std::vector<size_t> &results,
 
 void fsim::Simulator::_run_parallel_tf(){
   std::cout << "execute simulation._run_parallel taskflow();" << '\n';
+  // TODO: parallel version of fsim by adopting the tf
 }
 
-void fsim::Simulator::_run_parallel_omp(){
+void fsim::Simulator::_run_parallel_omp(const size_t num_thread){
   std::cout << "execute simulation._run_parallel OpenMP();" << '\n';
+  // TODO: parallel version of fsim by adopting the OMP
 }
 
 void fsim::Simulator::_run_good_case(const Pattern pattern, const size_t bits) {
@@ -272,6 +277,18 @@ void fsim::Simulator::_read_graph(std::ifstream &ckt) {
       Gate &to_gate = _gates[_gate_idx_to_tpg_order_idx[to_gate_id]];
       to_gate._inputs.push_back(&from_gate);
     }
+  }
+  
+  // levelize
+  for (size_t i = _num_PIs; i < _total_gates; i++) {
+    size_t ret_level = ((_gates[i]._inputs[0])->_level)+1;
+    for (size_t j = 1; j < _gates[i]._inputs.size(); j++) {
+      size_t tmp_level =  ((_gates[i]._inputs[j])->_level)+1;
+      if (ret_level < tmp_level) {
+        ret_level = tmp_level;
+      }
+    }
+    _gates[i]._level = ret_level;
   }
 
 #ifdef FSIM_DEBUG_PRINT_GRAPH
@@ -517,7 +534,6 @@ void fsim::Simulator::print_simulation_results(
 
 void fsim::Simulator::print_found_fault_to_pattern(
     const std::vector<size_t> &_found_fault_to_pattern) const {
-  std::cout << "\n=====\n\n";
   for (size_t i = 0; i < (2 * _num_fault); i += 2) {
     if (_found_fault_to_pattern[i] == 1) {
       std::cout << "fault_" << (i / 2) << " is found, with Pattern_"

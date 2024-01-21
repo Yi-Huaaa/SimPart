@@ -38,7 +38,7 @@ public:
   void read(std::istream& ckt, std::istream& flst, std::istream& pin);
 
   // TODO (parallel): add a level-based parallel simulation
-  void run(Mode mode);
+  void run(Mode mode, const size_t num_threads);
 
   const std::vector<size_t>& g_gate_results() const {
     return _g_gate_results;
@@ -82,7 +82,7 @@ private:
   // Mode: _run_sequential, _run_parallel
   void _run_sequential();
   void _run_parallel_tf();
-  void _run_parallel_omp();
+  void _run_parallel_omp(const size_t num_thread);
   void _run_good_case(const Pattern pattern, const size_t bits);
   void _run_bad_case(const Fault &fault, const Pattern pattern, const size_t bits);
 
