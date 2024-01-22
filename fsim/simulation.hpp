@@ -9,6 +9,7 @@
 #include "fault.hpp"
 #include "gate.hpp"
 #include "pattern.hpp"
+#include "../taskflow/taskflow/taskflow.hpp"
 
 // fsim print for check
 #define FSIM_DEBUG_PRINT_SIMULATION
@@ -67,7 +68,7 @@ private:
 
   size_t _num_pattern; // total number of patterns that need to be tested
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
-  std::vector<Pattern> _pattern;
+  std::vector<Pattern> _patterns;
 
   // Construct
   void _read_graph(std::ifstream &ckt);
@@ -80,11 +81,14 @@ private:
   std::vector<size_t> _found_fault_to_pattern;
 
   // Mode: _run_sequential, _run_parallel
+  // sequential
   void _run_sequential();
-  void _run_parallel_tf();
-  void _run_parallel_omp(const size_t num_thread);
   void _run_good_case(const Pattern pattern, const size_t bits);
   void _run_bad_case(const Fault &fault, const Pattern pattern, const size_t bits);
+  // parallel
+  void _run_parallel_tf();
+  void _run_good_case_tf(const Pattern pattern, const size_t bits);
+  void _run_bad_case_tf(const Fault &fault, const Pattern pattern, const size_t bits);
 
   void _apply_INV(Gate &gate);
   void _apply_AND(Gate &gate);

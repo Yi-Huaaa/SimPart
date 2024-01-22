@@ -53,6 +53,7 @@ private:
   GateType _type;
   std::vector<Gate *> _inputs;
   
+  size_t _idx;
   size_t _level; 
   size_t _output_value;
 
