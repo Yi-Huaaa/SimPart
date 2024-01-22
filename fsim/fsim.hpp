@@ -1,7 +1,6 @@
 #pragma once
 
-#include "./graph.hpp"
 #include "./fault.hpp"
+#include "./gate.hpp"
 #include "./pattern.hpp"
 #include "./simulation.hpp"
-

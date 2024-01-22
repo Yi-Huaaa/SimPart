@@ -76,7 +76,7 @@ def write_patterns_to_file(num_of_patterns, patterns, output_file):
             
 def write_patterns_to_file_new(num_of_PIs, num_of_patterns, patterns, output_file):
     with open(output_file, 'w') as file:
-        file.write(f"{num_of_PIs} {num_of_patterns}\n")
+        file.write(f"{num_of_patterns}\n")
 
         # # Iterate over each bit position
         # for b in range(num_of_PIs):
@@ -141,7 +141,7 @@ def write_simple_testcase_to_file(output_flst_file, output_ptn_file):
         file.write('\n')
 
     with open(output_ptn_file, 'w') as file:
-        file.write("3 3" + '\n')
+        file.write("3" + '\n')
         file.write("2" + '\n')
         file.write("4" + '\n')
         file.write("1" + '\n')
