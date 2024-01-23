@@ -39,8 +39,11 @@ public:
   // for testing
   void read(std::istream& ckt, std::istream& flst, std::istream& ptn);
 
-  // TODO (parallel): add a level-based parallel simulation
   void run(Mode mode, const size_t num_threads);
+
+  // TODO: for visualization - graph 
+  // add warning flags "-Wall -Wextra -Wfatal-errors -Wshadow" to your CMake
+  void dump_graph(std::ostream&) const;
 
   const std::vector<size_t>& g_gate_results() const {
     return _g_gate_results;
@@ -58,7 +61,8 @@ public:
 private:
   
   // Read
-  
+  tf::Executor _executor;
+
   
   size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires, _total_gates;
   std::vector<size_t> _gate_idx_to_tpg_order_idx;

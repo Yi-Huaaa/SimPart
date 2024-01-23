@@ -59,3 +59,5 @@ if(FSIM_BUILD_TESTS)
   add_subdirectory(unittests)
 endif(FSIM_BUILD_TESTS)
 
+# Enable test
+include(CTest)

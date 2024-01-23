@@ -8,9 +8,12 @@
 
 #include "simulation.hpp"
 
-void fsim::Simulator::read(const std::string &ckt_path,
-                           const std::string &flst_path,
-                           const std::string &ptn_path) {
+// TODO
+void fsim::Simulator::read(
+  const std::string &ckt_path,
+  const std::string &flst_path,
+  const std::string &ptn_path
+) {
   /* Ref: https://stackoverflow.com/questions/38950008/using-string-literals-without-using-namespace-std*/
   // using namespace std::literals::string_literals;
   // using namespace std::literals;
@@ -161,7 +164,6 @@ void fsim::Simulator::_run_bad_case(const Fault &fault, const Pattern pattern, c
 
 void fsim::Simulator::_run_parallel_tf() {
   std::cout << "execute simulation._run_parallel taskflow();" << '\n';
-  // TODO: parallel version of fsim by adopting the tf
 
   // Simulation
   _g_gate_results.resize(_total_gates);
@@ -180,6 +182,7 @@ void fsim::Simulator::_run_parallel_tf() {
       _run_bad_case_tf(_faults[j], _patterns[rd], num_testcases_this_round);
 
       size_t found_fault = 0;
+      // TODO: I think you should separate the definition for gates, PIs, and POs
       for (size_t i = (_total_gates - 1); i > (_total_gates - _num_POs - 1); i--) {
         if (_g_gate_results[i] != _b_gate_results[i]) {
           found_fault = 1;
@@ -196,7 +199,7 @@ void fsim::Simulator::_run_parallel_tf() {
 void fsim::Simulator::_run_good_case_tf(const Pattern pattern, const size_t bits) {
   
   // taskflow task assign
-  tf::Executor executor;
+  // TODO: executor should be centralized - best practice
   tf::Taskflow taskflow("_good_case");
 
   // Simulation
@@ -217,7 +220,7 @@ void fsim::Simulator::_run_good_case_tf(const Pattern pattern, const size_t bits
     }
   }
   
-  executor.run(taskflow).wait();
+  _executor.run(taskflow).wait();
 
   // Duplicated the answer of good_case into a new memory
   for (size_t i = 0; i < _total_gates; i++) {
@@ -239,7 +242,6 @@ void fsim::Simulator::_run_bad_case_tf(const Fault &fault, const Pattern pattern
   size_t fault_val = fault._gate_SA_fault_val;
 
   // taskflow task assign
-  tf::Executor executor;
   tf::Taskflow taskflow("_bad_case");
 
   // fault simulation
@@ -260,7 +262,7 @@ void fsim::Simulator::_run_bad_case_tf(const Fault &fault, const Pattern pattern
     }
   }
   
-  executor.run(taskflow).wait();
+  _executor.run(taskflow).wait();
 
   // Duplicated the answer of BAD_case into a new memory
   for (size_t i = 0; i < _total_gates; i++) {

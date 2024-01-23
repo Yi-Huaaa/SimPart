@@ -3,17 +3,22 @@
 #include <doctest.h>
 #include <fsim/fsim.hpp>
 
-// TODO: include and write many unittests...
-// make test
-// you can study how taskflow enables unittest
+/*
+// TODO:
+design corner circuits - especially those with strange structures
 
-TEST_CASE("Type" * doctest::timeout(300)) {
-  int i=1;
-  REQUIRE(i == 1);
-}
+1. one node
+2. two nodes with edge
+3. two nodes without edges
+
+parameterize your unittest as a function that takes execution mode as an example
+
+e.g.,
+void test_simple1(execution_mode, num_threads)
+
+*/
 
 TEST_CASE("Simple.1" * doctest::timeout(300)) {
-  std::cout << "Unit test, Simple.1\n";
 
   std::istringstream ickt("\
   3\
@@ -45,16 +50,20 @@ TEST_CASE("Simple.1" * doctest::timeout(300)) {
 
   sim.read(ickt, iflst, iptn);
 
+  // TODO:
+  //REQUIRE(sim.num_gates() == ???);
+  //REQUIRE(sim.num_wires() == ???);
+
   sim.run(fsim::Simulator::Mode::SEQUENTIAL, 1);
 
   auto& g_gate_results = sim.g_gate_results();
   std::vector<size_t> answer = {2,4,1,6,0,1,6,6};
 
-  std::cout << "Unittests - simple:\n";
+  //std::cout << "Unittests - simple:\n";
   for(size_t gid = 0; gid < g_gate_results.size(); gid++) {
     auto& gate = sim.gate(gid);
-    std::cout << "Unittests G-result of Gate " << gid << " (level=" << gate.level() << "): "
-              << g_gate_results[gid] << '\n';
+    //std::cout << "Unittests G-result of Gate " << gid << " (level=" << gate.level() << "): "
+    //          << g_gate_results[gid] << '\n';
     REQUIRE(g_gate_results[gid] == answer[gid]); // 1 -> ???
   }
 }
