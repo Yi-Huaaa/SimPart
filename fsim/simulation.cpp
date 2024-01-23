@@ -29,9 +29,11 @@ void fsim::Simulator::read(const std::string &ckt_path,
     throw std::runtime_error("cannot open pattern file "s + ptn_path);
   }
 
-  // TODO (unittest): remove below the code to read(istream&, istream&, istream&)
   // TODO (study): study object slicing 
-  
+  read(ckt, flst, ptn);
+}
+
+void fsim::Simulator::read(std::istream& ckt, std::istream& flst, std::istream& ptn){
   // gate
   std::cout << "Read and construct ckt" << std::endl;
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires;
@@ -51,11 +53,6 @@ void fsim::Simulator::read(const std::string &ckt_path,
   ptn >> _num_pattern;
   std::cout << _num_pattern << std::endl;
   _read_pattern(ptn);
-}
-
-void fsim::Simulator::_read_files(std::ifstream &ckt){
-  // TODO (studey/unittest): ifstream. istream difference
-
 }
 
 void fsim::Simulator::run(Mode mode, const size_t num_threads) {
@@ -87,6 +84,8 @@ void fsim::Simulator::_run_sequential(){
   std::cout << "execute simulation._run_sequential();" << '\n';
 
   // Simulation
+  _g_gate_results.resize(_total_gates);
+  _b_gate_results.resize(_total_gates);
   _found_fault_to_pattern.resize(2 * _faults.size());
 
   for (size_t rd = 0; rd < _num_rounds; rd++) {
@@ -121,7 +120,6 @@ void fsim::Simulator::_run_good_case(const Pattern pattern, const size_t bits) {
   }
 
   // Duplicated the answer of good_case into a new memory
-  _g_gate_results.resize(_total_gates);
   for (size_t i = 0; i < _total_gates; i++) {
     _g_gate_results[i] = _gates[i]._output_value;
   }
@@ -147,7 +145,6 @@ void fsim::Simulator::_run_bad_case(const Fault &fault, const Pattern pattern, c
   }
 
   // Duplicated the answer of BAD_case into a new memory
-  _b_gate_results.resize(_total_gates);
   for (size_t i = 0; i < _total_gates; i++) {
     _b_gate_results[i] = _gates[i]._output_value;
   }
@@ -167,6 +164,8 @@ void fsim::Simulator::_run_parallel_tf() {
   // TODO: parallel version of fsim by adopting the tf
 
   // Simulation
+  _g_gate_results.resize(_total_gates);
+  _b_gate_results.resize(_total_gates);
   _found_fault_to_pattern.resize(2 * _faults.size());
 
   for (size_t rd = 0; rd < _num_rounds; rd++) {
@@ -220,9 +219,7 @@ void fsim::Simulator::_run_good_case_tf(const Pattern pattern, const size_t bits
   
   executor.run(taskflow).wait();
 
-
   // Duplicated the answer of good_case into a new memory
-  _g_gate_results.resize(_total_gates);
   for (size_t i = 0; i < _total_gates; i++) {
     _g_gate_results[i] = _gates[i]._output_value;
   }
@@ -265,9 +262,7 @@ void fsim::Simulator::_run_bad_case_tf(const Fault &fault, const Pattern pattern
   
   executor.run(taskflow).wait();
 
-
   // Duplicated the answer of BAD_case into a new memory
-  _b_gate_results.resize(_total_gates);
   for (size_t i = 0; i < _total_gates; i++) {
     _b_gate_results[i] = _gates[i]._output_value;
   }
@@ -285,7 +280,7 @@ void fsim::Simulator::_run_bad_case_tf(const Fault &fault, const Pattern pattern
 
 
 // Construct functions
-void fsim::Simulator::_read_graph(std::ifstream &ckt) {
+void fsim::Simulator::_read_graph(std::istream &ckt) {
   std::vector<std::vector<size_t>> adj;
   adj.resize(_total_gates);
   std::vector<size_t> indegree;
@@ -404,7 +399,7 @@ void fsim::Simulator::_read_graph(std::ifstream &ckt) {
 #endif
 }
 
-void fsim::Simulator::_read_fault(std::ifstream &flst) {
+void fsim::Simulator::_read_fault(std::istream &flst) {
   _faults.resize(_num_fault);
   for (size_t i = 0; i < _num_fault; i++) {
     size_t wrong_gate, fault_value;
@@ -424,7 +419,7 @@ void fsim::Simulator::_read_fault(std::ifstream &flst) {
 #endif
 }
 
-void fsim::Simulator::_read_pattern(std::ifstream &ptn) {
+void fsim::Simulator::_read_pattern(std::istream &ptn) {
   _num_rounds = (_num_pattern + SIZE_T_BITS - 1) / SIZE_T_BITS; // ceiling
 
   _patterns.resize(_num_rounds);

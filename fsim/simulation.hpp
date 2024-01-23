@@ -34,9 +34,10 @@ public:
 
   void read(const std::string &ckt, const std::string &flst,
             const std::string &ptn);
+  void read(const std::istream& ckt, std::istream& flst, std::istream& ptn);
   
   // for testing
-  void read(std::istream& ckt, std::istream& flst, std::istream& pin);
+  void read(std::istream& ckt, std::istream& flst, std::istream& ptn);
 
   // TODO (parallel): add a level-based parallel simulation
   void run(Mode mode, const size_t num_threads);
@@ -57,7 +58,7 @@ public:
 private:
   
   // Read
-  void _read_files(std::ifstream &ckt);
+  
   
   size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires, _total_gates;
   std::vector<size_t> _gate_idx_to_tpg_order_idx;
@@ -71,9 +72,9 @@ private:
   std::vector<Pattern> _patterns;
 
   // Construct
-  void _read_graph(std::ifstream &ckt);
-  void _read_fault(std::ifstream &flst);
-  void _read_pattern(std::ifstream &ptn);
+  void _read_graph(std::istream &ckt);
+  void _read_fault(std::istream &flst);
+  void _read_pattern(std::istream &ptn);
 
   // Simulation
   std::vector<size_t> _g_gate_results; 

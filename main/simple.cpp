@@ -31,10 +31,5 @@ int main(int argc, char *argv[]) {
   simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
 
 
-  // PARALLEL Version - omp
-  mode = 2;
-  simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
-
-
   return 0;
 }
