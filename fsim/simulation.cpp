@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <limits>
+#include <omp.h>
 
 #include "simulation.hpp"
 
@@ -62,11 +63,16 @@ void fsim::Simulator::run(Mode mode, const size_t num_threads) {
 
   switch(mode) {
     case Mode::SEQUENTIAL:
+      std::cout << "run _run_sequential\n";
       _run_sequential();
       break;
     case Mode::PARALLEL_TF:
+      std::cout << "run _run_parallel_tf\n";
       _run_parallel_tf();
       break;
+    case Mode::PARALLEL_OMP:
+      std::cout << "run _run_parallel_omp\n";
+      _run_parallel_omp(num_threads);
   }
 #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
   size_t m = static_cast<size_t>(mode);
@@ -174,7 +180,7 @@ void fsim::Simulator::_run_parallel_tf() {
     size_t num_testcases_this_round = ((_num_pattern/(SIZE_T_BITS*(rd+1)))) ? (SIZE_T_BITS) : (_num_pattern%SIZE_T_BITS);
 
     // good simulation
-    std::cout << "Run Good case" << std::endl;
+    std::cout << "TF: Run Good case" << std::endl;
     _run_good_case_tf(_patterns[rd], num_testcases_this_round);
 
     // bad simulation (fault simulation)
@@ -265,6 +271,102 @@ void fsim::Simulator::_run_bad_case_tf(const Fault &fault, const Pattern pattern
   _executor.run(taskflow).wait();
 
   // Duplicated the answer of BAD_case into a new memory
+  for (size_t i = 0; i < _total_gates; i++) {
+    _b_gate_results[i] = _gates[i]._output_value;
+  }
+
+  if (bits < SIZE_T_BITS) {
+    _shift_to_correct_answer(_b_gate_results, bits);
+  }
+
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  std::cout << "BAD resutls:\n";
+  print_simulation_results(_b_gate_results);
+#endif
+}
+
+
+void fsim::Simulator::_run_parallel_omp(const size_t num_threads){
+  std::cout << "execute simulation._run_parallel omp();" << '\n';
+
+  // Simulation
+  _g_gate_results.resize(_total_gates);
+  _b_gate_results.resize(_total_gates);
+  _found_fault_to_pattern.resize(2 * _faults.size());
+
+  for (size_t rd = 0; rd < _num_rounds; rd++) {
+    size_t num_testcases_this_round = ((_num_pattern/(SIZE_T_BITS*(rd+1)))) ? (SIZE_T_BITS) : (_num_pattern%SIZE_T_BITS);
+
+    // good simulation
+    std::cout << "OMP: Run Good case" << std::endl;
+    _run_good_case_omp(_patterns[rd], num_testcases_this_round, num_threads);
+
+    // bad simulation (fault simulation)
+    for (size_t j = 0; j < _faults.size(); j++) {
+      _run_bad_case_omp(_faults[j], _patterns[rd], num_testcases_this_round, num_threads);
+
+      size_t found_fault = 0;
+      // TODO: I think you should separate the definition for gates, PIs, and POs
+      for (size_t i = (_total_gates - 1); i > (_total_gates - _num_POs - 1); i--) {
+        if (_g_gate_results[i] != _b_gate_results[i]) {
+          found_fault = 1;
+        }
+      }
+      // Record whether fault can be found
+      _found_fault_to_pattern[2 * j] = found_fault;
+      // Record which pattern found the fault
+      _found_fault_to_pattern[2 * j + 1] = rd;
+    }
+  }
+}
+
+void fsim::Simulator::_run_good_case_omp(const Pattern pattern, const size_t bits, const size_t num_threads) {
+  
+  // simulation
+  size_t accum = 0;
+  omp_set_num_threads(num_threads);  
+
+  for (size_t i = 0; i < _num_gates_per_level.size(); i++) {
+    #pragma omp parallel for
+    for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
+      size_t idx = accum+j;
+      _run_gate(_gates[idx], pattern, idx, 0, 0);
+      // printf("debug: omp_get_thread_num = %d (num_threads = %ld, i = %ld, j = %ld)\n", omp_get_thread_num(), num_threads, i, j); // debug_
+    }
+    accum += _num_gates_per_level[i];
+  }
+
+  // duplicated the answer of good_case into a new memory
+  for (size_t i = 0; i < _total_gates; i++) {
+    _g_gate_results[i] = _gates[i]._output_value;
+  }
+
+  if (bits < SIZE_T_BITS) {
+    _shift_to_correct_answer(_g_gate_results, bits);
+  }
+
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  std::cout << "GOOD resutls:" << std::endl;
+  print_simulation_results(_g_gate_results);
+#endif  
+
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  std::cout << "GOOD resutls:" << std::endl;
+  print_simulation_results(_g_gate_results);
+#endif
+}
+
+void fsim::Simulator::_run_bad_case_omp(const Fault &fault, const Pattern pattern, const size_t bits, const size_t num_threads) {
+  size_t wrong_gate = fault._gate_with_fault;
+  size_t fault_val = fault._gate_SA_fault_val;
+
+  // fault simulation
+  for (size_t i = 0; i < _total_gates; i++) {
+    size_t SA_fault = (i == wrong_gate);
+    _run_gate(_gates[i], pattern, i, SA_fault, fault_val);
+  }
+
+  // duplicated the answer of BAD_case into a new memory
   for (size_t i = 0; i < _total_gates; i++) {
     _b_gate_results[i] = _gates[i]._output_value;
   }
@@ -383,6 +485,9 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
   }
   
   // levelize
+  // TODO: levelization need to be cooperated with the omp foramt
+  // need to record #elements in each level 
+  size_t max_level = 0;
   for (size_t i = _num_PIs; i < _total_gates; i++) {
     size_t ret_level = ((_gates[i]._inputs[0])->_level)+1;
     for (size_t j = 1; j < _gates[i]._inputs.size(); j++) {
@@ -392,12 +497,19 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
       }
     }
     _gates[i]._level = ret_level;
+    max_level = (max_level < ret_level) ? (ret_level) : (max_level);
+  }
+  
+  _num_gates_per_level.resize(max_level);
+  for (size_t i = 0; i < _total_gates; i++) {
+    _num_gates_per_level[_gates[i]._level]++;
   }
 
 #ifdef FSIM_DEBUG_PRINT_GRAPH
   for (size_t i = 0; i < _total_gates; i++) {
     print_gate(_gates[i]);
   }
+  print_num_gates_per_level();
 #endif
 }
 
@@ -583,6 +695,15 @@ void fsim::Simulator::print_gate(const Gate &gate) const {
   }
   std::cout << "]\n";
   std::cout << "output_value: " << gate._output_value << "\n";
+}
+
+void fsim::Simulator::print_num_gates_per_level() const {
+  std::cout << "\n=====\n\n";
+  std::cout << "_num_gates_per_level: \n";
+  for (size_t i = 0; i < _num_gates_per_level.size(); i++) {
+    std::cout << "level_" << i << ": " << _num_gates_per_level[i] << "\n";
+  }
+  std::cout << "\n=====\n\n";
 }
 
 void fsim::Simulator::print_faults(const std::vector<Fault> &_faults) const {

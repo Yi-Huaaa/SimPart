@@ -16,6 +16,13 @@ parameterize your unittest as a function that takes execution mode as an example
 e.g.,
 void test_simple1(execution_mode, num_threads)
 
+
+Unittests: 
+1. test different modes
+2. test wether levelized success 
+3. 
+
+
 */
 
 TEST_CASE("Simple.1" * doctest::timeout(300)) {

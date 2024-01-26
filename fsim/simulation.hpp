@@ -43,6 +43,8 @@ public:
 
   // TODO: for visualization - graph 
   // add warning flags "-Wall -Wextra -Wfatal-errors -Wshadow" to your CMake
+  // add make flag during the cmake to make the unittests run directly
+  // add more unittests to run all of your program: for exmaple: different mode testing
   void dump_graph(std::ostream&) const;
 
   const std::vector<size_t>& g_gate_results() const {
@@ -75,6 +77,9 @@ private:
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
   std::vector<Pattern> _patterns;
 
+  // used for run parallel
+  std::vector<size_t> _num_gates_per_level; // records number of gates per level 
+
   // Construct
   void _read_graph(std::istream &ckt);
   void _read_fault(std::istream &flst);
@@ -90,10 +95,16 @@ private:
   void _run_sequential();
   void _run_good_case(const Pattern pattern, const size_t bits);
   void _run_bad_case(const Fault &fault, const Pattern pattern, const size_t bits);
-  // parallel
+  // parallel-tf
+  // todo: check whether taskflow use 4 threads runs parallelly
   void _run_parallel_tf();
   void _run_good_case_tf(const Pattern pattern, const size_t bits);
   void _run_bad_case_tf(const Fault &fault, const Pattern pattern, const size_t bits);
+  // parallel-omp
+  void _run_parallel_omp(const size_t num_threads);
+  void _run_good_case_omp(const Pattern pattern, const size_t bits, const size_t num_threads);
+  void _run_bad_case_omp(const Fault &fault, const Pattern pattern, const size_t bits, const size_t num_threads);
+
 
   void _apply_INV(Gate &gate);
   void _apply_AND(Gate &gate);
@@ -113,6 +124,7 @@ private:
                          const std::vector<size_t> &indegree,
                          const std::vector<size_t> &order) const;
   void print_gate(const Gate &gate) const;
+  void print_num_gates_per_level() const;
   void print_faults(const std::vector<Fault> &_faults) const;
   void print_patterns(const std::vector<Pattern> &patterns, const size_t round,
                      const size_t num_PIs) const;

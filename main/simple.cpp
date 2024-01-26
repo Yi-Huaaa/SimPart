@@ -2,17 +2,20 @@
 
 #include <fsim/fsim.hpp>
 
+#define num_thread 4 // define by user
+
 int main(int argc, char *argv[]) {
 
   // TODO: from user's perspective
   fsim::Simulator simulator;
+  size_t mode;
   
   std::string ckt_path(argv[1]);
   std::string flst_path(argv[2]);
   std::string ptn_path(argv[3]);
 
   simulator.read(ckt_path, flst_path, ptn_path);
-  size_t mode = 0; // mode: (0,1,2) = (SEQUENTIAL, PARALLEL_TF, PARALLEL_openMP); 
+  mode = 0; // mode: (0,1,2) = (SEQUENTIAL, PARALLEL_TF, PARALLEL_openMP); 
   simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), 1);
 
   // Output results
@@ -26,8 +29,12 @@ int main(int argc, char *argv[]) {
   }
 
   // PARALLEL Version - TF
-  const size_t num_thread = 4;
   mode = 1;
+  simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
+
+
+  // PARALLEL Version - TF
+  mode = 2;
   simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
 
 
