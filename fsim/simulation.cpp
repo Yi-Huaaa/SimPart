@@ -9,7 +9,7 @@
 
 #include "simulation.hpp"
 
-// TODO
+
 void fsim::Simulator::read(
   const std::string &ckt_path,
   const std::string &flst_path,
@@ -33,7 +33,6 @@ void fsim::Simulator::read(
     throw std::runtime_error("cannot open pattern file "s + ptn_path);
   }
 
-  // TODO (study): study object slicing 
   read(ckt, flst, ptn);
 }
 
@@ -485,8 +484,6 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
   }
   
   // levelize
-  // TODO: levelization need to be cooperated with the omp foramt
-  // need to record #elements in each level 
   size_t max_level = 0;
   for (size_t i = _num_PIs; i < _total_gates; i++) {
     size_t ret_level = ((_gates[i]._inputs[0])->_level)+1;
