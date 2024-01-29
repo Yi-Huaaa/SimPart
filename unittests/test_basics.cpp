@@ -63,14 +63,23 @@ TEST_CASE("Simple.1" * doctest::timeout(300)) {
 
   sim.run(fsim::Simulator::Mode::SEQUENTIAL, 1);
 
+  auto& g_pi_results = sim.g_pi_results();
   auto& g_gate_results = sim.g_gate_results();
-  std::vector<size_t> answer = {2,4,1,6,0,1,6,6};
+  auto& g_po_results = sim.g_po_results();
+  std::vector<size_t> pi_ans = {2,4,1};
+  std::vector<size_t> gate_answer = {6,0,1,6};
+  std::vector<size_t> po_answer = {6};
 
-  //std::cout << "Unittests - simple:\n";
+  for(size_t piid = 0; piid < g_pi_results.size(); piid++) {
+    auto& pi = sim.pi(piid);
+    REQUIRE(g_pi_results[piid] == pi_ans[piid]);
+  }
   for(size_t gid = 0; gid < g_gate_results.size(); gid++) {
     auto& gate = sim.gate(gid);
-    //std::cout << "Unittests G-result of Gate " << gid << " (level=" << gate.level() << "): "
-    //          << g_gate_results[gid] << '\n';
-    REQUIRE(g_gate_results[gid] == answer[gid]); // 1 -> ???
+    REQUIRE(g_gate_results[gid] == gate_answer[gid]);
+  }
+  for(size_t poid = 0; poid < g_po_results.size(); poid++) {
+    auto& po = sim.po(poid);
+    REQUIRE(g_po_results[poid] == po_answer[poid]);
   }
 }

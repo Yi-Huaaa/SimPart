@@ -22,10 +22,9 @@ int main(int argc, char *argv[]) {
 
   auto& g_gate_results = simulator.g_gate_results();
   std::cout << "User space resutls:" << std::endl;
-  for(size_t gid = 0; gid<g_gate_results.size(); gid++) {
+  for(size_t gid = 0; gid < g_gate_results.size(); gid++) {
     auto& gate = simulator.gate(gid);
-    std::cout << "G-result of Gate " << gid << " (level=" << gate.level() << "): "
-              << g_gate_results[gid] << '\n';
+    std::cout << "G-result of Gate " << gid << " (level=" << gate.level() << "): " << g_gate_results[gid] << '\n';
   }
 
   // PARALLEL Version - TF
@@ -33,9 +32,9 @@ int main(int argc, char *argv[]) {
   simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
 
 
-  // PARALLEL Version - TF
-  mode = 2;
-  simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
+  // // PARALLEL Version - TF
+  // mode = 2;
+  // simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
 
 
   return 0;
