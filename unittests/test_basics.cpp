@@ -25,8 +25,35 @@ Unittests:
 
 */
 
-TEST_CASE("Simple.1" * doctest::timeout(300)) {
+/**
+ * graph TEST_CASE
+ * PPSFP_simple
+ * one PI
+ * one PO
+ * one PI - one PO
+ * one node: two PIs - one gate (two inputs gate) - one PO
+ * one linear chain: one PI - (gate (INV))^n - one PO (n = 1)
+ * one linear chain: one PI - (gate (INV))^n - one PO (n = 10)
+ * two independent linear chain: (one PI - (gate (INV))^n - one PO)^2 (n = 10)
+ * Ring
+ * test FFR
+ * X-style circuit
+ * 
+*/
 
+/** 
+ * For all testcases: 
+ * test `read`, `run`, `output`
+ * 
+*/
+
+/**
+ * test different mode
+ * 
+ * 
+*/
+
+TEST_CASE("PPSFP_simple.1" * doctest::timeout(300)) {
   std::istringstream ickt("\
   3\
   1\
@@ -60,6 +87,7 @@ TEST_CASE("Simple.1" * doctest::timeout(300)) {
   // TODO:
   //REQUIRE(sim.num_gates() == ???);
   //REQUIRE(sim.num_wires() == ???);
+  // check var
 
   sim.run(fsim::Simulator::Mode::SEQUENTIAL, 1);
 
@@ -72,14 +100,14 @@ TEST_CASE("Simple.1" * doctest::timeout(300)) {
 
   for(size_t piid = 0; piid < g_pi_results.size(); piid++) {
     auto& pi = sim.pi(piid);
-    REQUIRE(g_pi_results[piid] == pi_ans[piid]);
+    REQUIRE_MESSAGE(g_pi_results[piid] == pi_ans[piid], "PI result mismatch");
   }
   for(size_t gid = 0; gid < g_gate_results.size(); gid++) {
     auto& gate = sim.gate(gid);
-    REQUIRE(g_gate_results[gid] == gate_answer[gid]);
+    REQUIRE_MESSAGE(g_gate_results[gid] == gate_answer[gid], "Gate result mismatch");
   }
   for(size_t poid = 0; poid < g_po_results.size(); poid++) {
     auto& po = sim.po(poid);
-    REQUIRE(g_po_results[poid] == po_answer[poid]);
+    REQUIRE_MESSAGE(g_po_results[poid] == po_answer[poid], "PO result mismatch");
   }
 }
