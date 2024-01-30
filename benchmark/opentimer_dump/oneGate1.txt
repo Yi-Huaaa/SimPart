@@ -1,0 +1,29 @@
+module a (
+inp1,
+out1
+);
+
+// Start PIs
+input inp1;
+
+// Start POs
+output out1;
+
+// Start wires
+wire out1;
+wire inp1;
+
+// Start cells
+INVX1 u1 ( .Y(out1) .A(inp1) );
+
+endmodule
+digraph TimingGraph {
+  "u1:A";
+  "u1:Y";
+  "out1";
+  "inp1";
+  "inp1" -> "u1:A";
+  "u1:Y" -> "out1";
+  "u1:A" -> "u1:Y";
+  "u1:A" -> "u1:Y";
+}

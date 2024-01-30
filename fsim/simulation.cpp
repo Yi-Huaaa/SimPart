@@ -101,7 +101,9 @@ void fsim::Simulator::_shift_to_correct_answer(std::vector<size_t> &results,
 }
 
 void fsim::Simulator::_run_sequential(){
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
   std::cout << "execute simulation._run_sequential();" << '\n';
+#endif 
 
   // Simulation
   _g_pi_results.resize(_num_PIs);
@@ -116,7 +118,9 @@ void fsim::Simulator::_run_sequential(){
     size_t num_testcases_this_round = ((_num_pattern/(SIZE_T_BITS*(rd+1)))) ? (SIZE_T_BITS) : (_num_pattern%SIZE_T_BITS);
 
     // good simulation
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
     std::cout << "Run Good case" << std::endl;
+#endif
     _run_good_case(_patterns[rd], num_testcases_this_round);
 
     // bad simulation (fault simulation)

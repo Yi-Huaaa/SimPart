@@ -15,11 +15,11 @@
 #include "../taskflow/taskflow/taskflow.hpp"
 
 // fsim print for check
-// #define FSIM_DEBUG_PRINT_SIMULATION
-// #define FSIM_DEBUG_PRINT_GRAPH
-// #define FSIM_DEBUG_PRINT_FAULTS
-// #define FSIM_DEBUG_PRINT_PATTERNS
-// #define FSIM_DEBUG_PRINT_FAULT_TABLE
+#define FSIM_DEBUG_PRINT_SIMULATION
+#define FSIM_DEBUG_PRINT_GRAPH
+#define FSIM_DEBUG_PRINT_FAULTS
+#define FSIM_DEBUG_PRINT_PATTERNS
+#define FSIM_DEBUG_PRINT_FAULT_TABLE
 
 namespace fsim {
 

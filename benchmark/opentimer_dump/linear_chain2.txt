@@ -1,0 +1,97 @@
+module a (
+inp6,
+inp5,
+inp4,
+inp3,
+inp2,
+inp1,
+out1
+);
+
+// Start PIs
+input inp6;
+input inp5;
+input inp4;
+input inp3;
+input inp2;
+input inp1;
+
+// Start POs
+output out1;
+
+// Start wires
+wire n2;
+wire n1;
+wire inp6;
+wire n4;
+wire n3;
+wire inp5;
+wire inp4;
+wire out1;
+wire inp3;
+wire inp2;
+wire inp1;
+
+// Start cells
+AND2X1 u5 ( .Y(out1) .B(n4) .A(inp6) );
+AND2X1 u3 ( .Y(n3) .B(n2) .A(inp4) );
+AND2X1 u4 ( .Y(n4) .B(n3) .A(inp5) );
+AND2X1 u2 ( .Y(n2) .B(n1) .A(inp3) );
+AND2X1 u1 ( .Y(n1) .B(inp2) .A(inp1) );
+
+endmodule
+digraph TimingGraph {
+  "u5:B";
+  "u5:Y";
+  "u4:A";
+  "u4:Y";
+  "u3:A";
+  "u5:A";
+  "u4:B";
+  "u3:Y";
+  "inp1";
+  "u3:B";
+  "inp2";
+  "u2:B";
+  "inp3";
+  "inp4";
+  "u2:A";
+  "inp5";
+  "inp6";
+  "u1:Y";
+  "u1:B";
+  "out1";
+  "u1:A";
+  "u2:Y";
+  "inp6" -> "u5:A";
+  "u4:Y" -> "u5:B";
+  "u5:Y" -> "out1";
+  "u5:B" -> "u5:Y";
+  "u5:A" -> "u5:Y";
+  "u5:B" -> "u5:Y";
+  "u5:A" -> "u5:Y";
+  "inp5" -> "u4:A";
+  "u3:Y" -> "u4:B";
+  "u4:B" -> "u4:Y";
+  "u4:A" -> "u4:Y";
+  "u4:B" -> "u4:Y";
+  "u4:A" -> "u4:Y";
+  "inp4" -> "u3:A";
+  "u2:Y" -> "u3:B";
+  "u3:B" -> "u3:Y";
+  "u3:A" -> "u3:Y";
+  "u3:B" -> "u3:Y";
+  "u3:A" -> "u3:Y";
+  "inp3" -> "u2:A";
+  "u1:Y" -> "u2:B";
+  "u2:B" -> "u2:Y";
+  "u2:A" -> "u2:Y";
+  "u2:B" -> "u2:Y";
+  "u2:A" -> "u2:Y";
+  "inp1" -> "u1:A";
+  "inp2" -> "u1:B";
+  "u1:B" -> "u1:Y";
+  "u1:A" -> "u1:Y";
+  "u1:B" -> "u1:Y";
+  "u1:A" -> "u1:Y";
+}
