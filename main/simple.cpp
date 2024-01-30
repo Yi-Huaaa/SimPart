@@ -20,12 +20,25 @@ int main(int argc, char *argv[]) {
 
   // Output results
 
+
+  auto& g_pi_results = simulator.g_pi_results();
   auto& g_gate_results = simulator.g_gate_results();
+  auto& g_po_results = simulator.g_po_results();
+
   std::cout << "User space resutls:" << std::endl;
+  for(size_t piid = 0; piid < g_pi_results.size(); piid++) {
+    auto& pii = simulator.pi(piid);
+    std::cout << "G-result of Gate " << piid << " (level=" << pii.level() << "): " << g_pi_results[piid] << '\n';
+  }
   for(size_t gid = 0; gid < g_gate_results.size(); gid++) {
     auto& gate = simulator.gate(gid);
     std::cout << "G-result of Gate " << gid << " (level=" << gate.level() << "): " << g_gate_results[gid] << '\n';
   }
+  for(size_t poid = 0; poid < g_po_results.size(); poid++) {
+    auto& poo = simulator.gate(poid);
+    std::cout << "G-result of Gate " << poid << " (level=" << poo.level() << "): " << g_po_results[poid] << '\n';
+  }
+
 
   // PARALLEL Version - TF
   mode = 1;

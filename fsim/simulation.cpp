@@ -38,23 +38,28 @@ void fsim::Simulator::read(
 
 void fsim::Simulator::read(std::istream& ckt, std::istream& flst, std::istream& ptn){
   // gate
-  std::cout << "Read and construct ckt" << std::endl;
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires;
-  _total_gates = _num_PIs + _num_POs + _num_inner_gates;
+#ifdef FSIM_DEBUG_PRINT_GRAPH
+  std::cout << "Read and construct ckt" << std::endl;
   std::cout << _num_PIs << ", " << _num_POs << ", " << _num_inner_gates << ", "
-            << _num_wires << ", " << _total_gates << std::endl;
+            << _num_wires << std::endl;
+#endif
   _read_graph(ckt);
 
   // fault
-  std::cout << "Read and construct flst" << std::endl;
   flst >> _num_fault;
+#ifdef FSIM_DEBUG_PRINT_FAULTS
+  std::cout << "Read and construct flst" << std::endl;
   std::cout << _num_fault << std::endl;
+#endif
   _read_fault(flst);
 
   // pattern
-  std::cout << "Read and construct ptn" << std::endl;
   ptn >> _num_pattern;
+#ifdef FSIM_DEBUG_PRINT_PATTERNS
+  std::cout << "Read and construct ptn" << std::endl;
   std::cout << _num_pattern << std::endl;
+#endif
   _read_pattern(ptn);
 }
 
@@ -62,15 +67,21 @@ void fsim::Simulator::run(Mode mode, const size_t num_threads) {
 
   switch(mode) {
     case Mode::SEQUENTIAL:
+#ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
       std::cout << "run _run_sequential\n";
+#endif      
       _run_sequential();
       break;
     case Mode::PARALLEL_TF:
+#ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
       std::cout << "run _run_parallel_tf\n";
+#endif
       _run_parallel_tf();
       break;
     case Mode::PARALLEL_OMP:
+#ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
       std::cout << "run _run_parallel_omp\n";
+#endif      
       _run_parallel_omp(num_threads);
   }
 #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
@@ -204,7 +215,9 @@ void fsim::Simulator::_run_bad_case(const Fault &fault, const Pattern pattern, c
 }
 
 void fsim::Simulator::_run_parallel_tf() {
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
   std::cout << "execute simulation._run_parallel taskflow();" << '\n';
+#endif
 
   // Simulation
   _g_pi_results.resize(_num_PIs);
@@ -219,7 +232,9 @@ void fsim::Simulator::_run_parallel_tf() {
     size_t num_testcases_this_round = ((_num_pattern/(SIZE_T_BITS*(rd+1)))) ? (SIZE_T_BITS) : (_num_pattern%SIZE_T_BITS);
 
     // good simulation
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
     std::cout << "TF: Run Good case" << std::endl;
+#endif
     _run_good_case_tf(_patterns[rd], num_testcases_this_round);
 
     // bad simulation (fault simulation)
@@ -238,10 +253,6 @@ void fsim::Simulator::_run_parallel_tf() {
       _found_fault_to_pattern[2 * j + 1] = rd;
     }
   }
-#ifdef FSIM_DEBUG_PRINT_SIMULATION
-  std::cout << "GOOD resutls TF:" << std::endl;
-  print_simulation_results(_g_pi_results, _g_gate_results, _g_po_results);
-#endif
 }
 
 void fsim::Simulator::_run_good_case_tf(const Pattern pattern, const size_t bits) {
@@ -385,7 +396,9 @@ void fsim::Simulator::_run_bad_case_tf(const Fault &fault, const Pattern pattern
 
 
 void fsim::Simulator::_run_parallel_omp(const size_t num_threads){
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
   std::cout << "execute simulation._run_parallel omp();" << '\n';
+#endif
 
   // Simulation
   _g_pi_results.resize(_num_PIs);
@@ -400,7 +413,9 @@ void fsim::Simulator::_run_parallel_omp(const size_t num_threads){
     size_t num_testcases_this_round = ((_num_pattern/(SIZE_T_BITS*(rd+1)))) ? (SIZE_T_BITS) : (_num_pattern%SIZE_T_BITS);
 
     // good simulation
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
     std::cout << "OMP: Run Good case" << std::endl;
+#endif
     _run_good_case_omp(_patterns[rd], num_testcases_this_round, num_threads);
 
     // bad simulation (fault simulation)
@@ -477,6 +492,8 @@ void fsim::Simulator::_run_bad_case_omp(const Fault &fault, const Pattern patter
   size_t fault_val = fault._gate_SA_fault_val;
   size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs, po_idx_accum = (_num_PIs+_num_inner_gates);
   
+  omp_set_num_threads(num_threads);  
+
   // fault simulation
   #pragma omp parallel for
   for (size_t i = 0; i < _num_PIs; i++) {
@@ -762,7 +779,7 @@ void fsim::Simulator::_read_pattern(std::istream &ptn) {
     _patterns[i]._value.resize(_num_PIs);
     for (size_t pi = 0; pi < _num_PIs; pi++) {
       size_t idx = _gate_idx_to_tpg_order_idx[i];
-      ptn >> _patterns[i]._value[pi];
+      ptn >> _patterns[idx]._value[pi];
     }
   }
 
@@ -875,6 +892,8 @@ void fsim::Simulator::_run_gate(BasePPG &gate, const Pattern pattern, const size
   case GateType::PO:
     _apply_PO(gate);
     break;
+  case GateType::MAX_GATE_TYPE:
+    break;
   }
 }
 
@@ -928,12 +947,12 @@ void fsim::Simulator::print_num_gates_per_level() const {
   std::cout << "\n=====\n\n";
 }
 
-void fsim::Simulator::print_faults(const std::vector<Fault> &_faults) const {
+void fsim::Simulator::print_faults(const std::vector<Fault> &faults) const {
   std::cout << "\n=====\n\n"
             << "FSIM_DEBUG_PRINT_FAULTS\n";
   for (size_t i = 0; i < _num_fault; i++) {
-    std::cout << "_gate_with_fault = " << _faults[i]._gate_with_fault << ", SA_"
-              << _faults[i]._gate_SA_fault_val << "\n";
+    std::cout << "_gate_with_fault = " << faults[i]._gate_with_fault << ", SA_"
+              << faults[i]._gate_SA_fault_val << "\n";
   }
   std::cout << "\n=====\n\n";
 }
@@ -941,10 +960,10 @@ void fsim::Simulator::print_faults(const std::vector<Fault> &_faults) const {
 void fsim::Simulator::print_patterns(const std::vector<Pattern> &patterns,
                                     const size_t round, const size_t num_PIs) const {
   std::cout << "\n=====\n\n";
-  for (unsigned int i = 0; i < round; i++) {
+  for (size_t i = 0; i < round; i++) {
     std::cout << "[" << SIZE_T_BITS * i << ", " << SIZE_T_BITS * (i + 1)
               << "] bits = [\n";
-    for (int j = 0; j < num_PIs; j++) {
+    for (size_t j = 0; j < num_PIs; j++) {
       print_bits_stack(sizeof(patterns[i]._value[j]), &patterns[i]._value[j]);
     }
     std::cout << "]\n";
@@ -985,11 +1004,11 @@ void fsim::Simulator::print_simulation_results(const std::vector<size_t> &pi_res
 }
 
 void fsim::Simulator::print_found_fault_to_pattern(
-    const std::vector<size_t> &_found_fault_to_pattern) const {
+    const std::vector<size_t> &found_fault_to_pattern) const {
   for (size_t i = 0; i < (2 * _num_fault); i += 2) {
-    if (_found_fault_to_pattern[i] == 1) {
+    if (found_fault_to_pattern[i] == 1) {
       std::cout << "fault_" << (i / 2) << " is found, with Pattern_"
-                << _found_fault_to_pattern[i + 1] << "\n";
+                << found_fault_to_pattern[i + 1] << "\n";
     } else {
       std::cout << "fault_" << i << " cannot be found\n";
     }

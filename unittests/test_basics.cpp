@@ -25,35 +25,9 @@ Unittests:
 
 */
 
-/**
- * graph TEST_CASE
- * PPSFP_simple
- * one PI
- * one PO
- * one PI - one PO
- * one node: two PIs - one gate (two inputs gate) - one PO
- * one linear chain: one PI - (gate (INV))^n - one PO (n = 1)
- * one linear chain: one PI - (gate (INV))^n - one PO (n = 10)
- * two independent linear chain: (one PI - (gate (INV))^n - one PO)^2 (n = 10)
- * Ring
- * test FFR
- * X-style circuit
- * 
-*/
 
-/** 
- * For all testcases: 
- * test `read`, `run`, `output`
- * 
-*/
-
-/**
- * test different mode
- * 
- * 
-*/
-
-TEST_CASE("PPSFP_simple.1" * doctest::timeout(300)) {
+TEST_CASE("simple.1" * doctest::timeout(300)) {
+  // CML testcase
   std::istringstream ickt("\
   3\
   1\
@@ -84,30 +58,227 @@ TEST_CASE("PPSFP_simple.1" * doctest::timeout(300)) {
 
   sim.read(ickt, iflst, iptn);
 
-  // TODO:
-  //REQUIRE(sim.num_gates() == ???);
-  //REQUIRE(sim.num_wires() == ???);
   // check var
+  REQUIRE_MESSAGE(sim.num_PIs() == 3, "_num_PIs mismatch");
+  REQUIRE_MESSAGE(sim.num_gates() == 4, "_num_gates mismatch");
+  REQUIRE_MESSAGE(sim.num_POs() == 1, "_num_POs mismatch");
+  REQUIRE_MESSAGE(sim.num_wires() == 7, "_num_wires mismatch");
+  REQUIRE_MESSAGE(sim.num_rounds() == 1, "_num_rounds mismatch");
 
-  sim.run(fsim::Simulator::Mode::SEQUENTIAL, 1);
+  // check topological sort results
+  // _gate_idx_to_tpg_order_idx -> this is index transfer from (1) original index (readin from stream) to (2) after topologicacl sort the new index of each gate
+  std::vector<size_t> tpg_res = {0, 1, 2, 7, 5, 6, 3, 4};
+  std::vector<size_t> gate_tpg_order = sim.gate_idx_to_tpg_order_idx();
+  for (size_t i = 0; i < gate_tpg_order.size(); i++) {
+    REQUIRE_MESSAGE(gate_tpg_order[i] == tpg_res[i], "topological sort results order mismatch");
+  }
 
-  auto& g_pi_results = sim.g_pi_results();
-  auto& g_gate_results = sim.g_gate_results();
-  auto& g_po_results = sim.g_po_results();
-  std::vector<size_t> pi_ans = {2,4,1};
-  std::vector<size_t> gate_answer = {6,0,1,6};
-  std::vector<size_t> po_answer = {6};
+  // check levelization
+  // _num_gates_per_level
+  std::vector<size_t> num_gate_per_lvl_res = {3, 1, 2, 1, 1};
+  std::vector<size_t> num_gate_per_lvl = sim.num_gates_per_level();
+  REQUIRE_MESSAGE(num_gate_per_lvl.size() == num_gate_per_lvl_res.size(), "num_gate_per_lvl.size()");
+  for (size_t i = 0; i < num_gate_per_lvl.size(); i++) {
+    REQUIRE_MESSAGE(num_gate_per_lvl[i] == num_gate_per_lvl_res[i], "num_gates_per_level results order mismatch");
+  }  
 
-  for(size_t piid = 0; piid < g_pi_results.size(); piid++) {
-    auto& pi = sim.pi(piid);
-    REQUIRE_MESSAGE(g_pi_results[piid] == pi_ans[piid], "PI result mismatch");
+  // check _PIs, _gates, _POs levelization
+  // check PI
+  std::vector<size_t> pi_lvl_ans = {0, 0, 0};
+  for (size_t i = 0; i < sim.num_PIs(); i++) {
+    REQUIRE_MESSAGE(sim.pi(i).level() == pi_lvl_ans[i], "PI level mismatch");
   }
-  for(size_t gid = 0; gid < g_gate_results.size(); gid++) {
-    auto& gate = sim.gate(gid);
-    REQUIRE_MESSAGE(g_gate_results[gid] == gate_answer[gid], "Gate result mismatch");
+  // check gate
+  std::vector<size_t> gate_lvl_ans = {1, 2, 2, 3};
+  for (size_t i = 0; i < sim.num_gates(); i++) {
+    // auto& gate = sim.gate(i);
+    REQUIRE_MESSAGE(sim.gate(i).level() == gate_lvl_ans[i], "gate level mismatch");
   }
-  for(size_t poid = 0; poid < g_po_results.size(); poid++) {
-    auto& po = sim.po(poid);
-    REQUIRE_MESSAGE(g_po_results[poid] == po_answer[poid], "PO result mismatch");
+  // check PO
+  std::vector<size_t> po_lvl_ans = {4, };
+  for (size_t i = 0; i < sim.num_POs(); i++) {
+    // auto& po = sim.po(i);
+    REQUIRE_MESSAGE(sim.po(i).level() == po_lvl_ans[i], "PO level mismatch");
   }
+
+  // check faults init; check patterns init
+  // _faults; 
+  auto& flts = sim.faults();
+  REQUIRE_MESSAGE(flts.size() == 2, "_fault.size() mismatch");
+  REQUIRE_MESSAGE(flts[0].gate_with_fault() == gate_tpg_order[2], "_fault init (gate_with_fault) mismatch");
+  REQUIRE_MESSAGE(flts[1].gate_with_fault() == gate_tpg_order[4], "_fault init (gate_with_fault) mismatch");
+  REQUIRE_MESSAGE(flts[0].gate_SA_fault_val() == -1, "_fault init (gate_SA_fault_val) mismatch"); // -1 -> means SA_1 fault
+  REQUIRE_MESSAGE(flts[1].gate_SA_fault_val() == 0, "_fault init (gate_SA_fault_val) mismatch");
+  // _patterns;
+  auto& ptns = sim.patterns();
+  REQUIRE_MESSAGE(ptns.size() == 1, "_patterns.size() mismatch");
+  std::vector<std::vector<size_t>> ptn_val_ans;
+  ptn_val_ans.resize(1);  ptn_val_ans[0] = {2, 4, 1};
+  
+  for (size_t i = 0; i < ptns.size(); i++) {
+    for (size_t j = 0; j < (ptns[i].output_value().size()); j++) {
+      size_t j_idx = gate_tpg_order[j];
+      REQUIRE_MESSAGE((ptns[i].output_value())[j_idx] == ptn_val_ans[i][j_idx], "_patterns value mismatch");
+    }
+  }
+  // test gate inputs gate (skip) -> use dump_graph to check this
+
+  // Simulation, check different modes
+  for (size_t m = 0; m < 3; m++) {
+    if (m == 1) { // mode == OMP
+      sim.run(fsim::Simulator::Mode::SEQUENTIAL, 1);
+    } else if (m == 2) { // mode == OMP
+      sim.run(fsim::Simulator::Mode::PARALLEL_TF, 4);
+    } else { // mode == OMP
+      sim.run(fsim::Simulator::Mode::PARALLEL_OMP, 4);
+    }
+    // good simulation resutls check 
+    auto& g_pi_results = sim.g_pi_results();
+    auto& g_gate_results = sim.g_gate_results();
+    auto& g_po_results = sim.g_po_results();
+    std::vector<size_t> pi_ans = {2,4,1};
+    std::vector<size_t> gate_ans = {6,0,1,6};
+    std::vector<size_t> po_ans = {6};
+
+    for(size_t piid = 0; piid < g_pi_results.size(); piid++) {
+      REQUIRE_MESSAGE(g_pi_results[piid] == pi_ans[piid], "PI result mismatch");
+    }
+    for(size_t gid = 0; gid < g_gate_results.size(); gid++) {
+      REQUIRE_MESSAGE(g_gate_results[gid] == gate_ans[gid], "Gate result mismatch");
+    }
+    for(size_t poid = 0; poid < g_po_results.size(); poid++) {
+      REQUIRE_MESSAGE(g_po_results[poid] == po_ans[poid], "PO result mismatch");
+    }
+
+    // check the fault table
+    std::vector<size_t> found_flst_2_ptn_ans = {1, 0, 1, 0};
+    std::vector<size_t> ff2p = sim.found_fault_to_pattern();
+    for(size_t i = 0; i < ff2p.size(); i++) {
+      REQUIRE_MESSAGE(ff2p[i] == found_flst_2_ptn_ans[i], "found fault mismatch");
+    }  
+  }
+
+  // todo: bad simulation resutls check (check the results of fault simulation )
+}
+
+
+
+TEST_CASE("oneGate.1" * doctest::timeout(300)) {  
+/**
+ * PI -- Gate (INV) -- PO
+*/
+
+
+}
+
+TEST_CASE("oneGate.2" * doctest::timeout(300)) {  
+/**
+ * PI0 -- Gate  -- PO
+ * PI1 --| 
+*/
+
+
+}
+
+
+TEST_CASE("linear_chain.1" * doctest::timeout(300)) {
+// linear chain: one linear chain: one PI - (gate (INV))^n - one PO (n = 10)
+/**
+ * PI0 -- INV -- INV -- (... all INV) -- PO
+*/
+
+
+}
+
+TEST_CASE("linear_chain.2" * doctest::timeout(300)) {
+// linear chain: one linear chain: one PI - (gate (INV))^n - one PO (n = 1)
+/**
+ * PI0 -- Gate -- Gate -- (... all Gates) -- PO
+ * 這應該是兩個 inputs 的 gate 的 linear chain 
+*/
+
+
+}
+
+
+TEST_CASE("independent_graph.1" * doctest::timeout(300)) {
+// linear chain: 3 independent graphs: (one PI - (gate (INV))^n - one PO)^2 (n = 10)
+/**
+ * 三條 linear chian (INV)
+*/
+
+}
+
+TEST_CASE("independent_graph.2" * doctest::timeout(300)) {
+// linear chain: 3 independent graphs: (one PI - (gate (INV))^n - one PO)^2 (n = 10)
+/**
+ * CML 重複三組
+*/
+
+}
+
+TEST_CASE("ring1" * doctest::timeout(300)) {
+// a ring 
+/**
+ *        / --- INV --- INV --- INV --- \
+ * PI ---                                 --- PO
+ *        \ --- INV --- INV --- INV --- /
+*/
+
+}
+
+
+
+TEST_CASE("X_style" * doctest::timeout(300)) {
+// 階層性電路
+/**
+ * CML 重複三組
+*/
+
+}
+
+
+TEST_CASE("onePI" * doctest::timeout(300)) {
+/**
+ * PI
+*/
+
+}
+
+TEST_CASE("onePO" * doctest::timeout(300)) {
+/**
+ * PO
+*/
+
+}
+
+TEST_CASE("onePI_onePO" * doctest::timeout(300)) {
+/**
+ * PI -- PO
+*/
+}
+
+TEST_CASE("twoPIs_independent" * doctest::timeout(300)) {
+/**
+ * PI0
+ * PI1
+*/
+
+}
+
+TEST_CASE("twoGates_independent" * doctest::timeout(300)) {
+/**
+ * PO0
+ * PO1
+*/
+
+
+}
+
+TEST_CASE("FFR" * doctest::timeout(300)) {
+/**
+ * PI
+*/
+
+
 }

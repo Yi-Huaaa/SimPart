@@ -15,6 +15,8 @@ class Pattern {
 
 public:
   // accessor
+  // plain old data type can simply be returned as a copy
+  std::vector<size_t> output_value() const { return _value;}
 
 private:
   std::vector<size_t> _value;

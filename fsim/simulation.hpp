@@ -15,11 +15,11 @@
 #include "../taskflow/taskflow/taskflow.hpp"
 
 // fsim print for check
-#define FSIM_DEBUG_PRINT_SIMULATION
-#define FSIM_DEBUG_PRINT_GRAPH
-#define FSIM_DEBUG_PRINT_FAULTS
-#define FSIM_DEBUG_PRINT_PATTERNS
-#define FSIM_DEBUG_PRINT_FAULT_TABLE
+// #define FSIM_DEBUG_PRINT_SIMULATION
+// #define FSIM_DEBUG_PRINT_GRAPH
+// #define FSIM_DEBUG_PRINT_FAULTS
+// #define FSIM_DEBUG_PRINT_PATTERNS
+// #define FSIM_DEBUG_PRINT_FAULT_TABLE
 
 namespace fsim {
 
@@ -38,42 +38,44 @@ public:
   void read(const std::string &ckt, const std::string &flst,
             const std::string &ptn);
   void read(const std::istream& ckt, std::istream& flst, std::istream& ptn);
-  
-  // for testing
-  void read(std::istream& ckt, std::istream& flst, std::istream& ptn);
-
   void run(Mode mode, const size_t num_threads);
 
+  // for unittest
+  void read(std::istream& ckt, std::istream& flst, std::istream& ptn);
+
   // TODO: for visualization - graph 
-  // add warning flags "-Wall -Wextra -Wfatal-errors -Wshadow" to your CMake
-  // add make flag during the cmake to make the unittests run directly
+  // (v) add warning flags "-Wall -Wextra -Wfatal-errors -Wshadow" to your CMake
+  // (v) add make flag during the cmake to make the unittests run directly
   // add more unittests to run all of your program: for exmaple: different mode testing
   void dump_graph(std::ostream&) const;
 
-  const std::vector<size_t>& g_pi_results() const {
-    return _g_pi_results;
-  }
-  const std::vector<size_t>& g_gate_results() const {
-    return _g_gate_results;
-  }
-  const std::vector<size_t>& g_po_results() const {
-    return _g_po_results;
-  }
-  
-  const PI& pi(size_t piid) const {
-    return _PIs[piid];
-  }
-  const Gate& gate(size_t gid) const {
-    return _gates[gid];
-  }
-  const PO& po(size_t poid) const {
-    return _POs[poid];
-  }
-  
 
-  // // accessor
-  // size_t num_gates() const { return _gates.size(); }
-  // const std::vector<Gate>& gates() const { return _gates; }
+  const std::vector<size_t>& g_pi_results() const { return _g_pi_results; }
+  const std::vector<size_t>& g_gate_results() const { return _g_gate_results; }
+  const std::vector<size_t>& g_po_results() const { return _g_po_results; }
+  
+  // return gates, faults, patterns
+  // single
+  const PI& pi(size_t piid) const { return _PIs[piid]; }
+  const Gate& gate(size_t gid) const { return _gates[gid];}
+  const PO& po(size_t poid) const { return _POs[poid];}
+  // all of them
+  const std::vector<Gate>& gates() const { return _gates; }
+  const std::vector<Fault>& faults() { return _faults; }
+  const std::vector<Pattern>& patterns() { return _patterns;}   
+
+  // accessor
+  // var 
+  size_t num_PIs() const { return _PIs.size(); }
+  size_t num_gates() const { return _gates.size(); }
+  size_t num_POs() const { return _POs.size(); }
+  size_t num_wires() const { return _num_wires; }
+  size_t num_pos() const { return _POs.size(); }
+  size_t num_rounds() const { return _num_rounds; }
+  const std::vector<size_t> gate_idx_to_tpg_order_idx() const  { return _gate_idx_to_tpg_order_idx; }
+  const std::vector<size_t> num_gates_per_level() const  { return _num_gates_per_level; }
+  const std::vector<size_t> found_fault_to_pattern () const { return _found_fault_to_pattern; }
+  
 
 private:
   
@@ -81,7 +83,7 @@ private:
   tf::Executor _executor;
 
   
-  size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires, _total_gates;
+  size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   std::vector<size_t> _gate_idx_to_tpg_order_idx;
   std::vector<Gate> _gates;
   std::vector<PI> _PIs;
@@ -146,7 +148,7 @@ private:
                          const std::vector<size_t> &order) const;
   void print_ppg(const BasePPG &gate) const;
   void print_num_gates_per_level() const;
-  void print_faults(const std::vector<Fault> &_faults) const;
+  void print_faults(const std::vector<Fault> &faults) const;
   void print_patterns(const std::vector<Pattern> &patterns, const size_t round,
                      const size_t num_PIs) const;
   void print_bits_stack(const size_t size, const void *const ptr) const;

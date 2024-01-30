@@ -36,9 +36,9 @@ public:
 
   // accessor
   // plain old data type can simply be returned as a copy
-  size_t level() const {
-    return _level;
-  }
+  size_t idx() const { return _idx;}
+  size_t level() const { return _level;}
+  size_t output_value() const { return _output_value;}
 
 private:
   GateType _type;

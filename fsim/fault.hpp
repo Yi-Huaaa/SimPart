@@ -13,6 +13,10 @@ class Fault {
 
 public:
   // accessor
+  // plain old data type can simply be returned as a copy
+  size_t gate_with_fault() const { return _gate_with_fault;}
+  size_t gate_SA_fault_val() const { return _gate_SA_fault_val;}
+
 
 private:
   size_t _gate_with_fault;
