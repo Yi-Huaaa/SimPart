@@ -83,6 +83,7 @@ void fsim::Simulator::run(Mode mode, const size_t num_threads) {
       std::cout << "run _run_parallel_omp\n";
 #endif      
       _run_parallel_omp(num_threads);
+      break;
   }
 #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
   size_t m = static_cast<size_t>(mode);
@@ -497,7 +498,6 @@ void fsim::Simulator::_run_bad_case_omp(const Fault &fault, const Pattern patter
   size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs, po_idx_accum = (_num_PIs+_num_inner_gates);
   
   omp_set_num_threads(num_threads);  
-
   // fault simulation
   #pragma omp parallel for
   for (size_t i = 0; i < _num_PIs; i++) {
@@ -511,7 +511,7 @@ void fsim::Simulator::_run_bad_case_omp(const Fault &fault, const Pattern patter
     #pragma omp parallel for
     for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
       size_t idx = accum+j;
-      size_t SA_fault = ((i+gate_idx_accum) == wrong_gate);
+      size_t SA_fault = ((idx+gate_idx_accum) == wrong_gate);
       _run_gate(_gates[idx], pattern, i, SA_fault, fault_val); // here: idx is redundant, no need to be worry about the correctness of its val
     }
     accum += _num_gates_per_level[i];

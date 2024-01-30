@@ -58,19 +58,17 @@ std::vector<std::vector<std::string>> test_cases {
   // oneGate   
  {
   "\
+  1\
+  1\
+  1\
   2\
-  1\
-  1\
-  3\
-  1 2 1 3 0\
-  0 2 1 3 1\
-  3 2 1 2 0\
-  1\
+  0 2 1 2 0\
+  2 2 1 1 0\
+  0\
   ",
   "\
-  3\
+  2\
   1 1\
-  2 0\
   0 0\
   ",
   "\
@@ -99,7 +97,6 @@ void _check_num_vars(fsim::Simulator& sim, std::vector<size_t>& ans) {
   REQUIRE_MESSAGE(sim.num_rounds() == ans[4], "_num_rounds mismatch");
 }
 
-
 void _check_good_case_results(fsim::Simulator& sim, std::vector<size_t>& pi_ans, std::vector<size_t>& gate_ans, std::vector<size_t>& po_ans) {
   auto& g_pi_results = sim.g_pi_results();
   auto& g_gate_results = sim.g_gate_results();
@@ -116,62 +113,80 @@ void _check_good_case_results(fsim::Simulator& sim, std::vector<size_t>& pi_ans,
   }
 }
 
-
-TEST_CASE("Check num vars (CML)" * doctest::timeout(300)) {
-  // CML testcase
-  fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-
-  std::vector<size_t> ans = {3, 4, 1, 7, 1};
-  _check_num_vars(sim, ans);
+void check_tpg_sort_order (std::vector<size_t> res, std::vector<size_t> ans) {
+  for (size_t i = 0; i < res.size(); i++) {
+    REQUIRE_MESSAGE(res[i] == ans[i], "topological sort results order mismatch");
+  }  
 }
 
-TEST_CASE("Check tpg sort order (CML)" * doctest::timeout(300)) {
-  // CML testcase
+TEST_CASE("Check num vars (CML, OneGate)" * doctest::timeout(300)) {
   fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-  
+  std::vector<std::vector<size_t>> ans = {{3, 4, 1, 7, 1}, {1, 1, 1, 2, 1,}};
+
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    _read_test_case(sim, t);
+    _check_num_vars(sim, ans[t]);    
+  }
+}
+
+TEST_CASE("Check tpg sort order (CML, OneGate)" * doctest::timeout(300)) {
   // check topological sort results
   // _gate_idx_to_tpg_order_idx -> this is index transfer from (1) original index (readin from stream) to (2) after topologicacl sort the new index of each gate
-  std::vector<size_t> tpg_res = {0, 1, 2, 7, 5, 6, 3, 4};
-  std::vector<size_t> gate_tpg_order = sim.gate_idx_to_tpg_order_idx();
-  for (size_t i = 0; i < gate_tpg_order.size(); i++) {
-    REQUIRE_MESSAGE(gate_tpg_order[i] == tpg_res[i], "topological sort results order mismatch");
+
+  fsim::Simulator sim; 
+  std::vector<std::vector<size_t>> tpg_ans = {{0, 1, 2, 7, 5, 6, 3, 4}, {0, 2, 1, }};
+
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    _read_test_case(sim, t);
+    
+    std::vector<size_t> gate_tpg_order = sim.gate_idx_to_tpg_order_idx();
+    check_tpg_sort_order(gate_tpg_order, tpg_ans[t]);
   }
+}
+
+
+void check_num_gate_per_lvl_ans(std::vector<size_t> res, std::vector<size_t> ans) {
+  for (size_t i = 0; i < res.size(); i++) {
+    REQUIRE_MESSAGE(res[i] == ans[i], "num_gates_per_level results order mismatch");
+    // printf("res[i] = %ld, ans[i] = %ld\n", res[i], ans[i]);
+  }  
+  
+}
+
+void check_pi_gate_po_level_ans(fsim::Simulator& sim, std::vector<size_t> pi_lvl_ans_t, std::vector<size_t> gate_lvl_ans_t, std::vector<size_t> po_lvl_ans_t) {
+    // check PI 
+    for (size_t i = 0; i < sim.num_PIs(); i++) {
+      REQUIRE_MESSAGE(sim.pi(i).level() == pi_lvl_ans_t[i], "PI level mismatch");
+    }
+    // check gate
+    for (size_t i = 0; i < sim.num_gates(); i++) {
+      REQUIRE_MESSAGE(sim.gate(i).level() == gate_lvl_ans_t[i], "gate level mismatch");
+    }
+    // check PO
+    for (size_t i = 0; i < sim.num_POs(); i++) {
+      REQUIRE_MESSAGE(sim.po(i).level() == po_lvl_ans_t[i], "PO level mismatch");
+    }
 }
 
 TEST_CASE("Check levelization (CML)" * doctest::timeout(300)) {
   // CML testcase
   fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-  
-  // check levelization
-  // _num_gates_per_level
-  std::vector<size_t> num_gate_per_lvl_res = {3, 1, 2, 1, 1};
-  std::vector<size_t> num_gate_per_lvl = sim.num_gates_per_level();
-  REQUIRE_MESSAGE(num_gate_per_lvl.size() == num_gate_per_lvl_res.size(), "num_gate_per_lvl.size()");
-  for (size_t i = 0; i < num_gate_per_lvl.size(); i++) {
-    REQUIRE_MESSAGE(num_gate_per_lvl[i] == num_gate_per_lvl_res[i], "num_gates_per_level results order mismatch");
-  }  
+  std::vector<std::vector<size_t>> num_gate_per_lvl_ans = {{3, 1, 2, 1, 1}, {1, 1, 1}, };
+  std::vector<std::vector<size_t>> pi_lvl_ans = {{0, 0, 0}, {0,}};
+  std::vector<std::vector<size_t>> gate_lvl_ans = {{1, 2, 2, 3}, {1,}};
+  std::vector<std::vector<size_t>> po_lvl_ans = {{4, }, {2,}};  
 
-  // check _PIs, _gates, _POs levelization
-  // check PI
-  std::vector<size_t> pi_lvl_ans = {0, 0, 0};
-  for (size_t i = 0; i < sim.num_PIs(); i++) {
-    REQUIRE_MESSAGE(sim.pi(i).level() == pi_lvl_ans[i], "PI level mismatch");
-  }
-  // check gate
-  std::vector<size_t> gate_lvl_ans = {1, 2, 2, 3};
-  for (size_t i = 0; i < sim.num_gates(); i++) {
-    REQUIRE_MESSAGE(sim.gate(i).level() == gate_lvl_ans[i], "gate level mismatch");
-  }
-  // check PO
-  std::vector<size_t> po_lvl_ans = {4, };
-  for (size_t i = 0; i < sim.num_POs(); i++) {
-    REQUIRE_MESSAGE(sim.po(i).level() == po_lvl_ans[i], "PO level mismatch");
+  // for (size_t t = 0; t < test_cases.size(); t++) {
+  for (size_t t = 0; t < 1; t++) {
+    _read_test_case(sim, t);
+    
+    // _num_gates_per_level 
+    std::vector<size_t> num_gate_per_lvl = sim.num_gates_per_level();
+    REQUIRE_MESSAGE(num_gate_per_lvl.size() == num_gate_per_lvl_ans[t].size(), "num_gate_per_lvl.size()");
+    check_num_gate_per_lvl_ans(num_gate_per_lvl, num_gate_per_lvl_ans[t]);
+
+    // check _PIs, _gates, _POs levelization
+    check_pi_gate_po_level_ans(sim, pi_lvl_ans[t], gate_lvl_ans[t], po_lvl_ans[t]);
   }
 }
 
@@ -312,16 +327,6 @@ TEST_CASE("Check fault to pattern table (parallel_omp) (CML)" * doctest::timeout
 }
 
 
-// TEST_CASE("oneGate.1" * doctest::timeout(300)) {  
-//   fsim::Simulator sim;
-//   size_t testcase = 0;
-//   _read_test_case(sim, testcase);
-
-//   std::vector<size_t> ans = {1, 1, 1, 2, 1,};
-//   // _check_num_vars(sim, ans);
-//   printf("!!! %ld, %ld, %ld, %ld, %ld, \n", sim.num_PIs(),  sim.num_gates(),  sim.num_POs(),  sim.num_wires(),  sim.num_rounds());
-
-// }
 
 // TEST_CASE("oneGate.2" * doctest::timeout(300)) {  
 // /**
