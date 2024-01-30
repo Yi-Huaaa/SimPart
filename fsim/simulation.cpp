@@ -512,7 +512,7 @@ void fsim::Simulator::_run_bad_case_omp(const Fault &fault, const Pattern patter
     for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
       size_t idx = accum+j;
       size_t SA_fault = ((idx+gate_idx_accum) == wrong_gate);
-      _run_gate(_gates[idx], pattern, i, SA_fault, fault_val); // here: idx is redundant, no need to be worry about the correctness of its val
+      _run_gate(_gates[idx], pattern, idx, SA_fault, fault_val); // here: idx is redundant, no need to be worry about the correctness of its val
     }
     accum += _num_gates_per_level[i];
   }
