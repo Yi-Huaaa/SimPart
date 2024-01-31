@@ -1,3 +1,4 @@
+/* trunk-ignore-all(clang-format) */
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 
 #include <doctest.h>
@@ -17,19 +18,18 @@ e.g.,
 void test_simple1(execution_mode, num_threads)
 
 
-Unittests: 
+Unittests:
 1. test different modes
-2. test wether levelized success 
-3. 
+2. test wether levelized success
+3.
 
 
 */
 
 // define test cases
-std::vector<std::vector<std::string>> test_cases {
- // CML
- {
-  "\
+std::vector<std::vector<std::string>> test_cases{
+  // CML
+  {"\
   3\
   1\
   4\
@@ -48,15 +48,14 @@ std::vector<std::vector<std::string>> test_cases {
   2 1\
   4 0\
   ",
-  "\
+     "\
   3\
   2\
   4\
   1\
-  "
- },
-  // oneGate   
- {
+  "},
+  // oneGate
+  {
   "\
   1\
   1\
@@ -75,450 +74,338 @@ std::vector<std::vector<std::string>> test_cases {
   2\
   1\
   ",
- },
-
+  },
 
 };
 
-// helper functions
-void _read_test_case(fsim::Simulator& sim, size_t test_case_id) {
+#define size_t_bits 64
+
+/** Answers */
+// answers check num vars (num_PIs, num_POs, num_wires, ...)
+std::vector<std::vector<size_t>> num_vars_ans = {
+  {3, 4, 1, 7, 1},
+  {1,1,1,2,1,}
+};
+// asnwers for Check tpg sort order
+std::vector<std::vector<size_t>> tpg_ans = {
+  {0, 1, 2, 7, 5, 6, 3, 4},
+  {0,2,1,}
+};
+// answers for check levelization
+std::vector<std::vector<size_t>> num_gate_per_lvl_ans = {
+  {3, 1, 2, 1, 1},
+  {1, 1, 1},
+};
+std::vector<std::vector<size_t>> pi_lvl_ans = {
+  {0, 0, 0},
+  {0,},
+};
+std::vector<std::vector<size_t>> gate_lvl_ans = {
+  {1, 2, 2, 3},
+  {1,},
+};
+std::vector<std::vector<size_t>> po_lvl_ans = {
+  {4,},
+  {2,},
+};
+// answers for faults initialization
+std::vector<size_t> fault_size_ans = {2, 2};
+std::vector<std::vector<size_t>> fault_ans = {
+  {2,1,4,0,},
+  {1,1,0,0,},
+};
+// answers for patterns initialization
+std::vector<size_t> ptn_size_ans = {
+  3,
+  1,
+};
+std::vector<std::vector<size_t>> ptn_val_ans = {
+  {2, 4, 1},
+  {1,}
+};
+// answers for simulation outputs of PIs, gates, POs
+std::vector<std::vector<size_t>> pi_ans = {
+  {2, 4, 1,},
+  {1,},
+};
+std::vector<std::vector<size_t>> gate_ans = {
+  {6, 0, 1, 6},
+  {2,},
+};
+std::vector<std::vector<size_t>> po_ans = {
+  {6,},
+  {2,},
+};
+// answers for found_fault_2_pattern_tables
+std::vector<std::vector<size_t>> found_flst_2_ptn_ans = {
+  {1, 0, 1, 0},
+  {1, 0, 1, 0}
+};
+
+/** helper functions */
+void _read_test_case(fsim::Simulator &sim, size_t test_case_id) {
   std::istringstream ickt(test_cases[test_case_id][0]);
   std::istringstream iflst(test_cases[test_case_id][1]);
   std::istringstream iptn(test_cases[test_case_id][2]);
   sim.read(ickt, iflst, iptn);
 }
 
-void _check_num_vars(fsim::Simulator& sim, std::vector<size_t>& ans) {
+void _check_num_vars(fsim::Simulator &sim, std::vector<size_t> &num_vars_ans_t) {
   // check var
-  REQUIRE_MESSAGE(sim.num_PIs() == ans[0], "_num_PIs mismatch");
-  REQUIRE_MESSAGE(sim.num_gates() == ans[1], "_num_gates mismatch");
-  REQUIRE_MESSAGE(sim.num_POs() == ans[2], "_num_POs mismatch");
-  REQUIRE_MESSAGE(sim.num_wires() == ans[3], "_num_wires mismatch");
-  REQUIRE_MESSAGE(sim.num_rounds() == ans[4], "_num_rounds mismatch");
+  REQUIRE_MESSAGE(sim.num_PIs() == num_vars_ans_t[0], "_num_PIs mismatch");
+  REQUIRE_MESSAGE(sim.num_gates() == num_vars_ans_t[1], "_num_gates mismatch");
+  REQUIRE_MESSAGE(sim.num_POs() == num_vars_ans_t[2], "_num_POs mismatch");
+  REQUIRE_MESSAGE(sim.num_wires() == num_vars_ans_t[3], "_num_wires mismatch");
+  REQUIRE_MESSAGE(sim.num_rounds() == num_vars_ans_t[4], "_num_rounds mismatch");
 }
 
-void _check_good_case_results(fsim::Simulator& sim, std::vector<size_t>& pi_ans, std::vector<size_t>& gate_ans, std::vector<size_t>& po_ans) {
-  auto& g_pi_results = sim.g_pi_results();
-  auto& g_gate_results = sim.g_gate_results();
-  auto& g_po_results = sim.g_po_results();
+void _check_good_case_results(fsim::Simulator &sim,
+                              std::vector<size_t> &pi_ans_t,
+                              std::vector<size_t> &gate_ans_t,
+                              std::vector<size_t> &po_ans_t) {
+  auto &g_pi_results = sim.g_pi_results();
+  auto &g_gate_results = sim.g_gate_results();
+  auto &g_po_results = sim.g_po_results();
 
-  for(size_t piid = 0; piid < g_pi_results.size(); piid++) {
-    REQUIRE_MESSAGE(g_pi_results[piid] == pi_ans[piid], "PI result mismatch");
+  for (size_t piid = 0; piid < g_pi_results.size(); piid++) {
+    REQUIRE_MESSAGE(g_pi_results[piid] == pi_ans_t[piid], "PI result mismatch");
   }
-  for(size_t gid = 0; gid < g_gate_results.size(); gid++) {
-    REQUIRE_MESSAGE(g_gate_results[gid] == gate_ans[gid], "Gate result mismatch");
+  for (size_t gid = 0; gid < g_gate_results.size(); gid++) {
+    REQUIRE_MESSAGE(g_gate_results[gid] == gate_ans_t[gid],
+                    "Gate result mismatch");
   }
-  for(size_t poid = 0; poid < g_po_results.size(); poid++) {
-    REQUIRE_MESSAGE(g_po_results[poid] == po_ans[poid], "PO result mismatch");
+  for (size_t poid = 0; poid < g_po_results.size(); poid++) {
+    REQUIRE_MESSAGE(g_po_results[poid] == po_ans_t[poid], "PO result mismatch");
   }
 }
 
-void _check_tpg_sort_order (std::vector<size_t> res, std::vector<size_t> ans) {
+void _check_tpg_sort_order(std::vector<size_t> res, std::vector<size_t> ans) {
   for (size_t i = 0; i < res.size(); i++) {
-    REQUIRE_MESSAGE(res[i] == ans[i], "topological sort results order mismatch");
-  }  
+    REQUIRE_MESSAGE(res[i] == ans[i],
+                    "topological sort results order mismatch");
+  }
 }
 
-
-void _check_num_gate_per_lvl_ans(std::vector<size_t> res, std::vector<size_t> ans) {
+void _check_num_gate_per_lvl_ans(std::vector<size_t> res,
+                                 std::vector<size_t> num_vars_ans_t) {
   for (size_t i = 0; i < res.size(); i++) {
-    REQUIRE_MESSAGE(res[i] == ans[i], "num_gates_per_level results order mismatch");
-    // printf("res[i] = %ld, ans[i] = %ld\n", res[i], ans[i]);
-  }  
-  
+    REQUIRE_MESSAGE(res[i] == num_vars_ans_t[i],
+                    "num_gates_per_level results order mismatch");
+  }
 }
 
-void _check_pi_gate_po_level_ans(fsim::Simulator& sim, std::vector<size_t> pi_lvl_ans_t, std::vector<size_t> gate_lvl_ans_t, std::vector<size_t> po_lvl_ans_t) {
-    // check PI 
-    for (size_t i = 0; i < sim.num_PIs(); i++) {
-      REQUIRE_MESSAGE(sim.pi(i).level() == pi_lvl_ans_t[i], "PI level mismatch");
-    }
-    // check gate
-    for (size_t i = 0; i < sim.num_gates(); i++) {
-      REQUIRE_MESSAGE(sim.gate(i).level() == gate_lvl_ans_t[i], "gate level mismatch");
-    }
-    // check PO
-    for (size_t i = 0; i < sim.num_POs(); i++) {
-      REQUIRE_MESSAGE(sim.po(i).level() == po_lvl_ans_t[i], "PO level mismatch");
-    }
+void _check_pi_gate_po_level_ans(fsim::Simulator &sim,
+                                 std::vector<size_t> pi_lvl_ans_t,
+                                 std::vector<size_t> gate_lvl_ans_t,
+                                 std::vector<size_t> po_lvl_ans_t) {
+  // check PI
+  for (size_t i = 0; i < sim.num_PIs(); i++) {
+    REQUIRE_MESSAGE(sim.pi(i).level() == pi_lvl_ans_t[i], "PI level mismatch");
+  }
+  // check gate
+  for (size_t i = 0; i < sim.num_gates(); i++) {
+    REQUIRE_MESSAGE(sim.gate(i).level() == gate_lvl_ans_t[i],
+                    "gate level mismatch");
+  }
+  // check PO
+  for (size_t i = 0; i < sim.num_POs(); i++) {
+    REQUIRE_MESSAGE(sim.po(i).level() == po_lvl_ans_t[i], "PO level mismatch");
+  }
 }
 
-TEST_CASE("Check num vars (CML, OneGate)" * doctest::timeout(300)) {
-  std::vector<std::vector<size_t>> ans = {{3, 4, 1, 7, 1}, {1, 1, 1, 2, 1,}};
+void _check_faults(fsim::Simulator &sim, std::vector<size_t> gate_tpg_order,
+                   size_t fault_size_ans_t, std::vector<size_t> fault_ans_t) {
+  auto &flts = sim.faults();
+  REQUIRE_MESSAGE(flts.size() == fault_size_ans_t, "_fault.size() mismatch");
+
+  for (size_t i = 0; i < flts.size(); i++) {
+    size_t gate_with_fault_ans = gate_tpg_order[fault_ans_t[2 * i]];
+    size_t gate_SA_fault_val_ans = (fault_ans_t[2 * i + 1] == 1) ? (-1) : (0);
+    REQUIRE_MESSAGE(flts[i].gate_with_fault() == gate_with_fault_ans,
+                    "_fault init (gate_with_fault) mismatch");
+    REQUIRE_MESSAGE(
+        flts[i].gate_SA_fault_val() == gate_SA_fault_val_ans,
+        "_fault init (gate_SA_fault_val) mismatch"); // -1 -> means SA_1 fault
+  }
+}
+
+void _check_patterns(fsim::Simulator &sim, std::vector<size_t> gate_tpg_order,
+                     size_t ptn_size_ans_t, std::vector<size_t> ptn_val_ans_t) {
+  auto &ptns = sim.patterns();
+  REQUIRE_MESSAGE(ptns.size() == ptn_size_ans_t, "_patterns.size() mismatch");
+
+  for (size_t i = 0; i < ptns.size(); i++) {
+    for (size_t j = 0; j < (ptns[i].output_value().size()); j++) {
+      size_t j_idx = gate_tpg_order[j];
+      REQUIRE_MESSAGE((ptns[i].output_value())[j_idx] == ptn_val_ans_t[j_idx],
+                      "_patterns value mismatch");
+    }
+  }
+}
+
+void _check_found_fault_2_pattern(
+    fsim::Simulator &sim, std::vector<size_t> found_fault_2_pattern_ans) {
+
+  std::vector<size_t> found_fault_2_pattern_res = sim.found_fault_to_pattern();
+  for (size_t i = 0; i < found_fault_2_pattern_res.size(); i++) {
+    REQUIRE_MESSAGE(found_fault_2_pattern_res[i] ==
+                        found_fault_2_pattern_ans[i],
+                    "found fault mismatch");
+  }
+}
+
+/** TEST_CASE, now: (CML, OneGate) */
+TEST_CASE("Check num vars" * doctest::timeout(300)) {
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    fsim::Simulator sim;
+    _read_test_case(sim, t);
+    _check_num_vars(sim, num_vars_ans[t]);
+  }
+}
+
+TEST_CASE("Check tpg sort order" * doctest::timeout(300)) {
+  // check topological sort results
+  // _gate_idx_to_tpg_order_idx -> this is index transfer from (1) original
+  // index (readin from stream) to (2) after topologicacl sort the new index of
+  // each gate
 
   for (size_t t = 0; t < test_cases.size(); t++) {
     fsim::Simulator sim;
     _read_test_case(sim, t);
-    _check_num_vars(sim, ans[t]);    
-  }
-}
 
-TEST_CASE("Check tpg sort order (CML, OneGate)" * doctest::timeout(300)) {
-  // check topological sort results
-  // _gate_idx_to_tpg_order_idx -> this is index transfer from (1) original index (readin from stream) to (2) after topologicacl sort the new index of each gate
-  std::vector<std::vector<size_t>> tpg_ans = {{0, 1, 2, 7, 5, 6, 3, 4}, {0, 2, 1, }};
-
-  for (size_t t = 0; t < test_cases.size(); t++) {
-    fsim::Simulator sim; 
-    _read_test_case(sim, t);
-    
     std::vector<size_t> gate_tpg_order = sim.gate_idx_to_tpg_order_idx();
     _check_tpg_sort_order(gate_tpg_order, tpg_ans[t]);
   }
 }
 
-
-TEST_CASE("Check levelization (CML, OneGate)" * doctest::timeout(300)) {
-  std::vector<std::vector<size_t>> num_gate_per_lvl_ans = {{3, 1, 2, 1, 1}, {1, 1, 1}, };
-  std::vector<std::vector<size_t>> pi_lvl_ans = {{0, 0, 0}, {0,}};
-  std::vector<std::vector<size_t>> gate_lvl_ans = {{1, 2, 2, 3}, {1,}};
-  std::vector<std::vector<size_t>> po_lvl_ans = {{4, }, {2,}};  
-
+TEST_CASE("Check levelization" * doctest::timeout(300)) {
   for (size_t t = 0; t < test_cases.size(); t++) {
     fsim::Simulator sim;
     _read_test_case(sim, t);
-    
-    // _num_gates_per_level 
+
+    // _num_gates_per_level
     std::vector<size_t> num_gate_per_lvl = sim.num_gates_per_level();
-    REQUIRE_MESSAGE(num_gate_per_lvl.size() == num_gate_per_lvl_ans[t].size(), "num_gate_per_lvl.size()");
+    REQUIRE_MESSAGE(num_gate_per_lvl.size() == num_gate_per_lvl_ans[t].size(),
+                    "num_gate_per_lvl.size()");
     _check_num_gate_per_lvl_ans(num_gate_per_lvl, num_gate_per_lvl_ans[t]);
 
     // check _PIs, _gates, _POs levelization
-    _check_pi_gate_po_level_ans(sim, pi_lvl_ans[t], gate_lvl_ans[t], po_lvl_ans[t]);
+    _check_pi_gate_po_level_ans(sim, pi_lvl_ans[t], gate_lvl_ans[t],
+                                po_lvl_ans[t]);
   }
 }
 
+TEST_CASE("Check faults initialization" * doctest::timeout(300)) {
+  // _faults;
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    fsim::Simulator sim;
+    _read_test_case(sim, t);
 
-void _check_faults (fsim::Simulator& sim, std::vector<size_t> gate_tpg_order) {
-  auto& flts = sim.faults();
-  REQUIRE_MESSAGE(flts.size() == 2, "_fault.size() mismatch");
-  REQUIRE_MESSAGE(flts[0].gate_with_fault() == gate_tpg_order[2], "_fault init (gate_with_fault) mismatch");
-  REQUIRE_MESSAGE(flts[1].gate_with_fault() == gate_tpg_order[4], "_fault init (gate_with_fault) mismatch");
-  REQUIRE_MESSAGE(flts[0].gate_SA_fault_val() == -1, "_fault init (gate_SA_fault_val) mismatch"); // -1 -> means SA_1 fault
-  REQUIRE_MESSAGE(flts[1].gate_SA_fault_val() == 0, "_fault init (gate_SA_fault_val) mismatch");
-}
+    std::vector<size_t> gate_tpg_order = sim.gate_idx_to_tpg_order_idx();
 
-
-TEST_CASE("Check faults initialization (CML)" * doctest::timeout(300)) {
-  // CML testcase
-  fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-  
-  std::vector<size_t> gate_tpg_order = sim.gate_idx_to_tpg_order_idx();
-
-  // _faults; 
-  _check_faults(sim, gate_tpg_order);
-}
-
-TEST_CASE("Check patterns initialization (CML)" * doctest::timeout(300)) {
-  // CML testcase
-  fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-  
-  std::vector<size_t> gate_tpg_order = sim.gate_idx_to_tpg_order_idx();
-
-  // _faults; 
-  auto& ptns = sim.patterns();
-  REQUIRE_MESSAGE(ptns.size() == 1, "_patterns.size() mismatch");
-  std::vector<std::vector<size_t>> ptn_val_ans;
-  ptn_val_ans.resize(1);  ptn_val_ans[0] = {2, 4, 1};
-  
-  for (size_t i = 0; i < ptns.size(); i++) {
-    for (size_t j = 0; j < (ptns[i].output_value().size()); j++) {
-      size_t j_idx = gate_tpg_order[j];
-      REQUIRE_MESSAGE((ptns[i].output_value())[j_idx] == ptn_val_ans[i][j_idx], "_patterns value mismatch");
-    }
+    _check_faults(sim, gate_tpg_order, fault_size_ans[t], fault_ans[t]);
   }
 }
 
-TEST_CASE("Check good case simulation (sequential) (CML)" * doctest::timeout(300)) {
-  // CML testcase
-  fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-  
-  sim.run(fsim::Simulator::Mode::SEQUENTIAL, 1);
+TEST_CASE("Check patterns initialization" * doctest::timeout(300)) {
+  for (size_t i = 0; i < ptn_size_ans.size(); i++) {
+    ptn_size_ans[i] = ((ptn_size_ans[i] + size_t_bits - 1) / size_t_bits);
+  }
 
-  // good simulation resutls check
-  std::vector<size_t> pi_ans = {2,4,1};
-  std::vector<size_t> gate_ans = {6,0,1,6};
-  std::vector<size_t> po_ans = {6};
-  _check_good_case_results(sim, pi_ans, gate_ans, po_ans);
+  // _patterns;
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    fsim::Simulator sim;
+    _read_test_case(sim, t);
+
+    std::vector<size_t> gate_tpg_order = sim.gate_idx_to_tpg_order_idx();
+
+    _check_patterns(sim, gate_tpg_order, ptn_size_ans[t], ptn_val_ans[t]);
+  }
 }
 
-TEST_CASE("Check good case simulation (parallel_tf) (CML)" * doctest::timeout(300)) {
-  // CML testcase
-  fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-  
+TEST_CASE("Check good case simulation (sequential)" * doctest::timeout(300)) {
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    fsim::Simulator sim;
+    _read_test_case(sim, t);
+
+    sim.run(fsim::Simulator::Mode::SEQUENTIAL, 1);
+
+    // good simulation resutls check
+    _check_good_case_results(sim, pi_ans[t], gate_ans[t], po_ans[t]);
+  }
+}
+
+TEST_CASE("Check good case simulation (parallel_tf)" * doctest::timeout(300)) {
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    fsim::Simulator sim;
+    _read_test_case(sim, t);
+
+    size_t num_threads = 4;
+    sim.run(fsim::Simulator::Mode::PARALLEL_TF, num_threads);
+
+    // good simulation resutls check
+    _check_good_case_results(sim, pi_ans[t], gate_ans[t], po_ans[t]);
+  }
+}
+
+TEST_CASE("Check good case simulation (parallel_omp)" * doctest::timeout(300)) {
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    fsim::Simulator sim;
+    _read_test_case(sim, t);
+
+    size_t num_threads = 4;
+    sim.run(fsim::Simulator::Mode::PARALLEL_OMP, num_threads);
+
+    // good simulation resutls check
+    _check_good_case_results(sim, pi_ans[t], gate_ans[t], po_ans[t]);
+  }
+}
+
+TEST_CASE("Check fault to pattern table (sequential)" * doctest::timeout(300)) {
+  size_t num_threads = 1;
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    fsim::Simulator sim;
+    _read_test_case(sim, t);
+
+    sim.run(fsim::Simulator::Mode::SEQUENTIAL, num_threads);
+
+    // check the fault table
+    _check_found_fault_2_pattern(sim, found_flst_2_ptn_ans[t]);
+  }
+}
+
+TEST_CASE("Check fault to pattern table (parallel_tf)" *
+          doctest::timeout(300)) {
   size_t num_threads = 4;
-  sim.run(fsim::Simulator::Mode::PARALLEL_TF, num_threads);
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    fsim::Simulator sim;
+    _read_test_case(sim, t);
 
-  // good simulation resutls check
-  std::vector<size_t> pi_ans = {2,4,1};
-  std::vector<size_t> gate_ans = {6,0,1,6};
-  std::vector<size_t> po_ans = {6};
-  _check_good_case_results(sim, pi_ans, gate_ans, po_ans);
-}
+    sim.run(fsim::Simulator::Mode::PARALLEL_TF, num_threads);
 
-TEST_CASE("Check good case simulation (parallel_omp) (CML)" * doctest::timeout(300)) {
-  // CML testcase
-  fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-  
-  size_t num_threads = 4;
-  sim.run(fsim::Simulator::Mode::PARALLEL_OMP, num_threads);
-
-  // good simulation resutls check
-  std::vector<size_t> pi_ans = {2,4,1};
-  std::vector<size_t> gate_ans = {6,0,1,6};
-  std::vector<size_t> po_ans = {6};
-  _check_good_case_results(sim, pi_ans, gate_ans, po_ans);
-}
-
-TEST_CASE("Check fault to pattern table (sequential) (CML)" * doctest::timeout(300)) {
-  // CML testcase
-  fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-  
-  sim.run(fsim::Simulator::Mode::SEQUENTIAL, 1);
-
-  // check the fault table
-  std::vector<size_t> found_flst_2_ptn_ans = {1, 0, 1, 0};
-  std::vector<size_t> ff2p = sim.found_fault_to_pattern();
-  for(size_t i = 0; i < ff2p.size(); i++) {
-    REQUIRE_MESSAGE(ff2p[i] == found_flst_2_ptn_ans[i], "found fault mismatch");
+    // check the fault table
+    _check_found_fault_2_pattern(sim, found_flst_2_ptn_ans[t]);
   }
 }
 
-TEST_CASE("Check fault to pattern table (parallel_tf) (CML)" * doctest::timeout(300)) {
-  // CML testcase
-  fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-  
+TEST_CASE("Check fault to pattern table (parallel_omp)" *
+          doctest::timeout(300)) {
   size_t num_threads = 4;
-  sim.run(fsim::Simulator::Mode::PARALLEL_TF, num_threads);
+  for (size_t t = 0; t < test_cases.size(); t++) {
+    fsim::Simulator sim;
+    _read_test_case(sim, t);
 
-  // check the fault table
-  std::vector<size_t> found_flst_2_ptn_ans = {1, 0, 1, 0};
-  std::vector<size_t> ff2p = sim.found_fault_to_pattern();
-  for(size_t i = 0; i < ff2p.size(); i++) {
-    REQUIRE_MESSAGE(ff2p[i] == found_flst_2_ptn_ans[i], "found fault mismatch");
+    sim.run(fsim::Simulator::Mode::PARALLEL_OMP, num_threads);
+
+    // check the fault table
+    _check_found_fault_2_pattern(sim, found_flst_2_ptn_ans[t]);
   }
 }
 
-TEST_CASE("Check fault to pattern table (parallel_omp) (CML)" * doctest::timeout(300)) {
-  // CML testcase
-  fsim::Simulator sim;
-  size_t testcase = 0;
-  _read_test_case(sim, testcase);
-  
-  size_t num_threads = 4;
-  sim.run(fsim::Simulator::Mode::PARALLEL_OMP, num_threads);
-
-  // check the fault table
-  std::vector<size_t> found_flst_2_ptn_ans = {1, 0, 1, 0};
-  std::vector<size_t> ff2p = sim.found_fault_to_pattern();
-  for(size_t i = 0; i < ff2p.size(); i++) {
-    REQUIRE_MESSAGE(ff2p[i] == found_flst_2_ptn_ans[i], "found fault mismatch");
-  }
-}
-
-
-
-// TEST_CASE("oneGate.2" * doctest::timeout(300)) {  
-// /**
-//  * PI0 -- AND  -- PO
-//  * PI1 --| 
-// */
-
-
-// }
-
-
-// TEST_CASE("linear_chain.1" * doctest::timeout(300)) {
-// // linear chain: one linear chain: one PI - (gate (INV))^n - one PO (n = 10)
-// /**
-//  * PI0 -- INV -- INV -- (... all INV) -- PO
-// */
-
-
-// }
-
-// TEST_CASE("linear_chain.2" * doctest::timeout(300)) {
-// /**
-//  * PI0 -- AND -- AND -- AND --- AND --- AND --- PO
-//  * 
-// */
-
-// }
-
-
-// TEST_CASE("independent_graph.1" * doctest::timeout(300)) {
-// // linear chain: 2 independent graphs: (one PI - (gate (INV))^n - one PO)^2 (n = 3)
-
-
-// }
-
-
-// TEST_CASE("ring1" * doctest::timeout(300)) {
-// // a ring 
-// /**
-//  *        / --- INV --- INV --- \
-//  * PI ---                          AND --- PO
-//  *        \ --- INV --- INV --- /
-// */
-
-// }
-
-
-// todo 
+// todo
 // TEST_CASE("X_style" * doctest::timeout(300)) {
 // // 階層性電路
 
 // }
 
-
-// -----------------------------
-
-
-TEST_CASE("simple_fully_tests.1" * doctest::timeout(300)) {
-  // CML testcase
-  std::istringstream ickt("\
-  3\
-  1\
-  4\
-  7\
-  7 2 1 5 0\
-  4 2 1 5 1\
-  5 2 1 3 0\
-  6 2 2 7 1 4 0\
-  1 2 1 6 0\
-  0 2 1 6 1\
-  2 2 1 7 0\
-  0 5 2 1\
-  ");
-  std::istringstream iflst("\
-  2\
-  2 1\
-  4 0\
-  ");
-  std::istringstream iptn("\
-  3\
-  2\
-  4\
-  1\
-  ");
-
-  fsim::Simulator sim;
-
-  sim.read(ickt, iflst, iptn);
-
-  // check var
-  REQUIRE_MESSAGE(sim.num_PIs() == 3, "_num_PIs mismatch");
-  REQUIRE_MESSAGE(sim.num_gates() == 4, "_num_gates mismatch");
-  REQUIRE_MESSAGE(sim.num_POs() == 1, "_num_POs mismatch");
-  REQUIRE_MESSAGE(sim.num_wires() == 7, "_num_wires mismatch");
-  REQUIRE_MESSAGE(sim.num_rounds() == 1, "_num_rounds mismatch");
-
-  // check topological sort results
-  // _gate_idx_to_tpg_order_idx -> this is index transfer from (1) original index (readin from stream) to (2) after topologicacl sort the new index of each gate
-  std::vector<size_t> tpg_res = {0, 1, 2, 7, 5, 6, 3, 4};
-  std::vector<size_t> gate_tpg_order = sim.gate_idx_to_tpg_order_idx();
-  for (size_t i = 0; i < gate_tpg_order.size(); i++) {
-    REQUIRE_MESSAGE(gate_tpg_order[i] == tpg_res[i], "topological sort results order mismatch");
-  }
-
-  // check levelization
-  // _num_gates_per_level
-  std::vector<size_t> num_gate_per_lvl_res = {3, 1, 2, 1, 1};
-  std::vector<size_t> num_gate_per_lvl = sim.num_gates_per_level();
-  REQUIRE_MESSAGE(num_gate_per_lvl.size() == num_gate_per_lvl_res.size(), "num_gate_per_lvl.size()");
-  for (size_t i = 0; i < num_gate_per_lvl.size(); i++) {
-    REQUIRE_MESSAGE(num_gate_per_lvl[i] == num_gate_per_lvl_res[i], "num_gates_per_level results order mismatch");
-  }  
-
-  // check _PIs, _gates, _POs levelization
-  // check PI
-  std::vector<size_t> pi_lvl_ans = {0, 0, 0};
-  for (size_t i = 0; i < sim.num_PIs(); i++) {
-    REQUIRE_MESSAGE(sim.pi(i).level() == pi_lvl_ans[i], "PI level mismatch");
-  }
-  // check gate
-  std::vector<size_t> gate_lvl_ans = {1, 2, 2, 3};
-  for (size_t i = 0; i < sim.num_gates(); i++) {
-    // auto& gate = sim.gate(i);
-    REQUIRE_MESSAGE(sim.gate(i).level() == gate_lvl_ans[i], "gate level mismatch");
-  }
-  // check PO
-  std::vector<size_t> po_lvl_ans = {4, };
-  for (size_t i = 0; i < sim.num_POs(); i++) {
-    // auto& po = sim.po(i);
-    REQUIRE_MESSAGE(sim.po(i).level() == po_lvl_ans[i], "PO level mismatch");
-  }
-
-  // check faults init; check patterns init
-  // _faults; 
-  auto& flts = sim.faults();
-  REQUIRE_MESSAGE(flts.size() == 2, "_fault.size() mismatch");
-  REQUIRE_MESSAGE(flts[0].gate_with_fault() == gate_tpg_order[2], "_fault init (gate_with_fault) mismatch");
-  REQUIRE_MESSAGE(flts[1].gate_with_fault() == gate_tpg_order[4], "_fault init (gate_with_fault) mismatch");
-  REQUIRE_MESSAGE(flts[0].gate_SA_fault_val() == -1, "_fault init (gate_SA_fault_val) mismatch"); // -1 -> means SA_1 fault
-  REQUIRE_MESSAGE(flts[1].gate_SA_fault_val() == 0, "_fault init (gate_SA_fault_val) mismatch");
-  // _patterns;
-  auto& ptns = sim.patterns();
-  REQUIRE_MESSAGE(ptns.size() == 1, "_patterns.size() mismatch");
-  std::vector<std::vector<size_t>> ptn_val_ans;
-  ptn_val_ans.resize(1);  ptn_val_ans[0] = {2, 4, 1};
-  
-  for (size_t i = 0; i < ptns.size(); i++) {
-    for (size_t j = 0; j < (ptns[i].output_value().size()); j++) {
-      size_t j_idx = gate_tpg_order[j];
-      REQUIRE_MESSAGE((ptns[i].output_value())[j_idx] == ptn_val_ans[i][j_idx], "_patterns value mismatch");
-    }
-  }
-  // test gate inputs gate (skip) -> use dump_graph to check this
-
-  // Simulation, check different modes
-  for (size_t m = 0; m < 3; m++) {
-    if (m == 1) { // mode == OMP
-      sim.run(fsim::Simulator::Mode::SEQUENTIAL, 1);
-    } else if (m == 2) { // mode == OMP
-      sim.run(fsim::Simulator::Mode::PARALLEL_TF, 4);
-    } else { // mode == OMP
-      sim.run(fsim::Simulator::Mode::PARALLEL_OMP, 4);
-    }
-    // good simulation resutls check 
-    auto& g_pi_results = sim.g_pi_results();
-    auto& g_gate_results = sim.g_gate_results();
-    auto& g_po_results = sim.g_po_results();
-    std::vector<size_t> pi_ans = {2,4,1};
-    std::vector<size_t> gate_ans = {6,0,1,6};
-    std::vector<size_t> po_ans = {6};
-
-    for(size_t piid = 0; piid < g_pi_results.size(); piid++) {
-      REQUIRE_MESSAGE(g_pi_results[piid] == pi_ans[piid], "PI result mismatch");
-    }
-    for(size_t gid = 0; gid < g_gate_results.size(); gid++) {
-      REQUIRE_MESSAGE(g_gate_results[gid] == gate_ans[gid], "Gate result mismatch");
-    }
-    for(size_t poid = 0; poid < g_po_results.size(); poid++) {
-      REQUIRE_MESSAGE(g_po_results[poid] == po_ans[poid], "PO result mismatch");
-    }
-
-    // check the fault table
-    std::vector<size_t> found_flst_2_ptn_ans = {1, 0, 1, 0};
-    std::vector<size_t> ff2p = sim.found_fault_to_pattern();
-    for(size_t i = 0; i < ff2p.size(); i++) {
-      REQUIRE_MESSAGE(ff2p[i] == found_flst_2_ptn_ans[i], "found fault mismatch");
-    }  
-  }
-
-  // todo: bad simulation resutls check (check the results of fault simulation )
-}
+// todo: bad simulation resutls check (check the results of fault simulation )
