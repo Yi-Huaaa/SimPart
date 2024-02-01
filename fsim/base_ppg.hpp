@@ -15,7 +15,17 @@ class Simulator;
 }
 
 // TOOD: ElementType
-enum class GateType { INV = 0, AND, OR, XOR, NAND, NOR, PI, PO, MAX_GATE_TYPE };
+enum class GateType { 
+  INV = 0, 
+  AND, // 1 
+  OR, // 2
+  XOR,  // 3
+  NAND, // 4
+  NOR, // 5
+  PI, // 6
+  PO, // 7
+  MAX_GATE_TYPE // 8
+};
 
 // TODO: ElementBase
 class BasePPG {

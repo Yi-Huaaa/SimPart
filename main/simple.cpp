@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
   std::cout << "User space resutls:" << std::endl;
   for(size_t piid = 0; piid < g_pi_results.size(); piid++) {
     auto& pii = simulator.pi(piid);
-    std::cout << "G-result of Gate " << piid << " (level=" << pii.level() << "): " << g_pi_results[piid] << '\n';
+    std::cout << "G-result of PI " << piid << " (level=" << pii.level() << "): " << g_pi_results[piid] << '\n';
   }
   for(size_t gid = 0; gid < g_gate_results.size(); gid++) {
     auto& gate = simulator.gate(gid);
@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
   }
   for(size_t poid = 0; poid < g_po_results.size(); poid++) {
     auto& poo = simulator.gate(poid);
-    std::cout << "G-result of Gate " << poid << " (level=" << poo.level() << "): " << g_po_results[poid] << '\n';
+    std::cout << "G-result of PO " << poid << " (level=" << poo.level() << "): " << g_po_results[poid] << '\n';
   }
 
 
