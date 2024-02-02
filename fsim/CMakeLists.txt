@@ -9,10 +9,6 @@ add_library(fsim
   simulation.cpp simulation.hpp
 )
 
-# Check if the -Wall flag is present in the compiler flags
-if(NOT "${CMAKE_CXX_FLAGS}" MATCHES "-Wall")
-  message(WARNING "Warning: Compiler flags do not include '-Wall'")
-endif()
 
 # Set compiler flags for the "fsim" library
 target_compile_options(fsim PRIVATE
@@ -21,4 +17,3 @@ target_compile_options(fsim PRIVATE
   -Wfatal-errors
   -Wshadow
 )
-
