@@ -61,8 +61,8 @@ public:
   const PO& po(size_t poid) const { return _POs[poid];}
   // all of them
   const std::vector<Gate>& gates() const { return _gates; }
-  const std::vector<Fault>& faults() { return _faults; }
-  const std::vector<Pattern>& patterns() { return _patterns;}   
+  const std::vector<Fault>& faults() const { return _faults; }
+  const std::vector<Pattern>& patterns() const { return _patterns;}   
 
   // accessor
   // var 
@@ -72,9 +72,9 @@ public:
   size_t num_wires() const { return _num_wires; }
   size_t num_pos() const { return _POs.size(); }
   size_t num_rounds() const { return _num_rounds; }
-  const std::vector<size_t> gate_idx_to_tpg_order_idx() const  { return _gate_idx_to_tpg_order_idx; }
-  const std::vector<size_t> num_gates_per_level() const  { return _num_gates_per_level; }
-  const std::vector<size_t> found_fault_to_pattern () const { return _found_fault_to_pattern; }
+  const std::vector<size_t>& gate_idx_to_tpg_order_idx() const { return _gate_idx_to_tpg_order_idx; }
+  const std::vector<size_t>& num_gates_per_level() const { return _num_gates_per_level; }
+  const std::vector<size_t>& found_fault_to_pattern () const { return _found_fault_to_pattern; }
   
 
 private:

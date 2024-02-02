@@ -1,4 +1,4 @@
-with open('../benchmark/opentimer_dump/independent_graph1.txt', 'r') as f:
+with open('../benchmark/opentimer_dump/ring1.txt', 'r') as f:
     lines = f.read().split('\n')
 
 start_pi_idx = lines.index('// Start PIs')
