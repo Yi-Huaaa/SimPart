@@ -902,6 +902,99 @@ void fsim::Simulator::_run_gate(BasePPG &gate, const Pattern pattern, const size
 }
 
 
+// Function to convert GateType to string
+std::string fsim::Simulator::gateTypeToString(GateType type) {
+  switch (type) {
+    case GateType::INV: return "INV";
+    case GateType::AND: return "AND";
+    case GateType::OR: return "OR";
+    case GateType::XOR: return "XOR";
+    case GateType::NAND: return "NAND";
+    case GateType::NOR: return "NOR";
+    case GateType::PI: return "PI";
+    case GateType::PO: return "PO";
+    default: return "UNKNOWN";
+  }
+}
+
+// output file visualization graph
+void fsim::Simulator::visualization_graph(const std::string& outputFile){
+  using std::string_literals::operator""s;
+  size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs, po_idx_accum = (_num_PIs+_num_inner_gates);
+
+  // Open output file
+  std::ofstream output_file(outputFile);
+  
+  // Check if the output file is open
+  if (!output_file.is_open()) {
+    std::cerr << "Error opening output file: " << outputFile << std::endl;
+    return;
+  }
+
+  // write file
+  output_file << "digraph G {\n";
+  output_file << "\tsubgraph cluster_0 {\n";
+  output_file << "\t\tcolor=black;\n";
+  output_file << "\t\tnode [style=filled,color=lightgrey];\n";
+
+  // gates 
+  for (size_t i = 0; i < _gates.size(); i++) { // now_gate
+    for (size_t j = 0; j < _gates[i]._inputs.size(); j++) { // pre_gate
+      BasePPG *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      Gate now_gate = _gates[i];
+      
+      std::string pre_s;
+      if (pre_gate->_type == GateType::PI) {
+        pre_s = "PI_"s + std::to_string(pre_gate->_idx-pi_idx_accum) + " -> "s;
+      } else {
+        pre_s = "Gate_"s + std::to_string(pre_gate->_idx-gate_idx_accum) + "_"s + gateTypeToString(pre_gate->_type) + " -> "s;
+      }
+      
+      std::string now_s;
+      now_s = "Gate_"s + std::to_string(now_gate._idx-gate_idx_accum) + "_"s + gateTypeToString(now_gate._type) + ";"s;
+      
+      output_file << "\t\t" << pre_s << now_s << "\n";
+    }
+  }
+
+  // POs
+  for (size_t i = 0; i < _POs.size(); i++) { // now_gate
+    for (size_t j = 0; j < _POs[i]._inputs.size(); j++) { // pre_gate
+      BasePPG *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      PO now_gate = _POs[i];
+      
+      std::string pre_s;
+      if (pre_gate->_type == GateType::PI) {
+        pre_s = "PI_"s + std::to_string(pre_gate->_idx-pi_idx_accum) + " -> "s;
+      } else {
+        pre_s = "Gate_"s + std::to_string(pre_gate->_idx-gate_idx_accum) + "_"s + gateTypeToString(pre_gate->_type) + " -> "s;
+      }
+      
+      std::string now_s;
+      now_s = "PO_"s + std::to_string(now_gate._idx-po_idx_accum) + ";"s;
+      
+      output_file << "\t\t" << pre_s << now_s << "\n";
+    }
+  }
+
+  output_file << "\t}\n\n";
+
+  for (size_t i = 0; i < _num_PIs; i++) {
+    output_file << "\tPI_"s << std::to_string(i) << "  [shape=Msquare];\n"s;
+  }
+  for (size_t i = 0; i < _num_POs; i++) {
+    output_file << "\tPO_"s << std::to_string(i) << "  [shape=Msquare];\n"s;
+  }
+  output_file << "}\n\n";
+
+
+  // Close files
+  output_file.close();
+}
+
+
+
+
 // debug: print functions
 void fsim::Simulator::print_topological(
     const std::vector<std::vector<size_t>> &adj,
