@@ -44,13 +44,11 @@ int main(int argc, char *argv[]) {
 
   // PARALLEL Version - TF
   mode = 1;
-  simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)),
-  num_thread);
+  simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
 
   // PARALLEL Version - TF
   mode = 2;
-  simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)),
-  num_thread);
+  simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
 
   // write file: visualization_graph
   simulator.visualization_graph(outputfile_path);

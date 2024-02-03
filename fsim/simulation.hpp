@@ -78,8 +78,8 @@ public:
   }
 
   // input of the "Graph_viz online"
-  std::string gateTypeToString (GateType type);
-  void visualization_graph(const std::string& outputFile);
+  std::string gateTypeToString(GateType type);
+  void visualization_graph(const std::string &outputFile);
 
 private:
   // Read
@@ -147,8 +147,6 @@ private:
                  const size_t SA_fault, const size_t fault_val);
   void _shift_to_correct_answer(std::vector<size_t> &results, const size_t bits,
                                 const size_t num_shift_gates);
-
-
 
   // print for debug
   void print_topological(const std::vector<std::vector<size_t>> &adj,
