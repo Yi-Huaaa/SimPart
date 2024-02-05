@@ -22,13 +22,16 @@ enum class GateType {
   XOR,  // 3
   NAND, // 4
   NOR, // 5
-  PI, // 6
-  PO, // 7
-  MAX_GATE_TYPE // 8
+  XNOR, // 6
+  MUX, // 7
+  CLKBUF, // 8
+  PI,  // 9
+  PO,  // 10
+  MAX_GATE_TYPE
 };
 
-// TODO: ElementBase
-class BasePPG {
+
+class ElementBase {
 
   friend class fsim::Simulator;
 
@@ -41,7 +44,7 @@ public:
 
 private:
   GateType _type;
-  std::vector<BasePPG *> _inputs;
+  std::vector<ElementBase *> _inputs;
 
   size_t _idx;
   size_t _level;

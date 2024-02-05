@@ -134,16 +134,19 @@ private:
   void _run_bad_case_omp(const Fault &fault, const Pattern pattern,
                          const size_t bits, const size_t num_threads);
 
-  void _apply_INV(BasePPG &gate);
-  void _apply_AND(BasePPG &gate);
-  void _apply_OR(BasePPG &gate);
-  void _apply_XOR(BasePPG &gate);
-  void _apply_NAND(BasePPG &gate);
-  void _apply_NOR(BasePPG &gate);
-  void _apply_PI(BasePPG &gate, const Pattern pattern, const size_t pi);
-  void _apply_PO(BasePPG &gate);
+  void _apply_INV(ElementBase &gate);
+  void _apply_AND(ElementBase &gate);
+  void _apply_OR(ElementBase &gate);
+  void _apply_XOR(ElementBase &gate);
+  void _apply_NAND(ElementBase &gate);
+  void _apply_NOR(ElementBase &gate);
+  void _apply_XNOR(ElementBase &gate);
+  void _apply_MUX(ElementBase &gate);
+  void _apply_CLKBUF(ElementBase &gate);
+  void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi);
+  void _apply_PO(ElementBase &gate);
 
-  void _run_gate(BasePPG &gate, const Pattern pattern, const size_t pi,
+  void _run_gate(ElementBase &gate, const Pattern pattern, const size_t pi,
                  const size_t SA_fault, const size_t fault_val);
   void _shift_to_correct_answer(std::vector<size_t> &results, const size_t bits,
                                 const size_t num_shift_gates);
@@ -152,7 +155,7 @@ private:
   void print_topological(const std::vector<std::vector<size_t>> &adj,
                          const std::vector<size_t> &indegree,
                          const std::vector<size_t> &order) const;
-  void print_ppg(const BasePPG &gate) const;
+  void print_ppg(const ElementBase &gate) const;
   void print_num_gates_per_level() const;
   void print_faults(const std::vector<Fault> &faults) const;
   void print_patterns(const std::vector<Pattern> &patterns, const size_t round,
@@ -163,6 +166,7 @@ private:
                                 const std::vector<size_t> &po_results) const;
   void print_found_fault_to_pattern(
       const std::vector<size_t> &_found_fault_to_pattern) const;
+  void print_gate_input_order_table(std::vector<std::vector<size_t>> input_table);
 };
 
 } // namespace fsim

@@ -28,7 +28,7 @@ class Simulator;
 //   MAX_GATE_TYPE
 // };
 
-class Gate : public BasePPG {
+class Gate : public ElementBase {
 
   friend class fsim::Simulator;
   friend class PI;

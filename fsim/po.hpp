@@ -14,7 +14,7 @@ namespace fsim {
 class Simulator;
 }
 
-class PO : public BasePPG {
+class PO : public ElementBase {
 
   friend class fsim::Simulator;
  

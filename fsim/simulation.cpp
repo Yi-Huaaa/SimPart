@@ -297,7 +297,7 @@ void fsim::Simulator::_run_good_case_tf(const Pattern pattern,
 
   for (size_t i = 0; i < _gates.size(); i++) {              // now_gate
     for (size_t j = 0; j < _gates[i]._inputs.size(); j++) { // pre_gate
-      BasePPG *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + gate_idx_accum].succeed(tasks[pre_idx]);
     }
@@ -305,7 +305,7 @@ void fsim::Simulator::_run_good_case_tf(const Pattern pattern,
 
   for (size_t i = 0; i < _POs.size(); i++) {              // now_gate
     for (size_t j = 0; j < _POs[i]._inputs.size(); j++) { // pre_gate
-      BasePPG *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + po_idx_accum].succeed(tasks[pre_idx]);
     }
@@ -377,7 +377,7 @@ void fsim::Simulator::_run_bad_case_tf(const Fault &fault,
 
   for (size_t i = 0; i < _gates.size(); i++) {              // now_gate
     for (size_t j = 0; j < _gates[i]._inputs.size(); j++) { // pre_gate
-      BasePPG *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + gate_idx_accum].succeed(tasks[pre_idx]);
     }
@@ -385,7 +385,7 @@ void fsim::Simulator::_run_bad_case_tf(const Fault &fault,
 
   for (size_t i = 0; i < _POs.size(); i++) {              // now_gate
     for (size_t j = 0; j < _POs[i]._inputs.size(); j++) { // pre_gate
-      BasePPG *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + po_idx_accum].succeed(tasks[pre_idx]);
     }
@@ -584,22 +584,46 @@ void fsim::Simulator::_run_bad_case_omp(const Fault &fault,
 void fsim::Simulator::_read_graph(std::istream &ckt) {
   size_t sum_pi_gates_pos = _num_PIs + _num_inner_gates + _num_POs;
 
+  // for topological sort
   std::vector<std::vector<size_t>> adj;
   adj.resize(sum_pi_gates_pos);
   std::vector<size_t> indegree;
   indegree.resize(sum_pi_gates_pos);
+
+  // map table for recording gate input order
+  // record for each to_gate, its from_gates's are which order (#_inputs, A/A1, B/A2, A3/S, A4)
+  std::vector<std::vector<size_t>> gate_input_order_table; 
+  gate_input_order_table.resize(sum_pi_gates_pos);
+  for (size_t i = 0; i < sum_pi_gates_pos; i++) {
+    gate_input_order_table[i].resize(5);
+  }
 
   /** Levelized the input gates before constructing the circuit graph */
   // read file, constrcut adjacent list, construct indegree array
   for (size_t i = 0; i < _num_wires; i++) {
     size_t gate_0, pin_Y, num_post_gates;
     ckt >> gate_0 >> pin_Y >> num_post_gates;
+    /**
+     * from parser.py: "Z": 0, "ZN": 0, "A": 1, "A1": 1, "B": 2, "A2": 2, "A3": 3, "A4": 4, "S": 5
+     * * pin_Y must be 0;
+     * * pin_tmp must be: 
+        * "A": 1, "A1": 1, "B": 2, "A2": 2, "A3": 3, "A4": 4, "S": 5
+        * idx:
+        * A/A1, B/A2, A3, A4, S
+        *    1,    2,  3,  4, 5
+        * re-idx:
+        *    1,    2,  3,  4, 3
+    */
 
     for (size_t j = 0; j < num_post_gates; j++) {
       size_t gate_tmp, pin_tmp;
       ckt >> gate_tmp >> pin_tmp;
+      pin_tmp = (pin_tmp == 5) ? (3) : (pin_tmp);
       adj[gate_0].push_back(gate_tmp);
       indegree[gate_tmp]++;
+
+      gate_input_order_table[gate_tmp][pin_tmp] = gate_0;
+      gate_input_order_table[gate_tmp][0] ++; // calculate how many inputs for this to_gate
     }
   }
 
@@ -629,8 +653,9 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
       }
     }
   }
-
-  // make vector of order's order becomes [PIs, gates, POs]
+  
+  // make vector of order's order becomes [PIs, gates, POs] 
+  // remove the PO in the order
   order.erase(std::remove_if(order.begin(), order.end(),
                              [this](const size_t &x) {
                                return ((x >= _num_PIs) &&
@@ -639,11 +664,12 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
               order.end());
 
   for (size_t i = 0; i < _num_POs; i++) {
-    order.push_back(_num_PIs + i);
+    order.push_back(_num_PIs + i); // push_back PO's index
   }
 
 #ifdef FSIM_DEBUG_PRINT_GRAPH
   print_topological(adj, indegree_orig, order);
+  print_gate_input_order_table(gate_input_order_table);
 #endif
 
   /** Constructing circuit graph */
@@ -709,10 +735,38 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
     _POs[i]._output_value = default_output_value;
   }
 
-  // give the input gates number
-  for (size_t i = 0; i < adj.size(); i++) {
-    for (size_t j = 0; j < adj[i].size(); j++) {
-      size_t from_gate_id = i, to_gate_id = adj[i][j];
+  // // give the input gates number
+  // for (size_t i = 0; i < adj.size(); i++) {
+  //   for (size_t j = 0; j < adj[i].size(); j++) {
+  //     size_t from_gate_id = i, to_gate_id = adj[i][j];
+  //     if (from_gate_id < _num_PIs) { // PI -> gate
+  //       PI &from_gate =
+  //           _PIs[_gate_idx_to_tpg_order_idx[from_gate_id] - pi_idx_accum];
+  //       Gate &to_gate =
+  //           _gates[_gate_idx_to_tpg_order_idx[to_gate_id] - gate_idx_accum];
+  //       to_gate._inputs.push_back(&from_gate);
+  //     } else if ((to_gate_id >= (_num_PIs)) &&
+  //                (to_gate_id < (_num_PIs + _num_POs))) { // gate -> PO
+  //       Gate &from_gate =
+  //           _gates[_gate_idx_to_tpg_order_idx[from_gate_id] - gate_idx_accum];
+  //       PO &to_gate =
+  //           _POs[_gate_idx_to_tpg_order_idx[to_gate_id] - po_idx_accum];
+  //       to_gate._inputs.push_back(&from_gate);
+  //     } else { // gate -> gate
+  //       Gate &from_gate =
+  //           _gates[_gate_idx_to_tpg_order_idx[from_gate_id] - gate_idx_accum];
+  //       Gate &to_gate =
+  //           _gates[_gate_idx_to_tpg_order_idx[to_gate_id] - gate_idx_accum];
+  //       to_gate._inputs.push_back(&from_gate);
+  //     }
+  //   }
+  // }
+
+  // give the input gates number - v2
+  for (size_t i = _num_PIs; i < gate_input_order_table.size(); i++) {
+    for (size_t j = 1; j < (gate_input_order_table[i][0]+1); j++) { // how many inputs for this gate
+      size_t from_gate_id = gate_input_order_table[i][j];
+      size_t to_gate_id = i;
       if (from_gate_id < _num_PIs) { // PI -> gate
         PI &from_gate =
             _PIs[_gate_idx_to_tpg_order_idx[from_gate_id] - pi_idx_accum];
@@ -735,6 +789,9 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
       }
     }
   }
+
+
+
 
   /** levelize */
   // levelize PIs -> set by the default_level (= 0), note: all PIs belond to the
@@ -831,14 +888,14 @@ void fsim::Simulator::_read_pattern(std::istream &ptn) {
 }
 
 // simulation for gates
-void fsim::Simulator::_apply_INV(BasePPG &gate) {
-  BasePPG *pre_gate = gate._inputs[0];
+void fsim::Simulator::_apply_INV(ElementBase &gate) {
+  ElementBase *pre_gate = gate._inputs[0];
   size_t ret = pre_gate->_output_value;
   gate._output_value = ~ret;
 }
 
-void fsim::Simulator::_apply_AND(BasePPG &gate) {
-  BasePPG *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_AND(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -848,8 +905,8 @@ void fsim::Simulator::_apply_AND(BasePPG &gate) {
   gate._output_value = ret;
 }
 
-void fsim::Simulator::_apply_OR(BasePPG &gate) {
-  BasePPG *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_OR(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -859,8 +916,8 @@ void fsim::Simulator::_apply_OR(BasePPG &gate) {
   gate._output_value = ret;
 }
 
-void fsim::Simulator::_apply_XOR(BasePPG &gate) {
-  BasePPG *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_XOR(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -870,8 +927,8 @@ void fsim::Simulator::_apply_XOR(BasePPG &gate) {
   gate._output_value = ret;
 }
 
-void fsim::Simulator::_apply_NAND(BasePPG &gate) {
-  BasePPG *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_NAND(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -881,8 +938,8 @@ void fsim::Simulator::_apply_NAND(BasePPG &gate) {
   gate._output_value = ~(ret);
 }
 
-void fsim::Simulator::_apply_NOR(BasePPG &gate) {
-  BasePPG *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_NOR(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -892,18 +949,47 @@ void fsim::Simulator::_apply_NOR(BasePPG &gate) {
   gate._output_value = ~(ret);
 }
 
-void fsim::Simulator::_apply_PI(BasePPG &gate, const Pattern pattern,
+void fsim::Simulator::_apply_XNOR(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._inputs.size(); i++) {
+    now_gate = gate._inputs[i];
+    ret ^= (now_gate)->_output_value;
+  }
+  gate._output_value = ~(ret);
+}
+
+void fsim::Simulator::_apply_MUX(ElementBase &gate) {
+  size_t a = gate._inputs[0]->_output_value;
+  size_t b = gate._inputs[1]->_output_value;
+  size_t s = gate._inputs[2]->_output_value;
+
+  size_t ret = ((s & b) | ( a & (!s)));
+
+  gate._output_value = (ret);
+}
+
+void fsim::Simulator::_apply_CLKBUF(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  gate._output_value = ret;
+}
+
+
+void fsim::Simulator::_apply_PI(ElementBase &gate, const Pattern pattern,
                                 const size_t pi) {
   gate._output_value = pattern._value[pi];
 }
 
-void fsim::Simulator::_apply_PO(BasePPG &gate) {
+void fsim::Simulator::_apply_PO(ElementBase &gate) {
   // It outputs its previous gate's output_value if there is no SA fault
-  BasePPG *pre_gate = gate._inputs[0];
+  ElementBase *pre_gate = gate._inputs[0];
   gate._output_value = pre_gate->_output_value;
 }
 
-void fsim::Simulator::_run_gate(BasePPG &gate, const Pattern pattern,
+void fsim::Simulator::_run_gate(ElementBase &gate, const Pattern pattern,
                                 const size_t pi, const size_t SA_fault,
                                 const size_t fault_val) {
 
@@ -929,6 +1015,15 @@ void fsim::Simulator::_run_gate(BasePPG &gate, const Pattern pattern,
     break;
   case GateType::NOR:
     _apply_NOR(gate);
+    break;
+  case GateType::XNOR:
+    _apply_XNOR(gate);
+    break;
+  case GateType::MUX:
+    _apply_MUX(gate);
+    break;
+  case GateType::CLKBUF:
+    _apply_CLKBUF(gate);
     break;
   case GateType::PI:
     _apply_PI(gate, pattern, pi);
@@ -956,6 +1051,12 @@ std::string fsim::Simulator::gateTypeToString(GateType type) {
     return "NAND";
   case GateType::NOR:
     return "NOR";
+  case GateType::XNOR:
+    return "XNOR";
+  case GateType::MUX:
+    return "MUX";
+  case GateType::CLKBUF:
+    return "CLKBUF";
   case GateType::PI:
     return "PI";
   case GateType::PO:
@@ -989,7 +1090,7 @@ void fsim::Simulator::visualization_graph(const std::string &outputFile) {
   // gates
   for (size_t i = 0; i < _gates.size(); i++) {              // now_gate
     for (size_t j = 0; j < _gates[i]._inputs.size(); j++) { // pre_gate
-      BasePPG *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       Gate now_gate = _gates[i];
 
       std::string pre_s;
@@ -1012,7 +1113,7 @@ void fsim::Simulator::visualization_graph(const std::string &outputFile) {
   // POs
   for (size_t i = 0; i < _POs.size(); i++) {              // now_gate
     for (size_t j = 0; j < _POs[i]._inputs.size(); j++) { // pre_gate
-      BasePPG *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       PO now_gate = _POs[i];
 
       std::string pre_s;
@@ -1072,7 +1173,7 @@ void fsim::Simulator::print_topological(
   std::cout << "\n";
 }
 
-void fsim::Simulator::print_ppg(const BasePPG &gate) const {
+void fsim::Simulator::print_ppg(const ElementBase &gate) const {
   std::cout << "\n=====\n\n";
   std::cout << "mem_id: " << &gate << "\n";
   std::cout << "idx: " << gate._idx << "\n";
@@ -1165,5 +1266,19 @@ void fsim::Simulator::print_found_fault_to_pattern(
       std::cout << "fault_" << i << " cannot be found\n";
     }
   }
+  std::cout << "\n=====\n\n";
+}
+
+void fsim::Simulator::print_gate_input_order_table(std::vector<std::vector<size_t>> input_table) {
+  std::cout << "\ngate_input_order_table:\n";
+  for (size_t i = 0; i < input_table.size(); i++) {
+    std::cout << "Gate_" << i << ": ";
+    std::cout << "num_of_inputs = " << input_table[i][0] << ", input gate_idx: ";
+    for (size_t j = 0; j < input_table[i][0]; j++) { // how many inputs for this gate
+      std::cout << input_table[i][j+1] << ", ";
+    }
+    std::cout << "\n";
+  }
+  std::cout << "]\n";
   std::cout << "\n=====\n\n";
 }
