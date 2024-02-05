@@ -4,13 +4,6 @@
 #include <doctest.h>
 #include <fsim/fsim.hpp>
 
-/*
-// TODO:
-* check: gateTtpe (?)
-
-
-*/
-
 // define test cases
 std::vector<std::vector<std::string>> test_cases{
   // CML
