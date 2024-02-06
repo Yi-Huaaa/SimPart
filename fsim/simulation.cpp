@@ -135,6 +135,7 @@ void fsim::Simulator::_run_sequential() {
       for (size_t i = 0; i < _num_POs; i++) {
         if (_g_po_results[i] != _b_po_results[i]) {
           found_fault = 1;
+          break;
         }
       }
       // Record whether fault can be found
@@ -260,6 +261,7 @@ void fsim::Simulator::_run_parallel_tf() {
       for (size_t i = 0; i < _num_POs; i++) {
         if (_g_po_results[i] != _b_po_results[i]) {
           found_fault = 1;
+          break;
         }
       }
       // Record whether fault can be found
@@ -451,6 +453,7 @@ void fsim::Simulator::_run_parallel_omp(const size_t num_threads) {
       for (size_t i = 0; i < _num_POs; i++) {
         if (_g_po_results[i] != _b_po_results[i]) {
           found_fault = 1;
+          break;
         }
       }
       // Record whether fault can be found
@@ -482,8 +485,7 @@ void fsim::Simulator::_run_good_case_omp(const Pattern pattern,
       _run_gate(_gates[idx], pattern, idx, 0,
                 0); // here: idx is redundant, no need to be worry about the
                     // correctness of its val
-      // printf("debug: omp_get_thread_num = %d (num_threads = %ld, i = %ld, j =
-      // %ld)\n", omp_get_thread_num(), num_threads, i, j); // debug_
+      // printf("debug: omp_get_thread_num = %d (#threads = %ld, i = %ld, j = %ld)\n", omp_get_thread_num(), omp_get_num_threads(), i, j); // debug_
     }
     accum += _num_gates_per_level[i];
   }
@@ -826,6 +828,7 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
   for (size_t i = 0; i < _num_POs; i++) {
     _num_gates_per_level[_POs[i]._level]++;
   }
+  printf("max_level = %ld\n", max_level);
 
 #ifdef FSIM_DEBUG_PRINT_GRAPH
   std::cout << "\n_PIs = [\n";

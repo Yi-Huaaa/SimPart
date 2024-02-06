@@ -122,7 +122,6 @@ private:
   void _run_bad_case(const Fault &fault, const Pattern pattern,
                      const size_t bits);
   // parallel-tf
-  // todo: check whether taskflow use 4 threads runs parallelly
   void _run_parallel_tf();
   void _run_good_case_tf(const Pattern pattern, const size_t bits);
   void _run_bad_case_tf(const Fault &fault, const Pattern pattern,
