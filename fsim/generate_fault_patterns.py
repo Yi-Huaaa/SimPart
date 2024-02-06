@@ -78,7 +78,7 @@ def write_patterns_to_file_new(num_of_PIs, num_of_patterns, patterns, output_fil
             file.write('\n')
         file.write('\n')
 
-        # print binary format
+        # print binary format -> used to check wehther the decimal format is corrected
         for t in range(team):
             for b in range(num_of_PIs):
                 # Extract the bits for the current bit position from all patterns

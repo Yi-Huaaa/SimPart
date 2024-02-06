@@ -5,6 +5,11 @@
 
 
 #define num_thread 16// define by user
+#define run_seq
+#define run_tf
+#define run_omp
+#define visualization
+// #define print_output
 
 int main(int argc, char *argv[]) {
 
@@ -23,13 +28,48 @@ int main(int argc, char *argv[]) {
   auto end = std::chrono::high_resolution_clock::now();
   duration_read_data = end - start;
   
+#ifdef run_seq
   mode = 0; // mode: (0,1,2) = (SEQUENTIAL, PARALLEL_TF, PARALLEL_openMP);
   start = std::chrono::high_resolution_clock::now();
     simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), 1);
   end = std::chrono::high_resolution_clock::now();
   duration_SEQ = end - start;
-  
+#endif
 
+#ifdef run_tf
+  // PARALLEL Version - TF
+  mode = 1;
+  start = std::chrono::high_resolution_clock::now();
+    simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
+  end = std::chrono::high_resolution_clock::now();
+  duration_TF = end - start;
+#endif
+
+#ifdef run_omp
+  // PARALLEL Version - OMP
+  mode = 2;
+  start = std::chrono::high_resolution_clock::now();
+    simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
+  end = std::chrono::high_resolution_clock::now();
+  duration_OMP = end - start;
+
+#endif
+
+#ifdef visualization
+  // write file: visualization_graph
+  simulator.visualization_graph(outputfile_path);
+#endif 
+
+  // print cost time
+  // duration_read_data, duration_SEQ, duration_TF, duration_OMP
+  std::cout << "Execution Time:\n";
+  std::cout << "Read Data: " << duration_read_data.count() << " seconds\n";
+  std::cout << "SEQUENTIAL: " << duration_SEQ.count() << " seconds\n";
+  std::cout << "PARALLEL_TF: " << duration_TF.count() << " seconds\n";
+  std::cout << "PARALLEL_OMP (#td=" << num_thread << "): " << duration_OMP.count() << " seconds\n";
+
+  
+#ifdef print_output
   // Output results
   auto &g_pi_results = simulator.g_pi_results();
   auto &g_gate_results = simulator.g_gate_results();
@@ -51,33 +91,7 @@ int main(int argc, char *argv[]) {
     std::cout << "G-result of PO " << poid << " (level=" << poo.level()
               << "): " << g_po_results[poid] << '\n';
   }
-
-  // PARALLEL Version - TF
-  mode = 1;
-  start = std::chrono::high_resolution_clock::now();
-    simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
-  end = std::chrono::high_resolution_clock::now();
-  duration_TF = end - start;
-
-  // PARALLEL Version - TF
-  mode = 2;
-  start = std::chrono::high_resolution_clock::now();
-    simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), num_thread);
-  end = std::chrono::high_resolution_clock::now();
-  duration_OMP = end - start;
-
-  // write file: visualization_graph
-  simulator.visualization_graph(outputfile_path);
-
-
-  // print cost time
-  // duration_read_data, duration_SEQ, duration_TF, duration_OMP
-  std::cout << "Execution Time:\n";
-  std::cout << "Execution Time for Read Data: " << duration_read_data.count() << " seconds\n";
-  std::cout << "Execution Time for SEQUENTIAL: " << duration_SEQ.count() << " seconds\n";
-  std::cout << "Execution Time for PARALLEL_TF: " << duration_TF.count() << " seconds\n";
-  std::cout << "Execution Time for PARALLEL_OpenMP (with num_thread = " << num_thread << "): " << duration_OMP.count() << " seconds\n";
-
+#endif
 
   return 0;
 }
