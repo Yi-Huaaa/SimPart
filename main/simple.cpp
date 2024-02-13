@@ -8,7 +8,7 @@
 #define run_seq
 #define run_tf
 #define run_omp
-#define visualization
+// #define visualization
 // #define print_output
 
 int main(int argc, char *argv[]) {
@@ -62,10 +62,10 @@ int main(int argc, char *argv[]) {
   // print cost time
   // duration_read_data, duration_SEQ, duration_TF, duration_OMP
   std::cout << "Execution Time:\n";
-  std::cout << "Read Data: " << duration_read_data.count() << " seconds\n";
-  std::cout << "SEQUENTIAL: " << duration_SEQ.count() << " seconds\n";
-  std::cout << "PARALLEL_TF: " << duration_TF.count() << " seconds\n";
-  std::cout << "PARALLEL_OMP (#td=" << num_thread << "): " << duration_OMP.count() << " seconds\n";
+  std::cout << "Read Data: " << (duration_read_data.count())*1000 << " ms\n";
+  std::cout << "SEQUENTIAL: " << (duration_SEQ.count())*1000 << " ms\n";
+  std::cout << "PARALLEL_TF: " << (duration_TF.count())*1000 << " ms\n";
+  std::cout << "PARALLEL_OMP (#td=" << num_thread << "): " << (duration_OMP.count())*1000 << " ms\n";
 
   
 #ifdef print_output

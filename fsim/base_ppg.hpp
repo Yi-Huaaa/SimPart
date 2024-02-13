@@ -25,8 +25,8 @@ enum class GateType {
   XNOR, // 6
   MUX, // 7
   CLKBUF, // 8
-  PI,  // 9
-  PO,  // 10
+  PI,  // 30
+  PO,  // 31
   MAX_GATE_TYPE
 };
 

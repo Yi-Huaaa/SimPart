@@ -38,9 +38,9 @@ if (OPENMP_FOUND)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 endif()
 
-
 # build options
 option(FSIM_BUILD_TESTS "Enables builds of tests" ON)
+option(FSIM_BUILD_CUDA "Enables builds of cuda code" ON)
 
 # Turn on the verbose
 set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -54,12 +54,54 @@ add_library(fsim::default_settings ALIAS default_settings)
 
 
 # -----------------------------------------------------------------------------
+# find nvcc
+# https://cliutils.gitlab.io/modern-cmake/chapters/packages/CUDA.html
+# -----------------------------------------------------------------------------
+if(FSIM_BUILD_CUDA)
+  message(STATUS "Configuring CUDA ...")
+  enable_language(CUDA)
+  if(NOT CMAKE_CUDA_COMPILER)
+    message(FATAL_ERROR "\nNo CUDA compiler found")
+  endif()
+  enable_language(CUDA)
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS "11")
+    message(STATUS "CMAKE_CUDA_COMPILER_VERSION: ${CMAKE_CUDA_COMPILER_VERSION}")
+    message(FATAL_ERROR "\nfsim requires CUDA at least v11")
+  endif()
+
+endif()
+
+# -----------------------------------------------------------------------------
+# fsim::default_setting
+# -----------------------------------------------------------------------------
+
+# error setting
+add_library(error_settings INTERFACE)
+
+# cuda compiler options
+if(FSIM_BUILD_CUDA)
+  message(STATUS "Configuring CUDA compiler options ...")
+  target_compile_options(
+    error_settings
+    BEFORE
+    INTERFACE
+    $<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda -Xcompiler=-Wall,-Wextra,-Wfatal-errors,-Wshadow>
+  )
+endif(FSIM_BUILD_CUDA)
+
+
+# -----------------------------------------------------------------------------
 # start build
 # -----------------------------------------------------------------------------
 
 # project-specific variables
 set(FSIM_3RD_PARTY_DIR ${PROJECT_SOURCE_DIR}/3rd-party)
 message(STATUS "FSIM_3RD_PARTY_DIR: " ${FSIM_3RD_PARTY_DIR})
+message(STATUS "CMAKE_CUDA_COMPILER: " ${CMAKE_CUDA_COMPILER})
+message(STATUS "CMAKE_CUDA_COMPILER_ID: " ${CMAKE_CUDA_COMPILER_ID})
+message(STATUS "CMAKE_CUDA_COMPILER_VERSION: " ${CMAKE_CUDA_COMPILER_VERSION})
+message(STATUS "CMAKE_CUDA_FLAGS: " ${CMAKE_CUDA_FLAGS})
+message(STATUS "FSIM_BUILD_CUDA: " ${FSIM_BUILD_CUDA})
 
 
 add_subdirectory(fsim)

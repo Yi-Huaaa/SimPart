@@ -6,13 +6,18 @@
 #include <string>
 #include <vector>
 
+
 #include "../taskflow/taskflow/taskflow.hpp"
+#include "../taskflow/taskflow/algorithm/for_each.hpp"
 #include "base_ppg.hpp"
 #include "fault.hpp"
 #include "gate.hpp"
 #include "pattern.hpp"
 #include "pi.hpp"
 #include "po.hpp"
+
+// fsim: Taskflow using the for_each_loop ver w/ this define 
+// #define TF_parallel_for
 
 // // fsim print for check
 // #define FSIM_DEBUG_PRINT_SIMULATION
@@ -38,10 +43,6 @@ public:
   // for unittest
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
 
-  // TODO: for visualization - graph
-  // (v) add warning flags "-Wall -Wextra -Wfatal-errors -Wshadow" to your CMake
-  // (v) add make flag during the cmake to make the unittests run directly
-  // add more unittests to run all of your program: for exmaple: different mode
   // testing
   void dump_graph(std::ostream &) const;
 
@@ -115,6 +116,8 @@ private:
   std::vector<size_t> _b_po_results;
   std::vector<size_t> _found_fault_to_pattern;
 
+
+
   // Mode: _run_sequential, _run_parallel
   // sequential
   void _run_sequential();
@@ -124,8 +127,12 @@ private:
   // parallel-tf
   void _run_parallel_tf();
   void _run_good_case_tf(const Pattern pattern, const size_t bits);
-  void _run_bad_case_tf(const Fault &fault, const Pattern pattern,
+  // _which_fault_pattern: private indices for TF to emplace work for only 1 time
+  std::vector<size_t> _which_fault_pattern; // [0]: which_fault, [1]: which_pattern
+  void _emplace_bad_case_tf(tf::Taskflow &taskflow);
+  void _run_bad_case_tf(tf::Taskflow &taskflow, const Fault &fault, const Pattern pattern,
                         const size_t bits);
+
   // parallel-omp
   void _run_parallel_omp(const size_t num_threads);
   void _run_good_case_omp(const Pattern pattern, const size_t bits,
@@ -166,6 +173,8 @@ private:
   void print_found_fault_to_pattern(
       const std::vector<size_t> &_found_fault_to_pattern) const;
   void print_gate_input_order_table(std::vector<std::vector<size_t>> input_table);
+
+  void insert_task (const Fault &fault, const Pattern pattern);
 };
 
 } // namespace fsim

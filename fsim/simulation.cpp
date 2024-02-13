@@ -240,7 +240,12 @@ void fsim::Simulator::_run_parallel_tf() {
   _b_gate_results.resize(_num_inner_gates);
   _b_po_results.resize(_num_POs);
   _found_fault_to_pattern.resize(2 * _faults.size());
+  _which_fault_pattern.resize(2); // [0]: which_fault, [1]: which_pattern
 
+  // taskflow task assign: emplace 
+  tf::Taskflow taskflow_bad_cases("_bad_case");
+  _emplace_bad_case_tf(taskflow_bad_cases);
+  
   for (size_t rd = 0; rd < _num_rounds; rd++) {
     size_t num_testcases_this_round =
         ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
@@ -251,11 +256,15 @@ void fsim::Simulator::_run_parallel_tf() {
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
     std::cout << "TF: Run Good case" << std::endl;
 #endif
+    // 
     _run_good_case_tf(_patterns[rd], num_testcases_this_round);
 
-    // bad simulation (fault simulation)
+    // bad simulation (fault simulation)    
     for (size_t j = 0; j < _faults.size(); j++) {
-      _run_bad_case_tf(_faults[j], _patterns[rd], num_testcases_this_round);
+      _which_fault_pattern[0] = j; // _which_fault 
+      _which_fault_pattern[1] = rd; // _which_pattern 
+      // run
+      _run_bad_case_tf(taskflow_bad_cases, _faults[j], _patterns[rd], num_testcases_this_round);
 
       size_t found_fault = 0;
       for (size_t i = 0; i < _num_POs; i++) {
@@ -338,43 +347,76 @@ void fsim::Simulator::_run_good_case_tf(const Pattern pattern,
 #endif
 }
 
-void fsim::Simulator::_run_bad_case_tf(const Fault &fault,
-                                       const Pattern pattern,
-                                       const size_t bits) {
-  size_t wrong_gate = fault._gate_with_fault;
-  size_t fault_val = fault._gate_SA_fault_val;
+
+void fsim::Simulator::_emplace_bad_case_tf(tf::Taskflow &taskflow) {
   size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs,
          po_idx_accum = (_num_PIs + _num_inner_gates);
 
-  // taskflow task assign
-  tf::Taskflow taskflow("_bad_case");
-
+#ifdef TF_parallel_for
   // fault simulation
+  std::vector<tf::Task> tasks;
+  tasks.resize(_num_gates_per_level.size());
+  size_t tasks_idx = 0;
+  int N = 0;
+  
+  // #pragma omp parallel for
+  tasks[tasks_idx] = taskflow.for_each_index(0, N = _num_PIs, 1, [this, pi_idx_accum] (int i) {
+    size_t SA_fault = ((i + pi_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
+    _run_gate(_PIs[i], _patterns[_which_fault_pattern[1]], i, SA_fault, _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
+  }); tasks_idx++;
+
+  // since the level_0 belongs to PI, the level_MAX belongs to POs
+  size_t accum = 0;
+  for (size_t i = 1; i < (_num_gates_per_level.size() - 1); i++) {
+    tasks[tasks_idx] = taskflow.for_each_index(0, N = _num_gates_per_level[i], 1, [this, gate_idx_accum, accum] (int j) {
+      size_t idx = accum + j;
+      size_t SA_fault = ((idx + gate_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
+      _run_gate(_gates[idx], _patterns[_which_fault_pattern[1]], idx, SA_fault,
+                _faults[_which_fault_pattern[0]]._gate_SA_fault_val); // here: idx is redundant, no need to be worry about
+                            // the correctness of its val
+    }); tasks_idx++;
+    accum += _num_gates_per_level[i];
+  }
+
+  tasks[tasks_idx] = taskflow.for_each_index(0, N = _num_POs, 1, [this, po_idx_accum] (int i) {
+    size_t SA_fault = ((i + po_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
+    _run_gate(_POs[i], _patterns[_which_fault_pattern[1]], i, SA_fault,
+              _faults[_which_fault_pattern[0]]._gate_SA_fault_val); // here: i is redundant, no need to be worry about the
+                          // correctness of its val
+  }); tasks_idx++;
+  
+  // tf: succeed
+  for (size_t i = 0; i < (tasks.size()-1); i++) {
+    tasks[i+1].succeed(tasks[i]);
+  }
+
+#else
+
   std::vector<tf::Task> tasks;
   tasks.resize((_num_PIs + _num_inner_gates + _num_POs));
 
   for (size_t i = 0; i < _PIs.size(); i++) {
     tasks[i + pi_idx_accum] = taskflow.emplace(
-        [this, i, &pattern, wrong_gate, fault_val, pi_idx_accum]() {
-          size_t SA_fault = ((i + pi_idx_accum) == wrong_gate);
-          _run_gate(_PIs[i], pattern, i, SA_fault, fault_val);
-        });
+      [this, i, pi_idx_accum]() {
+        size_t SA_fault = ((i + pi_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
+        _run_gate(_PIs[i], _patterns[_which_fault_pattern[1]], i, SA_fault, _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
+      });
   }
 
   for (size_t i = 0; i < _gates.size(); i++) {
     tasks[i + gate_idx_accum] = taskflow.emplace(
-        [this, i, &pattern, wrong_gate, fault_val, gate_idx_accum]() {
-          size_t SA_fault = ((i + gate_idx_accum) == wrong_gate);
-          _run_gate(_gates[i], pattern, i, SA_fault, fault_val);
-        });
+      [this, i, gate_idx_accum]() {
+        size_t SA_fault = ((i + gate_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
+        _run_gate(_gates[i], _patterns[_which_fault_pattern[1]], i, SA_fault, _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
+      });
   }
 
   for (size_t i = 0; i < _POs.size(); i++) {
     tasks[i + po_idx_accum] = taskflow.emplace(
-        [this, i, &pattern, wrong_gate, fault_val, po_idx_accum]() {
-          size_t SA_fault = ((i + po_idx_accum) == wrong_gate);
-          _run_gate(_POs[i], pattern, i, SA_fault, fault_val);
-        });
+      [this, i, po_idx_accum]() {
+        size_t SA_fault = ((i + po_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
+        _run_gate(_POs[i], _patterns[_which_fault_pattern[1]], i, SA_fault, _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
+      });
   }
 
   for (size_t i = 0; i < _gates.size(); i++) {              // now_gate
@@ -393,6 +435,17 @@ void fsim::Simulator::_run_bad_case_tf(const Fault &fault,
     }
   }
 
+#endif 
+}
+
+void fsim::Simulator::_run_bad_case_tf(tf::Taskflow &taskflow, const Fault &fault,
+                                       const Pattern pattern,
+                                       const size_t bits) {
+
+  // emplace only need to be done once outside the for loop of faults
+
+  // run 
+  // printf("fault = %ld, pattern = %ld\n", _which_fault_pattern[0], _which_fault_pattern[1]);
   _executor.run(taskflow).wait();
 
   // Duplicated the answer of good_case into a new memory
@@ -792,9 +845,6 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
     }
   }
 
-
-
-
   /** levelize */
   // levelize PIs -> set by the default_level (= 0), note: all PIs belond to the
   // level_0 , making the parallel in omp becomes easier levelize gates
@@ -861,9 +911,6 @@ void fsim::Simulator::_read_fault(std::istream &flst) {
     std::cout << wrong_gate << ", " << fault_value << "\n";
 #endif
     _faults[i]._gate_with_fault = _gate_idx_to_tpg_order_idx[wrong_gate];
-    // Ask_q: "numeric_limits" also include a limit lib, whether it ii salso
-    // been declared as a macor? _faults[i]._gate_SA_fault_val = (fault_value) ?
-    // (SIZE_MAX) : (0);
     _faults[i]._gate_SA_fault_val =
         (fault_value) ? std::numeric_limits<size_t>::max() : (0);
   }
