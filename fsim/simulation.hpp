@@ -30,10 +30,15 @@ namespace fsim {
 
 constexpr auto SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 
+class MyBase {
+  public:
+    void do_hello() {}
+};
+
 class Simulator {
 
 public:
-  enum class Mode { SEQUENTIAL = 0, PARALLEL_TF, PARALLEL_OMP };
+  enum class Mode { SEQUENTIAL = 0, PARALLEL_TF, PARALLEL_OMP, CUDA };
 
   void read(const std::string &ckt, const std::string &flst,
             const std::string &ptn);
@@ -81,6 +86,7 @@ public:
   // input of the "Graph_viz online"
   std::string gateTypeToString(GateType type);
   void visualization_graph(const std::string &outputFile);
+  void global_try_print(MyBase &base) { base.do_hello(); };
 
 private:
   // Read
@@ -173,8 +179,6 @@ private:
   void print_found_fault_to_pattern(
       const std::vector<size_t> &_found_fault_to_pattern) const;
   void print_gate_input_order_table(std::vector<std::vector<size_t>> input_table);
-
-  void insert_task (const Fault &fault, const Pattern pattern);
 };
 
 } // namespace fsim

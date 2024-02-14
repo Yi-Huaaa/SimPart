@@ -1,11 +1,12 @@
 #include <stdio.h>
+#include <fsim/cuda/fsim_cuda.cuh>
 
-__global__ void helloCUDA() {
-    printf("Hello, CUDA!\n");
-}
 
 int main() {
-    helloCUDA<<<1, 1>>>();
-    cudaDeviceSynchronize();
-    return 0;
+  // user perspective
+  fsim::CudaSimulator simulator;
+  simulator.do_hello();
+
+  simulator.run(fsim::Simulator::Mode::CUDA, 1);
+  return 0;
 }

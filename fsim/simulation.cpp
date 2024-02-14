@@ -83,6 +83,9 @@ void fsim::Simulator::run(Mode mode, const size_t num_threads) {
 #endif
     _run_parallel_omp(num_threads);
     break;
+    case Mode::CUDA:
+
+    break;
   }
 #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
   size_t m = static_cast<size_t>(mode);
@@ -242,6 +245,7 @@ void fsim::Simulator::_run_parallel_tf() {
   _found_fault_to_pattern.resize(2 * _faults.size());
   _which_fault_pattern.resize(2); // [0]: which_fault, [1]: which_pattern
 
+  // todo: make the emplace of good cases here 
   // taskflow task assign: emplace 
   tf::Taskflow taskflow_bad_cases("_bad_case");
   _emplace_bad_case_tf(taskflow_bad_cases);

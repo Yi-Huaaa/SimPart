@@ -8,4 +8,6 @@
 #include "./pattern.hpp"
 #include "./simulation.hpp"
 
-
+// #ifdef cuda_fsim
+// #include "./cuda/simulation.cuh"
+// #endif
