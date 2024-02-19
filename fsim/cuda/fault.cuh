@@ -12,20 +12,6 @@ class Pattern;
 class Fault {
 
   friend class CudaSimulator;
-  friend __global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t pi, const size_t SA_fault, const size_t fault_val);
-  // simulation for gates
-  friend __device__ void _apply_INV(ElementBase &gate);
-  friend __device__ void _apply_AND(ElementBase &gate);
-  friend __device__ void _apply_OR(ElementBase &gate);
-  friend __device__ void _apply_XOR(ElementBase &gate);
-  friend __device__ void _apply_NAND(ElementBase &gate);
-  friend __device__ void _apply_NOR(ElementBase &gate);
-  friend __device__ void _apply_XNOR(ElementBase &gate);
-  friend __device__ void _apply_MUX(ElementBase &gate);
-  friend __device__ void _apply_CLKBUF(ElementBase &gate);
-  friend __device__ void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi);
-  friend __device__ void _apply_PO(ElementBase &gate);
-
 
 public:
   // accessor

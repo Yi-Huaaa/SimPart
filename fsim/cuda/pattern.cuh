@@ -15,9 +15,9 @@ class Pattern {
 
   friend class CudaSimulator;
 
-  friend __global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t SA_fault, const size_t fault_val);
+  friend __global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case);
   // simulation for gates
-  friend __device__ void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi);
+  friend __device__ __forceinline__ void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi);
   
 
 public:

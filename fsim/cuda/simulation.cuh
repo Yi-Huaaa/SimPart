@@ -17,19 +17,19 @@
 // testing functions 
 __global__ void helloCUDA();
 __global__ void _run_gate_gpu(size_t *inputs);
-__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t SA_fault, const size_t fault_val);
+__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case);
 // simulation for gates
-__device__ void _apply_INV(ElementBase &gate);
-__device__ void _apply_AND(ElementBase &gate);
-__device__ void _apply_OR(ElementBase &gate);
-__device__ void _apply_XOR(ElementBase &gate);
-__device__ void _apply_NAND(ElementBase &gate);
-__device__ void _apply_NOR(ElementBase &gate);
-__device__ void _apply_XNOR(ElementBase &gate);
-__device__ void _apply_MUX(ElementBase &gate);
-__device__ void _apply_CLKBUF(ElementBase &gate);
-__device__ void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi);
-__device__ void _apply_PO(ElementBase &gate);
+__device__ __forceinline__ void _apply_INV(ElementBase &gate);
+__device__ __forceinline__ void _apply_AND(ElementBase &gate);
+__device__ __forceinline__ void _apply_OR(ElementBase &gate);
+__device__ __forceinline__ void _apply_XOR(ElementBase &gate);
+__device__ __forceinline__ void _apply_NAND(ElementBase &gate);
+__device__ __forceinline__ void _apply_NOR(ElementBase &gate);
+__device__ __forceinline__ void _apply_XNOR(ElementBase &gate);
+__device__ __forceinline__ void _apply_MUX(ElementBase &gate);
+__device__ __forceinline__ void _apply_CLKBUF(ElementBase &gate);
+__device__ __forceinline__ void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi);
+__device__ __forceinline__ void _apply_PO(ElementBase &gate);
 
 
 // print for check
@@ -103,6 +103,7 @@ private:
   size_t _max_level; // the max number of levels
   size_t _max_gate_size_of_levels;  // the max number of gates in all levels
   size_t *_num_gates_per_level; // records number of gates per level
+  size_t _size_of_num_gates_per_level; // _num_gates_per_level.size()
 
   size_t _num_fault; // for read file
   Fault *_faults;
@@ -129,7 +130,7 @@ private:
   void _run_parallel_cuda();
   void _run_good_case_cuda(const Pattern pattern, const size_t bits);
   void _run_bad_case_cuda(const Fault &fault, const Pattern pattern, const size_t bits);
-
+  void _shift_to_correct_answer(size_t *results, const size_t bits, const size_t num_shift_gates);
 
 
 
@@ -145,6 +146,7 @@ private:
   void print_patterns(const Pattern *patterns, const size_t round, const size_t num_PIs) const;
   void print_bits_stack(const size_t size, const void *const ptr) const;
   void print_found_fault_to_pattern( const size_t *found_fault_to_pattern) const;
+  void print_simulation_results(const size_t *pi_results, const size_t *gate_results, const size_t *po_results) const;
 };
 
 
