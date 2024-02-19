@@ -397,6 +397,341 @@ void CudaSimulator::_read_pattern(std::istream &ptn) {
 #endif
 }
 
+void CudaSimulator::run(Mode mode, const size_t num_threads) {
+
+#ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
+    std::cout << "run _run_parallel_cuda\n";
+#endif
+    _run_parallel_cuda();
+#ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
+  size_t m = static_cast<size_t>(mode);
+  std::cout << "Mode: CUDA\n";
+  // print_found_fault_to_pattern(_found_fault_to_pattern);
+#endif
+}
+
+void CudaSimulator::_run_parallel_cuda() {
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  std::cout << "execute simulation._run_parallel cuda();" << '\n';
+#endif
+
+  // // Simulation
+  cudaMallocManaged(&_g_pi_results, _num_PIs*sizeof(size_t));
+  cudaMallocManaged(&_g_gate_results, _num_inner_gates*sizeof(size_t));
+  cudaMallocManaged(&_g_po_results, _num_POs*sizeof(size_t));
+  cudaMallocManaged(&_b_pi_results, _num_PIs*sizeof(size_t));
+  cudaMallocManaged(&_b_gate_results, _num_inner_gates*sizeof(size_t));
+  cudaMallocManaged(&_b_po_results, _num_POs*sizeof(size_t));
+  cudaMallocManaged(&_found_fault_to_pattern, 2*_num_fault*sizeof(size_t));
+
+  for (size_t rd = 0; rd < _num_rounds; rd++) {
+    size_t num_testcases_this_round =
+        ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
+            ? (SIZE_T_BITS)
+            : (_num_pattern % SIZE_T_BITS);
+
+    // good simulation
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+    std::cout << "CUDA: Run Good case" << std::endl;
+#endif
+    _run_good_case_cuda(_patterns[rd], num_testcases_this_round);
+
+    // // bad simulation (fault simulation)
+    // for (size_t j = 0; j < _faults.size(); j++) {
+    //   _run_bad_case_omp(_faults[j], _patterns[rd], num_testcases_this_round,
+    //                     num_threads);
+
+    //   size_t found_fault = 0;
+    //   for (size_t i = 0; i < _num_POs; i++) {
+    //     if (_g_po_results[i] != _b_po_results[i]) {
+    //       found_fault = 1;
+    //       break;
+    //     }
+    //   }
+    //   // Record whether fault can be found
+    //   _found_fault_to_pattern[2 * j] = found_fault;
+    //   // Record which pattern found the fault
+    //   _found_fault_to_pattern[2 * j + 1] = rd;
+    // }
+  }
+}
+
+
+void CudaSimulator::_run_good_case_cuda(const Pattern pattern, const size_t bits) {
+  printf("insides _run_good_case_cuda\n");
+  // omp_set_num_threads(num_threads);
+
+  // Simulation
+  // #pragma omp parallel for
+  // for (size_t i = 0; i < _num_PIs; i++) {
+    // _run_gate (_PIs[i], pattern, i, 0, 0);
+  // }
+  _run_gate <<< 1, _num_PIs >>>(_PIs, pattern, 0, 0, 0);
+  cudaDeviceSynchronize();
+
+  //   // since the level_0 belongs to PI, the level_MAX belongs to POs
+  //   size_t accum = 0;
+  //   for (size_t i = 1; i < (_num_gates_per_level.size() - 1); i++) {
+  // #pragma omp parallel for
+  //     for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
+  //     size_t idx = accum + j;
+  //     _run_gate(_gates[idx], pattern, idx, 0, 0); // here: idx is redundant, no need to be worry about the
+  //     // correctness of its val
+  //     // printf("debug: omp_get_thread_num = %d (#threads = %ld, i = %ld, j = %ld)\n", omp_get_thread_num(), omp_get_num_threads(), i, j); // debug_
+  //     }
+  //   accum += _num_gates_per_level[i];
+  //   }
+
+  // #pragma omp parallel for
+  //   for (size_t i = 0; i < _num_POs; i++) {
+  //     _run_gate(_POs[i], pattern, i, 0, 0); // here: i is redundant, no need to be worry about the
+  //     // correctness of its val
+  //   }
+
+  // // Duplicated the answer of good_case into a new memory
+  //   for (size_t i = 0; i < _num_PIs; i++) {
+  //     _g_pi_results[i] = _PIs[i]._output_value;
+  //   }
+  //   for (size_t i = 0; i < _num_inner_gates; i++) {
+  //     _g_gate_results[i] = _gates[i]._output_value;
+  //   }
+  //   for (size_t i = 0; i < _num_POs; i++) {
+  //     _g_po_results[i] = _POs[i]._output_value;
+  //   }
+
+  //   if (bits < SIZE_T_BITS) {
+  //     _shift_to_correct_answer(_g_pi_results, bits, _num_PIs);
+  //     _shift_to_correct_answer(_g_gate_results, bits, _num_inner_gates);
+  //     _shift_to_correct_answer(_g_po_results, bits, _num_POs);
+  //   }
+
+  // #ifdef FSIM_DEBUG_PRINT_SIMULATION
+  //   std::cout << "GOOD resutls omp:" << std::endl;
+  //   print_simulation_results(_g_pi_results, _g_gate_results, _g_po_results);
+  // #endif
+}
+
+void CudaSimulator::_run_bad_case_cuda(const Fault &fault, const Pattern pattern, const size_t bits) {
+  size_t wrong_gate = fault._gate_with_fault;
+  size_t fault_val = fault._gate_SA_fault_val;
+  size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs,
+  po_idx_accum = (_num_PIs + _num_inner_gates);
+
+  //   omp_set_num_threads(num_threads);
+  //   // fault simulation
+  //   #pragma omp parallel for
+  //   for (size_t i = 0; i < _num_PIs; i++) {
+  //     size_t SA_fault = ((i + pi_idx_accum) == wrong_gate);
+  //     _run_gate(_PIs[i], pattern, i, SA_fault, fault_val);
+  //   }
+
+  //   // since the level_0 belongs to PI, the level_MAX belongs to POs
+  //   size_t accum = 0;
+  //   for (size_t i = 1; i < (_num_gates_per_level.size() - 1); i++) {
+  // #pragma omp parallel for
+  //     for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
+  //       size_t idx = accum + j;
+  //       size_t SA_fault = ((idx + gate_idx_accum) == wrong_gate);
+  //       _run_gate(_gates[idx], pattern, idx, SA_fault, fault_val); // here: idx is redundant, no need to be worry about
+  //       // the correctness of its val
+  //     }
+  //     accum += _num_gates_per_level[i];
+  //   }
+
+  //   #pragma omp parallel for
+  //   for (size_t i = 0; i < _num_POs; i++) {
+  //     size_t SA_fault = ((i + po_idx_accum) == wrong_gate);
+  //     _run_gate(_POs[i], pattern, i, SA_fault, fault_val); // here: i is redundant, no need to be worry about the
+  //     // correctness of its val
+  //   }
+
+  //   // Duplicated the answer of good_case into a new memory
+  //   for (size_t i = 0; i < _num_PIs; i++) {
+  //     _b_pi_results[i] = _PIs[i]._output_value;
+  //   }
+  //   for (size_t i = 0; i < _num_inner_gates; i++) {
+  //     _b_gate_results[i] = _gates[i]._output_value;
+  //   }
+  //   for (size_t i = 0; i < _num_POs; i++) {
+  //     _b_po_results[i] = _POs[i]._output_value;
+  //   }
+
+  //   if (bits < SIZE_T_BITS) {
+  //     _shift_to_correct_answer(_b_pi_results, bits, _num_PIs);
+  //     _shift_to_correct_answer(_b_gate_results, bits, _num_inner_gates);
+  //     _shift_to_correct_answer(_b_po_results, bits, _num_POs);
+  //   }
+
+  // #ifdef FSIM_DEBUG_PRINT_SIMULATION
+  //   std::cout << "BAD resutls omp:\n";
+  //   print_simulation_results(_b_pi_results, _b_gate_results, _b_po_results);
+  // #endif
+}
+
+__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t pi, const size_t SA_fault, const size_t fault_val) {
+
+  size_t t_idx = threadIdx.x;
+  size_t b_idx = blockIdx.x;
+  size_t gate_idx = t_idx; // tmp
+  
+  if (SA_fault) {
+    gate[t_idx]._output_value = fault_val;
+    return;
+  }
+  printf("_run_gate: t_idx = %ld, b_idx = %ld, %ld :)))\n", t_idx, b_idx, gate[t_idx]._num_inputs);
+  switch (gate[gate_idx]._type) {
+    case GateType::INV:
+      _apply_INV(gate[gate_idx]);
+    break;
+    case GateType::AND:
+      _apply_AND(gate[gate_idx]);
+    break;
+    case GateType::OR:
+      _apply_OR(gate[gate_idx]);
+    break;
+    case GateType::XOR:
+      _apply_XOR(gate[gate_idx]);
+    break;
+    case GateType::NAND:
+      _apply_NAND(gate[gate_idx]);
+    break;
+    case GateType::NOR:
+      _apply_NOR(gate[gate_idx]);
+    break;
+    case GateType::XNOR:
+      _apply_XNOR(gate[gate_idx]);
+    break;
+    case GateType::MUX:
+      _apply_MUX(gate[gate_idx]);
+    break;
+    case GateType::CLKBUF:
+      _apply_CLKBUF(gate[gate_idx]);
+    break;
+    case GateType::PI:
+      _apply_PI(gate[gate_idx], pattern, pi);
+    break;
+    case GateType::PO:
+      _apply_PO(gate[gate_idx]);
+    break;
+    case GateType::MAX_GATE_TYPE:
+    break;
+    }
+}
+
+// simulation for gates
+__device__ void _apply_INV(ElementBase &gate) {
+  ElementBase *pre_gate = gate._inputs[0];
+  size_t ret = pre_gate->_output_value;
+  gate._output_value = ~ret;
+}
+
+__device__ void _apply_AND(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._num_inputs; i++) {
+    now_gate = gate._inputs[i];
+    ret &= (now_gate)->_output_value;
+  }
+  gate._output_value = ret;
+}
+
+__device__ void _apply_OR(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._num_inputs; i++) {
+    now_gate = gate._inputs[i];
+    ret |= (now_gate)->_output_value;
+  }
+  gate._output_value = ret;
+}
+
+__device__ void _apply_XOR(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._num_inputs; i++) {
+    now_gate = gate._inputs[i];
+    ret ^= (now_gate)->_output_value;
+  }
+  gate._output_value = ret;
+}
+
+__device__ void _apply_NAND(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._num_inputs; i++) {
+    now_gate = gate._inputs[i];
+    ret &= (now_gate)->_output_value;
+  }
+  gate._output_value = ~(ret);
+}
+
+__device__ void _apply_NOR(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._num_inputs; i++) {
+    now_gate = gate._inputs[i];
+    ret |= (now_gate)->_output_value;
+  }
+  gate._output_value = ~(ret);
+}
+
+__device__ void _apply_XNOR(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._num_inputs; i++) {
+    now_gate = gate._inputs[i];
+    ret ^= (now_gate)->_output_value;
+  }
+  gate._output_value = ~(ret);
+}
+
+__device__ void _apply_MUX(ElementBase &gate) {
+  size_t a = gate._inputs[0]->_output_value;
+  size_t b = gate._inputs[1]->_output_value;
+  size_t s = gate._inputs[2]->_output_value;
+
+  size_t ret = ((s & b) | ( a & (!s)));
+
+  gate._output_value = (ret);
+}
+
+__device__ void _apply_CLKBUF(ElementBase &gate) {
+  ElementBase *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  gate._output_value = ret;
+}
+
+
+__device__ void _apply_PI(ElementBase &gate, const Pattern pattern,
+                                const size_t pi) {
+  gate._output_value = pattern._value[pi];
+}
+
+__device__ void _apply_PO(ElementBase &gate) {
+  // It outputs its previous gate's output_value if there is no SA fault
+  ElementBase *pre_gate = gate._inputs[0];
+  gate._output_value = pre_gate->_output_value;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -502,4 +837,15 @@ void CudaSimulator::print_bits_stack(const size_t size, const void *const ptr) c
     }
   }
   std::cout << "\n";
+}
+void CudaSimulator::print_found_fault_to_pattern(const size_t *found_fault_to_pattern) const {
+  for (size_t i = 0; i < (2 * _num_fault); i += 2) {
+    if (found_fault_to_pattern[i] == 1) {
+      std::cout << "fault_" << (i / 2) << " is found, with Pattern_"
+                << found_fault_to_pattern[i + 1] << "\n";
+    } else {
+      std::cout << "fault_" << i << " cannot be found\n";
+    }
+  }
+  std::cout << "\n=====\n\n";
 }

@@ -14,13 +14,16 @@
 
 
 class CudaSimulator;
-
+class ElementBase;
+class Pattern;
+class Fault;
 
 class Gate : public ElementBase {
 
   friend class CudaSimulator;
   friend class PI;
   friend class PO; 
+  
 
 public:
 

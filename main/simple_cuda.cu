@@ -32,9 +32,9 @@ int main(int argc, char *argv[]) {
   
 
 #ifdef run_cuda
-  mode = 3;
+  mode = 0;
   start = std::chrono::steady_clock::now();
-    // simulator.run(fsim::Simulator::Mode(static_cast<size_t>(mode)), 1);
+    simulator.run(CudaSimulator::Mode(static_cast<size_t>(mode)), 1);
   end = std::chrono::steady_clock::now();
   duration_CUDA = end - start;
 #endif

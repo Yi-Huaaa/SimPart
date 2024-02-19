@@ -17,7 +17,19 @@
 // testing functions 
 __global__ void helloCUDA();
 __global__ void _run_gate_gpu(size_t *inputs);
-
+__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t SA_fault, const size_t fault_val);
+// simulation for gates
+__device__ void _apply_INV(ElementBase &gate);
+__device__ void _apply_AND(ElementBase &gate);
+__device__ void _apply_OR(ElementBase &gate);
+__device__ void _apply_XOR(ElementBase &gate);
+__device__ void _apply_NAND(ElementBase &gate);
+__device__ void _apply_NOR(ElementBase &gate);
+__device__ void _apply_XNOR(ElementBase &gate);
+__device__ void _apply_MUX(ElementBase &gate);
+__device__ void _apply_CLKBUF(ElementBase &gate);
+__device__ void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi);
+__device__ void _apply_PO(ElementBase &gate);
 
 
 // print for check
@@ -32,9 +44,11 @@ __global__ void _run_gate_gpu(size_t *inputs);
 
 class CudaSimulator {
 
-
 // constexpr size_t SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
+
+// friend functions 
+friend __global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t pi, const size_t SA_fault, const size_t fault_val);
 
 public:
  
@@ -54,6 +68,8 @@ public:
     } printf("\n");
   }
 
+
+
 // =======================================================================
 
   // cuda simulator functions 
@@ -61,11 +77,10 @@ public:
 
   void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
-  // void run(Mode mode, const size_t num_threads);            
+  void run(Mode mode, const size_t num_threads);
   
   
 private: 
-  
   // testig functions 
   // store data on unified memory 
   size_t *inputs_gpu;
@@ -96,11 +111,28 @@ private:
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
   Pattern *_patterns;
 
-
   // Construct
   void _read_graph(std::istream &ckt);
   void _read_fault(std::istream &flst);
   void _read_pattern(std::istream &ptn);
+
+  // Simulation
+  size_t *_g_pi_results;
+  size_t *_g_gate_results;
+  size_t *_g_po_results;
+  size_t *_b_pi_results;
+  size_t *_b_gate_results;
+  size_t *_b_po_results;
+  size_t *_found_fault_to_pattern;
+
+  // parallel-cuda
+  void _run_parallel_cuda();
+  void _run_good_case_cuda(const Pattern pattern, const size_t bits);
+  void _run_bad_case_cuda(const Fault &fault, const Pattern pattern, const size_t bits);
+
+
+
+
 
   // print for debug
   void print_topological(const std::vector<std::vector<size_t>> &adj,
@@ -112,6 +144,7 @@ private:
   void print_faults(const Fault *faults) const;
   void print_patterns(const Pattern *patterns, const size_t round, const size_t num_PIs) const;
   void print_bits_stack(const size_t size, const void *const ptr) const;
+  void print_found_fault_to_pattern( const size_t *found_fault_to_pattern) const;
 };
 
 
