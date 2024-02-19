@@ -1,34 +1,53 @@
 #ifndef CUDA_SIMULATION_H
 #define CUDA_SIMULATION_H
 
-#include <stdio.h>
-#include "../simulation.hpp"
 
 // CUDA functions 
+
 __global__ void helloCUDA();
+__global__ void _run_gate_gpu(size_t *inputs);
 
 
-// fsim namespace
-namespace fsim {
+class CudaSimulator {
 
-class CudaSimulator : public Simulator {
+
 public:
-  void do_hello() {
-    helloCUDA<<<1, 1>>>();
+ 
+  void do_hello () {
+    printf("???\n");
+    helloCUDA <<< 1, 1 >>> ();
+    
+    _init();
+    _run_gate_gpu <<< 1, 1 >>> (_gates_gpu);
     cudaDeviceSynchronize();
+
+    printf("check\n");
+    size_t num = 10;
+    for (size_t i = 0; i < num; i++) {
+      printf("%ld, ", _gates_gpu[i]);
+    } printf("\n");
+  }
+  void read(std::string ckt_path, std::string flst_path, std::string ptn_path){
+    printf("help\n");
   }
 
-  void run(Mode mode, const size_t num_threads) {
-    helloCUDA<<<1, 2>>>();
-    cudaDeviceSynchronize();
-  }
-
-  private: 
   
+  
+private: 
+  
+
+  void _init () {
+    size_t num  = 10;
+    cudaMallocManaged(&_gates_gpu, num*sizeof(size_t));
+    for (size_t i = 0; i < num; i++) {
+      _gates_gpu[i] = i;
+    }
+  }
+  // store data on unified memory 
+  size_t *_gates_gpu;
+
+
 };
 
-  
-
-} // namespace fsim
 
 #endif

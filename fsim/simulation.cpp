@@ -658,7 +658,7 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
   }
 
   /** Levelized the input gates before constructing the circuit graph */
-  // read file, constrcut adjacent list, construct indegree array
+  // read file, construct adjacent list, construct indegree array
   for (size_t i = 0; i < _num_wires; i++) {
     size_t gate_0, pin_Y, num_post_gates;
     ckt >> gate_0 >> pin_Y >> num_post_gates;
@@ -852,7 +852,8 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
   /** levelize */
   // levelize PIs -> set by the default_level (= 0), note: all PIs belond to the
   // level_0 , making the parallel in omp becomes easier levelize gates
-  size_t max_level = 0;
+  _max_level = 0;
+  _max_gate_size_of_levels = 0;
   for (size_t i = 0; i < _num_inner_gates; i++) {
     size_t ret_level = ((_gates[i]._inputs[0])->_level) + 1;
     for (size_t j = 1; j < _gates[i]._inputs.size(); j++) {
@@ -862,17 +863,18 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
       }
     }
     _gates[i]._level = ret_level;
-    max_level = (max_level < ret_level) ? (ret_level) : (max_level);
+    _max_level = (_max_level < ret_level) ? (ret_level) : (_max_level);
   }
 
   // levelize POs -> all POs belond to the level_max
   // , making the parallel in omp becomes easier
   for (size_t i = 0; i < _num_POs; i++) {
-    _POs[i]._level = max_level + 1;
+    _POs[i]._level = _max_level + 1;
   }
-  max_level++;
+  _max_level++;
 
-  _num_gates_per_level.resize(max_level + 1);
+  _num_gates_per_level.resize(_max_level + 1);
+
   for (size_t i = 0; i < _num_PIs; i++) {
     _num_gates_per_level[_PIs[i]._level]++;
   }
@@ -882,9 +884,12 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
   for (size_t i = 0; i < _num_POs; i++) {
     _num_gates_per_level[_POs[i]._level]++;
   }
-  printf("max_level = %ld\n", max_level);
-
+  // find the _max_gate_size_of_levels
+  _max_gate_size_of_levels = *std::max_element(_num_gates_per_level.begin(), _num_gates_per_level.end());
+  
 #ifdef FSIM_DEBUG_PRINT_GRAPH
+  printf("_max_level = %ld, _max_gate_size_of_levels = %ld\n", _max_level, _max_gate_size_of_levels);
+  
   std::cout << "\n_PIs = [\n";
   for (size_t i = 0; i < _num_PIs; i++) {
     print_ppg(_PIs[i]);

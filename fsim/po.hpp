@@ -12,11 +12,13 @@
 // forward declaration 
 namespace fsim {
 class Simulator;
+class CudaSimulator;
 }
 
 class PO : public ElementBase {
 
   friend class fsim::Simulator;
+  friend class fsim::CudaSimulator;
  
 public:
 

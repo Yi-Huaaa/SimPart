@@ -12,6 +12,7 @@
 
 namespace fsim {
 class Simulator;
+class CudaSimulator;
 }
 
 // TOOD: ElementType
@@ -34,6 +35,7 @@ enum class GateType {
 class ElementBase {
 
   friend class fsim::Simulator;
+  friend class fsim::CudaSimulator;
 
 public:
   // accessor
@@ -49,6 +51,7 @@ private:
   size_t _idx;
   size_t _level;
   size_t _output_value;
+  
 
   // TODO: std::optional
   //       std::variant<int, float, std::string> storage

@@ -14,6 +14,7 @@
 
 namespace fsim {
 class Simulator;
+class CudaSimulator;
 }
 
 // enum class GateType {
@@ -31,6 +32,7 @@ class Simulator;
 class Gate : public ElementBase {
 
   friend class fsim::Simulator;
+  friend class fsim::CudaSimulator;
   friend class PI;
   friend class PO; 
 

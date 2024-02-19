@@ -5,11 +5,13 @@
 
 namespace fsim {
 class Simulator;
+class CudaSimulator;
 }
 
 class Fault {
 
   friend class fsim::Simulator;
+  friend class fsim::CudaSimulator;
 
 public:
   // accessor

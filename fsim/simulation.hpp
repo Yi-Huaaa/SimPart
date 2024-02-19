@@ -27,15 +27,17 @@
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
 
 namespace fsim {
+  class CudaSimulator;
+}
+
+namespace fsim {
 
 constexpr auto SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 
-class MyBase {
-  public:
-    void do_hello() {}
-};
-
 class Simulator {
+
+  friend class fsim::CudaSimulator;
+
 
 public:
   enum class Mode { SEQUENTIAL = 0, PARALLEL_TF, PARALLEL_OMP, CUDA };
@@ -86,7 +88,6 @@ public:
   // input of the "Graph_viz online"
   std::string gateTypeToString(GateType type);
   void visualization_graph(const std::string &outputFile);
-  void global_try_print(MyBase &base) { base.do_hello(); };
 
 private:
   // Read
@@ -107,6 +108,9 @@ private:
 
   // used for run parallel
   std::vector<size_t> _num_gates_per_level; // records number of gates per level
+  size_t _max_level; // the max number of levels
+  size_t _max_gate_size_of_levels;  // the max number of gates in all levels
+  
 
   // Construct
   void _read_graph(std::istream &ckt);
