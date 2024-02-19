@@ -33,13 +33,11 @@ __device__ __forceinline__ void _apply_PO(ElementBase &gate);
 
 
 // print for check
-#define FSIM_DEBUG_PRINT_SIMULATION
-#define FSIM_DEBUG_PRINT_GRAPH
-#define FSIM_DEBUG_PRINT_FAULTS
-#define FSIM_DEBUG_PRINT_PATTERNS
-#define FSIM_DEBUG_PRINT_FAULT_TABLE
-
-
+// #define FSIM_DEBUG_PRINT_SIMULATION
+// #define FSIM_DEBUG_PRINT_GRAPH
+// #define FSIM_DEBUG_PRINT_FAULTS
+// #define FSIM_DEBUG_PRINT_PATTERNS
+// #define FSIM_DEBUG_PRINT_FAULT_TABLE
 
 
 class CudaSimulator {
