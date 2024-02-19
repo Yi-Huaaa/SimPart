@@ -55,21 +55,21 @@ void CudaSimulator::read(std::istream &ckt, std::istream &flst, std::istream &pt
   #endif
   _read_graph(ckt);
 
-  // // fault
-  // flst >> _num_fault;
-  // #ifdef FSIM_DEBUG_PRINT_FAULTS
-  //   std::cout << "Read and construct flst" << std::endl;
-  //   std::cout << _num_fault << std::endl;
-  // #endif
-  // _read_fault(flst);
+  // fault
+  flst >> _num_fault;
+  #ifdef FSIM_DEBUG_PRINT_FAULTS
+    std::cout << "Read and construct flst" << std::endl;
+    std::cout << _num_fault << std::endl;
+  #endif
+  _read_fault(flst);
 
-  // // pattern
-  // ptn >> _num_pattern;
-  // #ifdef FSIM_DEBUG_PRINT_PATTERNS
-  //   std::cout << "Read and construct ptn" << std::endl;
-  //   std::cout << _num_pattern << std::endl;
-  // #endif
-  // _read_pattern(ptn);
+  // pattern
+  ptn >> _num_pattern;
+  #ifdef FSIM_DEBUG_PRINT_PATTERNS
+    std::cout << "Read and construct ptn" << std::endl;
+    std::cout << _num_pattern << std::endl;
+  #endif
+  _read_pattern(ptn);
 }
 
 // Implement your own remove_if function
@@ -240,13 +240,11 @@ void CudaSimulator::_read_graph(std::istream &ckt) {
   // ask memory -> note: remember to minus the gate_idx_accum (po_idx_accum)
   for (size_t i = _num_PIs; i < (sum_pi_gates_pos); i++) {
     if ( _gate_idx_to_tpg_order_idx[i] >= (_num_PIs+_num_inner_gates) ) { // PO
-      size_t t = _gate_idx_to_tpg_order_idx[i];
       size_t gate_idx = _gate_idx_to_tpg_order_idx[i]-po_idx_accum;
       size_t num_inputs = gate_input_order_table[i][0];
       _POs[gate_idx]._num_inputs = num_inputs;
       cudaMallocManaged(&_POs[gate_idx]._inputs, num_inputs*sizeof(ElementBase*));
     } else { // gate
-      size_t t = _gate_idx_to_tpg_order_idx[i];
       size_t gate_idx = _gate_idx_to_tpg_order_idx[i]-gate_idx_accum;
       size_t num_inputs = gate_input_order_table[i][0];
       _gates[gate_idx]._num_inputs = num_inputs;
@@ -360,6 +358,45 @@ void CudaSimulator::_read_graph(std::istream &ckt) {
 #endif
 }
 
+void CudaSimulator::_read_fault(std::istream &flst) {
+  // _faults.resize(_num_fault);
+  cudaMallocManaged(&_faults, _num_fault*sizeof(Fault));
+  for (size_t i = 0; i < _num_fault; i++) {
+    size_t wrong_gate, fault_value;
+    flst >> wrong_gate >> fault_value;
+#ifdef FSIM_DEBUG_PRINT_FAULTS
+    std::cout << wrong_gate << ", " << fault_value << "\n";
+#endif
+    _faults[i]._gate_with_fault = _gate_idx_to_tpg_order_idx[wrong_gate];
+    _faults[i]._gate_SA_fault_val =
+        (fault_value) ? std::numeric_limits<size_t>::max() : (0);
+  }
+
+#ifdef FSIM_DEBUG_PRINT_FAULTS
+  print_faults(_faults);
+#endif
+}
+
+void CudaSimulator::_read_pattern(std::istream &ptn) {
+  _num_rounds = (_num_pattern + SIZE_T_BITS - 1) / SIZE_T_BITS; // ceiling
+
+  // _patterns.resize(_num_rounds);
+  cudaMallocManaged(&_patterns, _num_rounds*sizeof(Pattern));
+
+  for (size_t i = 0; i < _num_rounds; i++) {
+    // _patterns[i]._value.resize(_num_PIs);
+    cudaMallocManaged(&_patterns[i]._value, _num_PIs*sizeof(size_t));
+    for (size_t pi = 0; pi < _num_PIs; pi++) {
+      size_t idx = _gate_idx_to_tpg_order_idx[i];
+      ptn >> _patterns[idx]._value[pi];
+    }
+  }
+
+#ifdef FSIM_DEBUG_PRINT_PATTERNS
+  print_patterns(_patterns, _num_rounds, _num_PIs);
+#endif
+}
+
 
 
 
@@ -428,4 +465,41 @@ void CudaSimulator::print_ppg(const ElementBase &gate) const {
   }
   std::cout << "]\n";
   std::cout << "output_value: " << gate._output_value << "\n";
+}
+
+void CudaSimulator::print_faults(const Fault *faults) const {
+  std::cout << "\n=====\n\n"
+            << "FSIM_DEBUG_PRINT_FAULTS\n";
+  for (size_t i = 0; i < _num_fault; i++) {
+    std::cout << "_gate_with_fault = " << faults[i]._gate_with_fault << ", SA_"
+              << faults[i]._gate_SA_fault_val << "\n";
+  }
+  std::cout << "\n=====\n\n";
+}
+
+void CudaSimulator::print_patterns(const Pattern *patterns,
+    const size_t round,
+    const size_t num_PIs) const {
+  std::cout << "\n=====\n\n";
+  for (size_t i = 0; i < round; i++) {
+    std::cout << "[" << SIZE_T_BITS * i << ", " << SIZE_T_BITS * (i + 1) << "] bits = [\n";
+    for (size_t j = 0; j < num_PIs; j++) {
+      print_bits_stack(sizeof(patterns[i]._value[j]), &patterns[i]._value[j]);
+    }
+    std::cout << "]\n";
+  }
+}
+
+void CudaSimulator::print_bits_stack(const size_t size, const void *const ptr) const {
+  unsigned char *b = (unsigned char *)ptr;
+  unsigned char byte;
+  int i, j;
+
+  for (i = size - 1; i >= 0; i--) {
+    for (j = 7; j >= 0; j--) {
+      byte = (b[i] >> j) & 1;
+      std::cout << static_cast<unsigned>(byte);
+    }
+  }
+  std::cout << "\n";
 }

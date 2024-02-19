@@ -20,12 +20,21 @@ __global__ void _run_gate_gpu(size_t *inputs);
 
 
 
-// defiine for debug
+// print for check
+#define FSIM_DEBUG_PRINT_SIMULATION
 #define FSIM_DEBUG_PRINT_GRAPH
+#define FSIM_DEBUG_PRINT_FAULTS
+#define FSIM_DEBUG_PRINT_PATTERNS
+#define FSIM_DEBUG_PRINT_FAULT_TABLE
+
 
 
 
 class CudaSimulator {
+
+
+// constexpr size_t SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
+const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
 
 public:
  
@@ -80,6 +89,14 @@ private:
   size_t _max_gate_size_of_levels;  // the max number of gates in all levels
   size_t *_num_gates_per_level; // records number of gates per level
 
+  size_t _num_fault; // for read file
+  Fault *_faults;
+
+  size_t _num_pattern; // total number of patterns that need to be tested
+  size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
+  Pattern *_patterns;
+
+
   // Construct
   void _read_graph(std::istream &ckt);
   void _read_fault(std::istream &flst);
@@ -92,6 +109,9 @@ private:
   void print_gate_input_order_table(std::vector<std::vector<size_t>> input_table);
   void print_num_gates_per_level() const;
   void print_ppg(const ElementBase &gate) const;
+  void print_faults(const Fault *faults) const;
+  void print_patterns(const Pattern *patterns, const size_t round, const size_t num_PIs) const;
+  void print_bits_stack(const size_t size, const void *const ptr) const;
 };
 
 
