@@ -83,9 +83,6 @@ void fsim::Simulator::run(Mode mode, const size_t num_threads) {
 #endif
     _run_parallel_omp(num_threads);
     break;
-    case Mode::CUDA:
-
-    break;
   }
 #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
   size_t m = static_cast<size_t>(mode);

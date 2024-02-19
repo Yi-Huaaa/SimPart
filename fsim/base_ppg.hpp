@@ -12,7 +12,6 @@
 
 namespace fsim {
 class Simulator;
-class CudaSimulator;
 }
 
 // TOOD: ElementType
@@ -35,7 +34,6 @@ enum class GateType {
 class ElementBase {
 
   friend class fsim::Simulator;
-  friend class fsim::CudaSimulator;
 
 public:
   // accessor

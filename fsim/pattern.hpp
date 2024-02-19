@@ -7,13 +7,11 @@
 
 namespace fsim {
 class Simulator;
-class CudaSimulator;
 }
 
 class Pattern {
 
   friend class fsim::Simulator;
-  friend class fsim::CudaSimulator;
 
 public:
   // accessor

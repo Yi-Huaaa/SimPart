@@ -26,9 +26,6 @@
 // #define FSIM_DEBUG_PRINT_PATTERNS
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
 
-namespace fsim {
-  class CudaSimulator;
-}
 
 namespace fsim {
 
@@ -36,11 +33,8 @@ constexpr auto SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 
 class Simulator {
 
-  friend class fsim::CudaSimulator;
-
-
 public:
-  enum class Mode { SEQUENTIAL = 0, PARALLEL_TF, PARALLEL_OMP, CUDA };
+  enum class Mode { SEQUENTIAL = 0, PARALLEL_TF, PARALLEL_OMP };
 
   void read(const std::string &ckt, const std::string &flst,
             const std::string &ptn);
@@ -95,8 +89,8 @@ private:
 
   size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   std::vector<size_t> _gate_idx_to_tpg_order_idx;
-  std::vector<Gate> _gates;
   std::vector<PI> _PIs;
+  std::vector<Gate> _gates;
   std::vector<PO> _POs;
 
   size_t _num_fault; // for read file
