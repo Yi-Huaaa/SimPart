@@ -6,15 +6,19 @@
 #define run_cuda
 // #define visualization
 // #define print_output
-#define test_makefile
+// #define test_makefile
+
+double round_to(double value, double precision = 1.0){
+  return std::round(value / precision) * precision;
+}
 
 int main(int argc, char *argv[]) {
   // user perspective
   CudaSimulator simulator;
 
-
+#ifdef test_makefile
   simulator.do_hello();
-
+#endif
 
   size_t mode;
   std::chrono::duration<double> duration_read_data, duration_CUDA;
@@ -40,8 +44,8 @@ int main(int argc, char *argv[]) {
 #endif
 
   std::cout << "Execution Time:\n";
-  std::cout << "read_data: " << (duration_read_data.count())*1000 << " ms\n";
-  std::cout << "run_CUDA: " << (duration_CUDA.count())*1000 << " ms\n";
+  std::cout << "read_data: " << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
+  std::cout << "run_CUDA: " <<  round_to((duration_CUDA.count())*1000, 0.001) << " ms\n";
   
   return 0;
 }

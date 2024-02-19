@@ -11,6 +11,11 @@
 // #define visualization
 // #define print_output
 
+double round_to(double value, double precision = 1.0){
+  return std::round(value / precision) * precision;
+}
+
+
 int main(int argc, char *argv[]) {
 
   // from user's perspective
@@ -62,10 +67,10 @@ int main(int argc, char *argv[]) {
   // print cost time
   // duration_read_data, duration_SEQ, duration_TF, duration_OMP
   std::cout << "Execution Time:\n";
-  std::cout << "Read Data: " << (duration_read_data.count())*1000 << " ms\n";
-  std::cout << "SEQUENTIAL: " << (duration_SEQ.count())*1000 << " ms\n";
-  std::cout << "PARALLEL_TF: " << (duration_TF.count())*1000 << " ms\n";
-  std::cout << "PARALLEL_OMP (#td=" << num_thread << "): " << (duration_OMP.count())*1000 << " ms\n";
+  std::cout << "Read Data: " << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
+  std::cout << "SEQUENTIAL: " << round_to((duration_SEQ.count())*1000, 0.001) << " ms\n";
+  std::cout << "PARALLEL_TF: " << round_to((duration_TF.count())*1000, 0.001) << " ms\n";
+  std::cout << "PARALLEL_OMP (#td=" << num_thread << "): " << round_to((duration_OMP.count())*1000, 0.001) << " ms\n";
 
   
 #ifdef print_output
