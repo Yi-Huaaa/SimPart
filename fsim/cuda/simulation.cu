@@ -466,7 +466,7 @@ void CudaSimulator::_run_good_case_cuda(const Pattern pattern, const size_t bits
   // for (size_t i = 0; i < _num_PIs; i++) {
     // _run_gate (_PIs[i], pattern, i, 0, 0);
   // }
-  _run_gate <<< 1, _num_PIs >>>(_PIs, pattern, 0, 0, 0);
+  _run_gate <<< 1, _num_PIs >>>(_PIs, pattern, 0, 0);
   cudaDeviceSynchronize();
 
   //   // since the level_0 belongs to PI, the level_MAX belongs to POs
@@ -475,8 +475,7 @@ void CudaSimulator::_run_good_case_cuda(const Pattern pattern, const size_t bits
   // #pragma omp parallel for
   //     for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
   //     size_t idx = accum + j;
-  //     _run_gate(_gates[idx], pattern, idx, 0, 0); // here: idx is redundant, no need to be worry about the
-  //     // correctness of its val
+  //     _run_gate(_gates[idx], pattern, idx, 0, 0); // here: idx is redundant, no need to be worry about the correctness of its val
   //     // printf("debug: omp_get_thread_num = %d (#threads = %ld, i = %ld, j = %ld)\n", omp_get_thread_num(), omp_get_num_threads(), i, j); // debug_
   //     }
   //   accum += _num_gates_per_level[i];
@@ -568,7 +567,7 @@ void CudaSimulator::_run_bad_case_cuda(const Fault &fault, const Pattern pattern
   // #endif
 }
 
-__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t pi, const size_t SA_fault, const size_t fault_val) {
+__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t SA_fault, const size_t fault_val) {
 
   size_t t_idx = threadIdx.x;
   size_t b_idx = blockIdx.x;
@@ -608,7 +607,7 @@ __global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t
       _apply_CLKBUF(gate[gate_idx]);
     break;
     case GateType::PI:
-      _apply_PI(gate[gate_idx], pattern, pi);
+      _apply_PI(gate[gate_idx], pattern, t_idx);
     break;
     case GateType::PO:
       _apply_PO(gate[gate_idx]);
