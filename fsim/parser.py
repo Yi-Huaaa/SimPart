@@ -27,6 +27,7 @@ connections = [
     if "->" in x
 ]
 
+
 def gate_enum_to_id(s):
     # ! IMPORTANT: note: should be the same as in C code
     gate_enum = ["INV", "AND", "OR", "XOR", "NAND", "NOR", "XNOR", "MUX", "CLKBUF"]
@@ -34,6 +35,7 @@ def gate_enum_to_id(s):
         if s.startswith(enum):
             return idx
     raise Exception(f"{s} is an unknown gate name")
+
 
 # get the gate type of each cell
 gate_type_ids = [gate_enum_to_id(x[1]) for x in cells]
@@ -60,7 +62,19 @@ gate_d = {y: idx for idx, y in enumerate(pis + pos + [x[0] for x in cells])}
 # -----
 # Y/Z/ZN: 0, A/A1: 1, B/A2: 2, A3: 3, A4: 4, S: 5
 # for MUX -> input hope to be in order of (A, B, S) = (1, 2, 5)
-pin_d = {"Y": 0, "Z": 0, "ZN": 0, "A": 1, "A1": 1, "B": 2, "A2": 2, "A3": 3, "A4": 4, "S": 5}
+pin_d = {
+    "Y": 0,
+    "Z": 0,
+    "ZN": 0,
+    "A": 1,
+    "A1": 1,
+    "B": 2,
+    "A2": 2,
+    "A3": 3,
+    "A4": 4,
+    "S": 5,
+}
+
 
 def get_gate_and_pin_id(s):
     if ":" in s:
@@ -72,6 +86,7 @@ def get_gate_and_pin_id(s):
         return gate_d[s], pin_d["A"]
     else:
         raise Exception(f"{s} is an unknown gate:pin")
+
 
 # output
 print(len(pis))

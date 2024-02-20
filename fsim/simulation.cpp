@@ -242,11 +242,11 @@ void fsim::Simulator::_run_parallel_tf() {
   _found_fault_to_pattern.resize(2 * _faults.size());
   _which_fault_pattern.resize(2); // [0]: which_fault, [1]: which_pattern
 
-  // todo: make the emplace of good cases here 
-  // taskflow task assign: emplace 
+  // todo: make the emplace of good cases here
+  // taskflow task assign: emplace
   tf::Taskflow taskflow_bad_cases("_bad_case");
   _emplace_bad_case_tf(taskflow_bad_cases);
-  
+
   for (size_t rd = 0; rd < _num_rounds; rd++) {
     size_t num_testcases_this_round =
         ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
@@ -257,15 +257,16 @@ void fsim::Simulator::_run_parallel_tf() {
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
     std::cout << "TF: Run Good case" << std::endl;
 #endif
-    // 
+    //
     _run_good_case_tf(_patterns[rd], num_testcases_this_round);
 
-    // bad simulation (fault simulation)    
+    // bad simulation (fault simulation)
     for (size_t j = 0; j < _faults.size(); j++) {
-      _which_fault_pattern[0] = j; // _which_fault 
-      _which_fault_pattern[1] = rd; // _which_pattern 
+      _which_fault_pattern[0] = j;  // _which_fault
+      _which_fault_pattern[1] = rd; // _which_pattern
       // run
-      _run_bad_case_tf(taskflow_bad_cases, _faults[j], _patterns[rd], num_testcases_this_round);
+      _run_bad_case_tf(taskflow_bad_cases, _faults[j], _patterns[rd],
+                       num_testcases_this_round);
 
       size_t found_fault = 0;
       for (size_t i = 0; i < _num_POs; i++) {
@@ -309,7 +310,8 @@ void fsim::Simulator::_run_good_case_tf(const Pattern pattern,
 
   for (size_t i = 0; i < _gates.size(); i++) {              // now_gate
     for (size_t j = 0; j < _gates[i]._inputs.size(); j++) { // pre_gate
-      ElementBase *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate =
+          _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + gate_idx_accum].succeed(tasks[pre_idx]);
     }
@@ -317,7 +319,8 @@ void fsim::Simulator::_run_good_case_tf(const Pattern pattern,
 
   for (size_t i = 0; i < _POs.size(); i++) {              // now_gate
     for (size_t j = 0; j < _POs[i]._inputs.size(); j++) { // pre_gate
-      ElementBase *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate =
+          _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + po_idx_accum].succeed(tasks[pre_idx]);
     }
@@ -348,7 +351,6 @@ void fsim::Simulator::_run_good_case_tf(const Pattern pattern,
 #endif
 }
 
-
 void fsim::Simulator::_emplace_bad_case_tf(tf::Taskflow &taskflow) {
   size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs,
          po_idx_accum = (_num_PIs + _num_inner_gates);
@@ -359,36 +361,52 @@ void fsim::Simulator::_emplace_bad_case_tf(tf::Taskflow &taskflow) {
   tasks.resize(_num_gates_per_level.size());
   size_t tasks_idx = 0;
   int N = 0;
-  
+
   // #pragma omp parallel for
-  tasks[tasks_idx] = taskflow.for_each_index(0, N = _num_PIs, 1, [this, pi_idx_accum] (int i) {
-    size_t SA_fault = ((i + pi_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
-    _run_gate(_PIs[i], _patterns[_which_fault_pattern[1]], i, SA_fault, _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
-  }); tasks_idx++;
+  tasks[tasks_idx] =
+      taskflow.for_each_index(0, N = _num_PIs, 1, [this, pi_idx_accum](int i) {
+        size_t SA_fault = ((i + pi_idx_accum) ==
+                           _faults[_which_fault_pattern[0]]._gate_with_fault);
+        _run_gate(_PIs[i], _patterns[_which_fault_pattern[1]], i, SA_fault,
+                  _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
+      });
+  tasks_idx++;
 
   // since the level_0 belongs to PI, the level_MAX belongs to POs
   size_t accum = 0;
   for (size_t i = 1; i < (_num_gates_per_level.size() - 1); i++) {
-    tasks[tasks_idx] = taskflow.for_each_index(0, N = _num_gates_per_level[i], 1, [this, gate_idx_accum, accum] (int j) {
-      size_t idx = accum + j;
-      size_t SA_fault = ((idx + gate_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
-      _run_gate(_gates[idx], _patterns[_which_fault_pattern[1]], idx, SA_fault,
-                _faults[_which_fault_pattern[0]]._gate_SA_fault_val); // here: idx is redundant, no need to be worry about
-                            // the correctness of its val
-    }); tasks_idx++;
+    tasks[tasks_idx] = taskflow.for_each_index(
+        0, N = _num_gates_per_level[i], 1,
+        [this, gate_idx_accum, accum](int j) {
+          size_t idx = accum + j;
+          size_t SA_fault = ((idx + gate_idx_accum) ==
+                             _faults[_which_fault_pattern[0]]._gate_with_fault);
+          _run_gate(_gates[idx], _patterns[_which_fault_pattern[1]], idx,
+                    SA_fault,
+                    _faults[_which_fault_pattern[0]]
+                        ._gate_SA_fault_val); // here: idx is redundant, no need
+                                              // to be worry about the
+                                              // correctness of its val
+        });
+    tasks_idx++;
     accum += _num_gates_per_level[i];
   }
 
-  tasks[tasks_idx] = taskflow.for_each_index(0, N = _num_POs, 1, [this, po_idx_accum] (int i) {
-    size_t SA_fault = ((i + po_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
-    _run_gate(_POs[i], _patterns[_which_fault_pattern[1]], i, SA_fault,
-              _faults[_which_fault_pattern[0]]._gate_SA_fault_val); // here: i is redundant, no need to be worry about the
-                          // correctness of its val
-  }); tasks_idx++;
-  
+  tasks[tasks_idx] =
+      taskflow.for_each_index(0, N = _num_POs, 1, [this, po_idx_accum](int i) {
+        size_t SA_fault = ((i + po_idx_accum) ==
+                           _faults[_which_fault_pattern[0]]._gate_with_fault);
+        _run_gate(
+            _POs[i], _patterns[_which_fault_pattern[1]], i, SA_fault,
+            _faults[_which_fault_pattern[0]]
+                ._gate_SA_fault_val); // here: i is redundant, no need to be
+                                      // worry about the correctness of its val
+      });
+  tasks_idx++;
+
   // tf: succeed
-  for (size_t i = 0; i < (tasks.size()-1); i++) {
-    tasks[i+1].succeed(tasks[i]);
+  for (size_t i = 0; i < (tasks.size() - 1); i++) {
+    tasks[i + 1].succeed(tasks[i]);
   }
 
 #else
@@ -397,32 +415,36 @@ void fsim::Simulator::_emplace_bad_case_tf(tf::Taskflow &taskflow) {
   tasks.resize((_num_PIs + _num_inner_gates + _num_POs));
 
   for (size_t i = 0; i < _PIs.size(); i++) {
-    tasks[i + pi_idx_accum] = taskflow.emplace(
-      [this, i, pi_idx_accum]() {
-        size_t SA_fault = ((i + pi_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
-        _run_gate(_PIs[i], _patterns[_which_fault_pattern[1]], i, SA_fault, _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
-      });
+    tasks[i + pi_idx_accum] = taskflow.emplace([this, i, pi_idx_accum]() {
+      size_t SA_fault = ((i + pi_idx_accum) ==
+                         _faults[_which_fault_pattern[0]]._gate_with_fault);
+      _run_gate(_PIs[i], _patterns[_which_fault_pattern[1]], i, SA_fault,
+                _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
+    });
   }
 
   for (size_t i = 0; i < _gates.size(); i++) {
-    tasks[i + gate_idx_accum] = taskflow.emplace(
-      [this, i, gate_idx_accum]() {
-        size_t SA_fault = ((i + gate_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
-        _run_gate(_gates[i], _patterns[_which_fault_pattern[1]], i, SA_fault, _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
-      });
+    tasks[i + gate_idx_accum] = taskflow.emplace([this, i, gate_idx_accum]() {
+      size_t SA_fault = ((i + gate_idx_accum) ==
+                         _faults[_which_fault_pattern[0]]._gate_with_fault);
+      _run_gate(_gates[i], _patterns[_which_fault_pattern[1]], i, SA_fault,
+                _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
+    });
   }
 
   for (size_t i = 0; i < _POs.size(); i++) {
-    tasks[i + po_idx_accum] = taskflow.emplace(
-      [this, i, po_idx_accum]() {
-        size_t SA_fault = ((i + po_idx_accum) == _faults[_which_fault_pattern[0]]._gate_with_fault);
-        _run_gate(_POs[i], _patterns[_which_fault_pattern[1]], i, SA_fault, _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
-      });
+    tasks[i + po_idx_accum] = taskflow.emplace([this, i, po_idx_accum]() {
+      size_t SA_fault = ((i + po_idx_accum) ==
+                         _faults[_which_fault_pattern[0]]._gate_with_fault);
+      _run_gate(_POs[i], _patterns[_which_fault_pattern[1]], i, SA_fault,
+                _faults[_which_fault_pattern[0]]._gate_SA_fault_val);
+    });
   }
 
   for (size_t i = 0; i < _gates.size(); i++) {              // now_gate
     for (size_t j = 0; j < _gates[i]._inputs.size(); j++) { // pre_gate
-      ElementBase *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate =
+          _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + gate_idx_accum].succeed(tasks[pre_idx]);
     }
@@ -430,23 +452,26 @@ void fsim::Simulator::_emplace_bad_case_tf(tf::Taskflow &taskflow) {
 
   for (size_t i = 0; i < _POs.size(); i++) {              // now_gate
     for (size_t j = 0; j < _POs[i]._inputs.size(); j++) { // pre_gate
-      ElementBase *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate =
+          _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + po_idx_accum].succeed(tasks[pre_idx]);
     }
   }
 
-#endif 
+#endif
 }
 
-void fsim::Simulator::_run_bad_case_tf(tf::Taskflow &taskflow, const Fault &fault,
+void fsim::Simulator::_run_bad_case_tf(tf::Taskflow &taskflow,
+                                       const Fault &fault,
                                        const Pattern pattern,
                                        const size_t bits) {
 
   // emplace only need to be done once outside the for loop of faults
 
-  // run 
-  // printf("fault = %ld, pattern = %ld\n", _which_fault_pattern[0], _which_fault_pattern[1]);
+  // run
+  // printf("fault = %ld, pattern = %ld\n", _which_fault_pattern[0],
+  // _which_fault_pattern[1]);
   _executor.run(taskflow).wait();
 
   // Duplicated the answer of good_case into a new memory
@@ -539,7 +564,8 @@ void fsim::Simulator::_run_good_case_omp(const Pattern pattern,
       _run_gate(_gates[idx], pattern, idx, 0,
                 0); // here: idx is redundant, no need to be worry about the
                     // correctness of its val
-      // printf("debug: omp_get_thread_num = %d (#threads = %ld, i = %ld, j = %ld)\n", omp_get_thread_num(), omp_get_num_threads(), i, j); // debug_
+      // printf("debug: omp_get_thread_num = %d (#threads = %ld, i = %ld, j =
+      // %ld)\n", omp_get_thread_num(), omp_get_num_threads(), i, j); // debug_
     }
     accum += _num_gates_per_level[i];
   }
@@ -647,8 +673,9 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
   indegree.resize(sum_pi_gates_pos);
 
   // map table for recording gate input order
-  // record for each to_gate, its from_gates's are which order (#_inputs, A/A1, B/A2, A3/S, A4)
-  std::vector<std::vector<size_t>> gate_input_order_table; 
+  // record for each to_gate, its from_gates's are which order (#_inputs, A/A1,
+  // B/A2, A3/S, A4)
+  std::vector<std::vector<size_t>> gate_input_order_table;
   gate_input_order_table.resize(sum_pi_gates_pos);
   for (size_t i = 0; i < sum_pi_gates_pos; i++) {
     gate_input_order_table[i].resize(5);
@@ -660,16 +687,17 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
     size_t gate_0, pin_Y, num_post_gates;
     ckt >> gate_0 >> pin_Y >> num_post_gates;
     /**
-     * from parser.py: "Z": 0, "ZN": 0, "A": 1, "A1": 1, "B": 2, "A2": 2, "A3": 3, "A4": 4, "S": 5
+     * from parser.py: "Z": 0, "ZN": 0, "A": 1, "A1": 1, "B": 2, "A2": 2, "A3":
+     * 3, "A4": 4, "S": 5
      * * pin_Y must be 0;
-     * * pin_tmp must be: 
-        * "A": 1, "A1": 1, "B": 2, "A2": 2, "A3": 3, "A4": 4, "S": 5
-        * idx:
-        * A/A1, B/A2, A3, A4, S
-        *    1,    2,  3,  4, 5
-        * re-idx:
-        *    1,    2,  3,  4, 3
-    */
+     * * pin_tmp must be:
+     * "A": 1, "A1": 1, "B": 2, "A2": 2, "A3": 3, "A4": 4, "S": 5
+     * idx:
+     * A/A1, B/A2, A3, A4, S
+     *    1,    2,  3,  4, 5
+     * re-idx:
+     *    1,    2,  3,  4, 3
+     */
 
     for (size_t j = 0; j < num_post_gates; j++) {
       size_t gate_tmp, pin_tmp;
@@ -679,7 +707,8 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
       indegree[gate_tmp]++;
 
       gate_input_order_table[gate_tmp][pin_tmp] = gate_0;
-      gate_input_order_table[gate_tmp][0] ++; // calculate how many inputs for this to_gate
+      gate_input_order_table[gate_tmp]
+                            [0]++; // calculate how many inputs for this to_gate
     }
   }
 
@@ -709,8 +738,8 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
       }
     }
   }
-  
-  // make vector of order's order becomes [PIs, gates, POs] 
+
+  // make vector of order's order becomes [PIs, gates, POs]
   // remove the PO in the order
   order.erase(std::remove_if(order.begin(), order.end(),
                              [this](const size_t &x) {
@@ -804,13 +833,15 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
   //     } else if ((to_gate_id >= (_num_PIs)) &&
   //                (to_gate_id < (_num_PIs + _num_POs))) { // gate -> PO
   //       Gate &from_gate =
-  //           _gates[_gate_idx_to_tpg_order_idx[from_gate_id] - gate_idx_accum];
+  //           _gates[_gate_idx_to_tpg_order_idx[from_gate_id] -
+  //           gate_idx_accum];
   //       PO &to_gate =
   //           _POs[_gate_idx_to_tpg_order_idx[to_gate_id] - po_idx_accum];
   //       to_gate._inputs.push_back(&from_gate);
   //     } else { // gate -> gate
   //       Gate &from_gate =
-  //           _gates[_gate_idx_to_tpg_order_idx[from_gate_id] - gate_idx_accum];
+  //           _gates[_gate_idx_to_tpg_order_idx[from_gate_id] -
+  //           gate_idx_accum];
   //       Gate &to_gate =
   //           _gates[_gate_idx_to_tpg_order_idx[to_gate_id] - gate_idx_accum];
   //       to_gate._inputs.push_back(&from_gate);
@@ -820,7 +851,8 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
 
   // give the input gates number - v2
   for (size_t i = _num_PIs; i < gate_input_order_table.size(); i++) {
-    for (size_t j = 1; j < (gate_input_order_table[i][0]+1); j++) { // how many inputs for this gate
+    for (size_t j = 1; j < (gate_input_order_table[i][0] + 1);
+         j++) { // how many inputs for this gate
       size_t from_gate_id = gate_input_order_table[i][j];
       size_t to_gate_id = i;
       if (from_gate_id < _num_PIs) { // PI -> gate
@@ -882,11 +914,13 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
     _num_gates_per_level[_POs[i]._level]++;
   }
   // find the _max_gate_size_of_levels
-  _max_gate_size_of_levels = *std::max_element(_num_gates_per_level.begin(), _num_gates_per_level.end());
-  
+  _max_gate_size_of_levels = *std::max_element(_num_gates_per_level.begin(),
+                                               _num_gates_per_level.end());
+
 #ifdef FSIM_DEBUG_PRINT_GRAPH
-  printf("_max_level = %ld, _max_gate_size_of_levels = %ld\n", _max_level, _max_gate_size_of_levels);
-  
+  printf("_max_level = %ld, _max_gate_size_of_levels = %ld\n", _max_level,
+         _max_gate_size_of_levels);
+
   std::cout << "\n_PIs = [\n";
   for (size_t i = 0; i < _num_PIs; i++) {
     print_ppg(_PIs[i]);
@@ -1021,7 +1055,7 @@ void fsim::Simulator::_apply_MUX(ElementBase &gate) {
   size_t b = gate._inputs[1]->_output_value;
   size_t s = gate._inputs[2]->_output_value;
 
-  size_t ret = ((s & b) | ( a & (!s)));
+  size_t ret = ((s & b) | (a & (!s)));
 
   gate._output_value = (ret);
 }
@@ -1032,7 +1066,6 @@ void fsim::Simulator::_apply_CLKBUF(ElementBase &gate) {
 
   gate._output_value = ret;
 }
-
 
 void fsim::Simulator::_apply_PI(ElementBase &gate, const Pattern pattern,
                                 const size_t pi) {
@@ -1146,7 +1179,8 @@ void fsim::Simulator::visualization_graph(const std::string &outputFile) {
   // gates
   for (size_t i = 0; i < _gates.size(); i++) {              // now_gate
     for (size_t j = 0; j < _gates[i]._inputs.size(); j++) { // pre_gate
-      ElementBase *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate =
+          _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       Gate now_gate = _gates[i];
 
       std::string pre_s;
@@ -1169,7 +1203,8 @@ void fsim::Simulator::visualization_graph(const std::string &outputFile) {
   // POs
   for (size_t i = 0; i < _POs.size(); i++) {              // now_gate
     for (size_t j = 0; j < _POs[i]._inputs.size(); j++) { // pre_gate
-      ElementBase *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      ElementBase *pre_gate =
+          _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       PO now_gate = _POs[i];
 
       std::string pre_s;
@@ -1325,13 +1360,16 @@ void fsim::Simulator::print_found_fault_to_pattern(
   std::cout << "\n=====\n\n";
 }
 
-void fsim::Simulator::print_gate_input_order_table(std::vector<std::vector<size_t>> input_table) {
+void fsim::Simulator::print_gate_input_order_table(
+    std::vector<std::vector<size_t>> input_table) {
   std::cout << "\ngate_input_order_table:\n";
   for (size_t i = 0; i < input_table.size(); i++) {
     std::cout << "Gate_" << i << ": ";
-    std::cout << "num_of_inputs = " << input_table[i][0] << ", input gate_idx: ";
-    for (size_t j = 0; j < input_table[i][0]; j++) { // how many inputs for this gate
-      std::cout << input_table[i][j+1] << ", ";
+    std::cout << "num_of_inputs = " << input_table[i][0]
+              << ", input gate_idx: ";
+    for (size_t j = 0; j < input_table[i][0];
+         j++) { // how many inputs for this gate
+      std::cout << input_table[i][j + 1] << ", ";
     }
     std::cout << "\n";
   }
