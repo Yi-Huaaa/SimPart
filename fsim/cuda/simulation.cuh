@@ -77,6 +77,9 @@ public:
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
   void run(Mode mode, const size_t num_threads);
   
+  // input of the "Graph_viz online"
+  std::string gateTypeToString(GateType type);
+  void visualization_graph(const std::string &outputFile);
   
 private: 
   // testig functions 
@@ -130,7 +133,8 @@ private:
   void _run_bad_case_cuda(const Fault &fault, const Pattern pattern, const size_t bits);
   void _shift_to_correct_answer(size_t *results, const size_t bits, const size_t num_shift_gates);
 
-
+  
+  
 
 
   // print for debug

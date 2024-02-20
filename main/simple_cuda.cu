@@ -7,6 +7,7 @@
 // #define visualization
 // #define print_output
 // #define test_makefile
+#define visualization
 
 double round_to(double value, double precision = 1.0){
   return std::round(value / precision) * precision;
@@ -42,6 +43,11 @@ int main(int argc, char *argv[]) {
   end = std::chrono::steady_clock::now();
   duration_CUDA = end - start;
 #endif
+
+#ifdef visualization
+  // write file: visualization_graph
+  simulator.visualization_graph(outputfile_path);
+#endif 
 
   std::cout << "Execution Time:\n";
   std::cout << "read_data: " << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";

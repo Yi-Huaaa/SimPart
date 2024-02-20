@@ -674,7 +674,7 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
     for (size_t j = 0; j < num_post_gates; j++) {
       size_t gate_tmp, pin_tmp;
       ckt >> gate_tmp >> pin_tmp;
-      pin_tmp = (pin_tmp == 5) ? (3) : (pin_tmp);
+      pin_tmp = (pin_tmp == 5) ? (3) : (pin_tmp); // for MUX
       adj[gate_0].push_back(gate_tmp);
       indegree[gate_tmp]++;
 

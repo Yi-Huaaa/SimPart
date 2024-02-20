@@ -461,9 +461,13 @@ void CudaSimulator::_run_good_case_cuda(const Pattern pattern, const size_t bits
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   printf("insides _run_good_case_cuda\n");
 #endif  
+  // todo: adjustable
+  size_t num_blocks, num_threads;
 
 // Simulation
-  _run_gate <<< 1, _num_PIs >>>(_PIs, pattern, 0, 0, 0, 0);
+  num_blocks = 1; // 1;
+  num_threads = _num_PIs; //_num_PIs;
+  _run_gate <<< num_blocks, num_threads >>> (_PIs, pattern, 0, 0, 0, 0);
   cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   printf("---\n");
@@ -472,7 +476,9 @@ void CudaSimulator::_run_good_case_cuda(const Pattern pattern, const size_t bits
   // since the level_0 belongs to PI, the level_MAX belongs to POs
   size_t accum = 0;
   for (size_t i = 1; i < (_size_of_num_gates_per_level - 1); i++) {
-    _run_gate <<< 1, _num_gates_per_level[i] >>>(_gates+accum, pattern, 0, 0, 0, 0);
+    num_blocks = 1;
+    num_threads = _num_gates_per_level[i];
+    _run_gate <<< num_blocks, num_threads >>> (_gates+accum, pattern, 0, 0, 0, 0);
     cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
     printf("---\n");
@@ -481,7 +487,9 @@ void CudaSimulator::_run_good_case_cuda(const Pattern pattern, const size_t bits
   }
 
   // POs
-  _run_gate <<< 1, _num_POs >>>(_POs, pattern, 0, 0, 0, 0);
+  num_blocks = 1;
+  num_threads = _num_POs;
+  _run_gate <<< num_blocks, num_threads >>> (_POs, pattern, 0, 0, 0, 0);
   cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   printf("---\n");
@@ -578,15 +586,13 @@ __global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t
 
   size_t t_idx = threadIdx.x;
   size_t b_idx = blockIdx.x;
-  size_t gate_idx = t_idx; // tmp
-  
+  size_t gate_idx = blockDim.x * b_idx + t_idx; // tmp
+
   // idx_accum: pi_idx_accum, gate_idx_accum, po_idx_accum, 
   size_t SA_fault = (((gate_idx + idx_accum_sa) == wrong_gate) & bad_case);
-  // printf("wrong_gate = %ld, bad_case = %ld, gate_idx = %ld, idx_accum_sa = %ld\n", wrong_gate, bad_case, gate_idx, idx_accum_sa);
 
   if (SA_fault) {
     gate[gate_idx]._output_value = fault_val;
-    // printf("! gate_idx = %ld, SA_fault = %ld, fault_val = %ld\n", gate_idx, SA_fault, fault_val);
     return;
   }
   // printf("_run_gate: t_idx = %ld, b_idx = %ld, %ld :)))\n", t_idx, b_idx, gate[t_idx]._num_inputs);
@@ -619,7 +625,7 @@ __global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t
       _apply_CLKBUF(gate[gate_idx]);
     break;
     case GateType::PI:
-      _apply_PI(gate[gate_idx], pattern, t_idx);
+      _apply_PI(gate[gate_idx], pattern, gate_idx);
     break;
     case GateType::PO:
       _apply_PO(gate[gate_idx]);
@@ -739,9 +745,115 @@ void CudaSimulator::_shift_to_correct_answer(size_t *results, const size_t bits,
   }
 }
 
+// output file visualization graph
+void CudaSimulator::visualization_graph(const std::string &outputFile) {
+  using std::string_literals::operator""s;
+  size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs,
+         po_idx_accum = (_num_PIs + _num_inner_gates);
 
+  // Open output file
+  std::ofstream output_file(outputFile);
 
+  // Check if the output file is open
+  if (!output_file.is_open()) {
+    std::cerr << "Error opening output file: " << outputFile << std::endl;
+    return;
+  }
 
+  // write file
+  output_file << "digraph G {\n";
+  output_file << "\tsubgraph cluster_0 {\n";
+  output_file << "\t\tcolor=black;\n";
+  output_file << "\t\tnode [style=filled,color=lightgrey];\n";
+
+  // gates
+  for (size_t i = 0; i < _num_inner_gates; i++) {              // now_gate
+    for (size_t j = 0; j < _gates[i]._num_inputs; j++) { // pre_gate
+      ElementBase *pre_gate = _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      Gate now_gate = _gates[i];
+
+      std::string pre_s;
+      if (pre_gate->_type == GateType::PI) {
+        pre_s =
+            "PI_"s + std::to_string(pre_gate->_idx - pi_idx_accum) + " -> "s;
+      } else {
+        pre_s = "Gate_"s + std::to_string(pre_gate->_idx - gate_idx_accum) +
+                "_"s + gateTypeToString(pre_gate->_type) + " -> "s;
+      }
+
+      std::string now_s;
+      now_s = "Gate_"s + std::to_string(now_gate._idx - gate_idx_accum) + "_"s +
+              gateTypeToString(now_gate._type) + ";"s;
+
+      output_file << "\t\t" << pre_s << now_s << "\n";
+    }
+  }
+
+  // POs
+  for (size_t i = 0; i < _num_POs; i++) {              // now_gate
+    for (size_t j = 0; j < _POs[i]._num_inputs; j++) { // pre_gate
+      ElementBase *pre_gate = _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
+      PO now_gate = _POs[i];
+
+      std::string pre_s;
+      if (pre_gate->_type == GateType::PI) {
+        pre_s =
+            "PI_"s + std::to_string(pre_gate->_idx - pi_idx_accum) + " -> "s;
+      } else {
+        pre_s = "Gate_"s + std::to_string(pre_gate->_idx - gate_idx_accum) +
+                "_"s + gateTypeToString(pre_gate->_type) + " -> "s;
+      }
+
+      std::string now_s;
+      now_s = "PO_"s + std::to_string(now_gate._idx - po_idx_accum) + ";"s;
+
+      output_file << "\t\t" << pre_s << now_s << "\n";
+    }
+  }
+
+  output_file << "\t}\n\n";
+
+  for (size_t i = 0; i < _num_PIs; i++) {
+    output_file << "\tPI_"s << std::to_string(i) << "  [shape=Msquare];\n"s;
+  }
+  for (size_t i = 0; i < _num_POs; i++) {
+    output_file << "\tPO_"s << std::to_string(i) << "  [shape=Msquare];\n"s;
+  }
+  output_file << "}\n\n";
+
+  // Close files
+  output_file.close();
+}
+
+// Function to convert GateType to string
+std::string CudaSimulator::gateTypeToString(GateType type) {
+  switch (type) {
+  case GateType::INV:
+    return "INV";
+  case GateType::AND:
+    return "AND";
+  case GateType::OR:
+    return "OR";
+  case GateType::XOR:
+    return "XOR";
+  case GateType::NAND:
+    return "NAND";
+  case GateType::NOR:
+    return "NOR";
+  case GateType::XNOR:
+    return "XNOR";
+  case GateType::MUX:
+    return "MUX";
+  case GateType::CLKBUF:
+    return "CLKBUF";
+  case GateType::PI:
+    return "PI";
+  case GateType::PO:
+    return "PO";
+  default:
+    return "UNKNOWN";
+  }
+}
 
 
 
