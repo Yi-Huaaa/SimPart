@@ -465,9 +465,9 @@ void CudaSimulator::_run_good_case_cuda(const Pattern pattern, const size_t bits
   size_t num_blocks, num_threads;
 
 // Simulation
-  num_blocks = 1; // 1;
-  num_threads = _num_PIs; //_num_PIs;
-  _run_gate <<< num_blocks, num_threads >>> (_PIs, pattern, 0, 0, 0, 0);
+  num_blocks = (_num_PIs > 1024) ? (_num_PIs >> 10) : (1); // 1;
+  num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs); // _num_PIs;
+  _run_gate <<< num_blocks, num_threads >>> (_PIs, pattern, 0, 0, 0, 0, _num_PIs);
   cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   printf("---\n");
@@ -476,9 +476,9 @@ void CudaSimulator::_run_good_case_cuda(const Pattern pattern, const size_t bits
   // since the level_0 belongs to PI, the level_MAX belongs to POs
   size_t accum = 0;
   for (size_t i = 1; i < (_size_of_num_gates_per_level - 1); i++) {
-    num_blocks = 1;
-    num_threads = _num_gates_per_level[i];
-    _run_gate <<< num_blocks, num_threads >>> (_gates+accum, pattern, 0, 0, 0, 0);
+    num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] >> 10) : (1);//1;
+    num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);// _num_gates_per_level[i];
+    _run_gate <<< num_blocks, num_threads >>> (_gates+accum, pattern, 0, 0, 0, 0, _num_gates_per_level[i]);
     cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
     printf("---\n");
@@ -487,9 +487,9 @@ void CudaSimulator::_run_good_case_cuda(const Pattern pattern, const size_t bits
   }
 
   // POs
-  num_blocks = 1;
-  num_threads = _num_POs;
-  _run_gate <<< num_blocks, num_threads >>> (_POs, pattern, 0, 0, 0, 0);
+  num_blocks = (_num_POs > 1024) ? (_num_POs >> 10) : (1); // 1;
+  num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);// _num_POs; //_num_POs;
+  _run_gate <<< num_blocks, num_threads >>> (_POs, pattern, 0, 0, 0, 0, _num_POs);
   cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   printf("---\n");
@@ -528,11 +528,14 @@ void CudaSimulator::_run_bad_case_cuda(const Fault &fault, const Pattern pattern
   po_idx_accum = (_num_PIs + _num_inner_gates);
   size_t bad_case = 1;
   size_t idx_accum_sa = pi_idx_accum;
+  size_t num_blocks, num_threads;
 
   // fault simulation
   // size_t SA_fault = ((i + pi_idx_accum) == wrong_gate);
   idx_accum_sa = pi_idx_accum;
-  _run_gate <<< 1, _num_PIs >>>(_PIs, pattern, fault_val, idx_accum_sa, wrong_gate, bad_case);
+  num_blocks = (_num_PIs > 1024) ? (_num_PIs >> 10) : (1); // 1;
+  num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs); // _num_PIs;
+  _run_gate <<< num_blocks, num_threads >>>(_PIs, pattern, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_PIs);
   cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   printf("---\n");
@@ -543,7 +546,9 @@ void CudaSimulator::_run_bad_case_cuda(const Fault &fault, const Pattern pattern
   size_t accum = 0;
   for (size_t i = 1; i < (_size_of_num_gates_per_level - 1); i++) {
     // note: here be carefil, the index will be updated by usnig pointer addition!!!
-    _run_gate <<< 1, _num_gates_per_level[i] >>>(_gates+accum, pattern, fault_val, idx_accum_sa+accum, wrong_gate, bad_case);
+    num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] >> 10) : (1);//1;
+    num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);// _num_gates_per_level[i];
+    _run_gate <<< 1, _num_gates_per_level[i] >>>(_gates+accum, pattern, fault_val, idx_accum_sa+accum, wrong_gate, bad_case, _num_gates_per_level[i]);
     cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
     printf("---\n");
@@ -553,7 +558,9 @@ void CudaSimulator::_run_bad_case_cuda(const Fault &fault, const Pattern pattern
 
   // POs
   idx_accum_sa = po_idx_accum;
-  _run_gate <<< 1, _num_POs >>>(_POs, pattern, fault_val, idx_accum_sa, wrong_gate, bad_case);
+  num_blocks = (_num_POs > 1024) ? (_num_POs >> 10) : (1); // 1;
+  num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);// _num_POs; //_num_POs;
+  _run_gate <<< 1, _num_POs >>>(_POs, pattern, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_POs);
   cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   printf("---\n");
@@ -582,11 +589,13 @@ void CudaSimulator::_run_bad_case_cuda(const Fault &fault, const Pattern pattern
   #endif
 }
 
-__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case) {
+__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level) {
 
   size_t t_idx = threadIdx.x;
   size_t b_idx = blockIdx.x;
   size_t gate_idx = blockDim.x * b_idx + t_idx; // tmp
+  if (gate_idx > max_gate_num_per_level)
+    return;
 
   // idx_accum: pi_idx_accum, gate_idx_accum, po_idx_accum, 
   size_t SA_fault = (((gate_idx + idx_accum_sa) == wrong_gate) & bad_case);

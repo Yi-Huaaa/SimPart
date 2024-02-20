@@ -17,7 +17,7 @@
 // testing functions 
 __global__ void helloCUDA();
 __global__ void _run_gate_gpu(size_t *inputs);
-__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case);
+__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level);
 // simulation for gates
 __device__ __forceinline__ void _apply_INV(ElementBase &gate);
 __device__ __forceinline__ void _apply_AND(ElementBase &gate);
@@ -46,7 +46,7 @@ class CudaSimulator {
 const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
 
 // friend functions 
-friend __global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t pi, const size_t SA_fault, const size_t fault_val);
+friend __global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t pi, const size_t SA_fault, const size_t fault_val, const size_t max_gate_num_per_level);
 
 public:
  

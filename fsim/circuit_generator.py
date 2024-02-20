@@ -6,6 +6,11 @@ PI_nums = 206
 PO_nums = 107
 rounds = 23000
 
+# as large as b17: 
+# PI_nums = 206
+# PO_nums = 107
+# rounds = 23000
+
 #   INV = 0, 
 #   AND, // 1 
 #   OR, // 2
