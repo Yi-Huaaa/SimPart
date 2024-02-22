@@ -550,6 +550,25 @@ void CudaSimulator::_run_parallel_cuda() {
       _compare_g_b_results <<< 1, 1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
     }
   }
+
+  // free memory 
+  cudaFree(_PIs_gpu);
+  cudaFree(_gates_gpu);
+  cudaFree(_POs_gpu);
+  cudaFree(_faults_gpu);
+  cudaFree(_patterns_gpu);
+
+  cudaFree(_g_pi_results_gpu);
+  cudaFree(_g_gate_results_gpu);
+  cudaFree(_g_po_results_gpu);
+  cudaFree(_b_pi_results_gpu);
+  cudaFree(_b_gate_results_gpu);
+  cudaFree(_b_po_results_gpu);
+  cudaFree(_found_fault_to_pattern_gpu);
+  
+  cudaFree(_gate_inputs_list_gpu);
+  cudaFree(_gate_inputs_list_start_gpu);
+ 
 }
 
 
