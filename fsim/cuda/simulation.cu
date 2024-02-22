@@ -529,10 +529,7 @@ void CudaSimulator::_run_parallel_cuda() {
   cudaMemcpy(_gate_inputs_list_gpu, _gate_inputs_list, sum_inputs_gates*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaMemcpy(_gate_inputs_list_start_gpu, _gate_inputs_list_start, sum_pi_gates_pos*sizeof(size_t), cudaMemcpyHostToDevice);
   
-
-  
   // cudaMemcpy(_gates_gpu[0]._inputs, _gates[0]._inputs, 2*sizeof(ElementBase*), cudaMemcpyHostToDevice);
-  // note: 現在答案是錯的，但時間應概是對的，因為 _gates_gpu[i]._inputs 的 inputs 並沒有存進去
 
   for (size_t rd = 0; rd < _num_rounds; rd++) {
     size_t num_testcases_this_round =
@@ -550,18 +547,7 @@ void CudaSimulator::_run_parallel_cuda() {
     // bad simulation (fault simulation)
     for (size_t j = 0; j < _num_fault; j++) {
       _run_bad_case_cuda(rd, j, num_testcases_this_round);
-
-      // size_t found_fault = 0;
-      // for (size_t i = 0; i < _num_POs; i++) {
-      //   if (_g_po_results[i] != _b_po_results[i]) {
-      //     found_fault = 1;
-      //     break;
-      //   }
-      // }
-      // // Record whether fault can be found
-      // _found_fault_to_pattern[2 * j] = found_fault;
-      // // Record which pattern found the fault
-      // _found_fault_to_pattern[2 * j + 1] = rd;
+      _compare_g_b_results <<< 1, 1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
     }
   }
 }
@@ -582,8 +568,8 @@ void CudaSimulator::_run_good_case_cuda(const size_t rd, const size_t bits) {
   // printf("num_blocks = %ld, num_threads = %ld\n", num_blocks, num_threads);
   _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, 0, 0, 0, 0, _num_PIs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, pi_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
   // cudaDeviceSynchronize();  
-  // cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
+  cudaDeviceSynchronize();
   printf("---\n");
 #endif  
 
@@ -593,8 +579,8 @@ void CudaSimulator::_run_good_case_cuda(const size_t rd, const size_t bits) {
     num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] >> 10) : (1);//1;
     num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);// _num_gates_per_level[i];
     _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, 0, 0, 0, 0, _num_gates_per_level[i], _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, accum, gate_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
-    // cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
+    cudaDeviceSynchronize();
     printf("---\n");
 #endif      
     accum += _num_gates_per_level[i];
@@ -604,8 +590,8 @@ void CudaSimulator::_run_good_case_cuda(const size_t rd, const size_t bits) {
   num_blocks = (_num_POs > 1024) ? (_num_POs >> 10) : (1); // 1;
   num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);// _num_POs; //_num_POs;
   _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, 0, 0, 0, 0, _num_POs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, po_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
-  // cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
+  cudaDeviceSynchronize();  
   printf("---\n");
 #endif  
 
@@ -658,8 +644,8 @@ void CudaSimulator::_run_bad_case_cuda(const size_t rd, const size_t fault_num, 
   num_blocks = (_num_PIs > 1024) ? (_num_PIs >> 10) : (1); // 1;
   num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs); // _num_PIs;
   _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_PIs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, pi_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
-  // cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
+  cudaDeviceSynchronize();
   printf("---\n");
 #endif  
 
@@ -670,8 +656,8 @@ void CudaSimulator::_run_bad_case_cuda(const size_t rd, const size_t fault_num, 
     num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] >> 10) : (1);//1;
     num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);// _num_gates_per_level[i];
     _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_gates_per_level[i], _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, accum, gate_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
-    // cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
+    cudaDeviceSynchronize();
     printf("---\n");
 #endif      
     accum += _num_gates_per_level[i];
@@ -682,8 +668,8 @@ void CudaSimulator::_run_bad_case_cuda(const size_t rd, const size_t fault_num, 
   num_blocks = (_num_POs > 1024) ? (_num_POs >> 10) : (1); // 1;
   num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);// _num_POs; //_num_POs;
   _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_POs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, po_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
-  // cudaDeviceSynchronize();
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
+  cudaDeviceSynchronize();  
   printf("---\n");
 #endif  
 
@@ -943,6 +929,24 @@ __device__ __forceinline__ void _apply_PO(ElementBase &gate, PI *_PIs_gpu, Gate 
   // ElementBase *pre_gate = gate._inputs[0];
   gate._output_value = ret;
 }
+
+__global__ void _compare_g_b_results(const size_t j, const size_t _num_POs, const size_t rd, 
+  size_t *_g_po_results_gpu, size_t *_b_po_results_gpu, size_t *_found_fault_to_pattern_gpu) {
+
+size_t found_fault = 0;
+  for (size_t i = 0; i < _num_POs; i++) {
+    if (_g_po_results_gpu[i] != _b_po_results_gpu[i]) {
+      found_fault = 1;
+    break;
+    }
+  }
+  // Record whether fault can be found
+  _found_fault_to_pattern_gpu[2 * j] = found_fault;
+  // Record which pattern found the fault
+  _found_fault_to_pattern_gpu[2 * j + 1] = rd;
+}
+
+
 
 // todo: this can be merged into the __device__code for acceleration
 void CudaSimulator::_shift_to_correct_answer(size_t *results, const size_t bits, const size_t num_shift_gates) {
