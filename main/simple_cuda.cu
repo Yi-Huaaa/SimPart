@@ -7,7 +7,6 @@
 // #define visualization
 // #define print_output
 // #define test_makefile
-// #define visualization
 
 double round_to(double value, double precision = 1.0){
   return std::round(value / precision) * precision;

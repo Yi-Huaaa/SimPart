@@ -13,27 +13,30 @@
 #include "pi.cuh"
 #include "po.cuh"
 
+
 // CUDA functions 
 // testing functions 
 __global__ void helloCUDA();
 __global__ void _run_gate_gpu(size_t *inputs);
-__global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level);
-// simulation for gates
-__device__ __forceinline__ void _apply_INV(ElementBase &gate);
-__device__ __forceinline__ void _apply_AND(ElementBase &gate);
-__device__ __forceinline__ void _apply_OR(ElementBase &gate);
-__device__ __forceinline__ void _apply_XOR(ElementBase &gate);
-__device__ __forceinline__ void _apply_NAND(ElementBase &gate);
-__device__ __forceinline__ void _apply_NOR(ElementBase &gate);
-__device__ __forceinline__ void _apply_XNOR(ElementBase &gate);
-__device__ __forceinline__ void _apply_MUX(ElementBase &gate);
-__device__ __forceinline__ void _apply_CLKBUF(ElementBase &gate);
-__device__ __forceinline__ void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi);
-__device__ __forceinline__ void _apply_PO(ElementBase &gate);
+__global__ void _run_gate(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, const size_t rd, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t idx_accum, 
+  size_t pi_g_po_idx_accum, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+
+__device__ __forceinline__ void _apply_INV(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__device__ __forceinline__ void _apply_AND(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__device__ __forceinline__ void _apply_OR(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__device__ __forceinline__ void _apply_XOR(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__device__ __forceinline__ void _apply_NAND(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__device__ __forceinline__ void _apply_NOR(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__device__ __forceinline__ void _apply_XNOR(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__device__ __forceinline__ void _apply_MUX(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__device__ __forceinline__ void _apply_CLKBUF(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__device__ __forceinline__ void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__device__ __forceinline__ void _apply_PO(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__global__ void _shift_to_correct_answer_gpu(size_t *outputs, ElementBase *input_arr, const size_t bits, const size_t SIZE_T_BITS);
 
 
 // print for check
-// #define FSIM_DEBUG_PRINT_SIMULATION
+#define FSIM_DEBUG_PRINT_SIMULATION
 // #define FSIM_DEBUG_PRINT_GRAPH
 // #define FSIM_DEBUG_PRINT_FAULTS
 // #define FSIM_DEBUG_PRINT_PATTERNS
@@ -46,7 +49,8 @@ class CudaSimulator {
 const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
 
 // friend functions 
-friend __global__ void _run_gate(ElementBase *gate, const Pattern pattern, const size_t pi, const size_t SA_fault, const size_t fault_val, const size_t max_gate_num_per_level);
+friend __global__ void _run_gate(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, const size_t rd, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t idx_accum, size_t pi_g_po_idx_accum, size_t _num_inner_gates, size_t _num_POs);
+friend __global__ void _shift_to_correct_answer_gpu(size_t *outputs, ElementBase *input_arr, const size_t bits, const size_t SIZE_T_BITS);
 
 public:
  
@@ -119,17 +123,36 @@ private:
   void _read_pattern(std::istream &ptn);
 
   // Simulation
-  size_t *_g_pi_results;
-  size_t *_g_gate_results;
-  size_t *_g_po_results;
-  size_t *_b_pi_results;
-  size_t *_b_gate_results;
-  size_t *_b_po_results;
-  size_t *_found_fault_to_pattern;
+  // size_t *_g_pi_results;
+  // size_t *_g_gate_results;
+  // size_t *_g_po_results;
+  // size_t *_b_pi_results;
+  // size_t *_b_gate_results;
+  // size_t *_b_po_results;
+  // size_t *_found_fault_to_pattern;
+  size_t *_gate_inputs_list;
+  size_t *_gate_inputs_list_from; // 0: PI, 1: PO
+  size_t *_gate_inputs_list_start;
+  size_t sum_inputs_gates;
+
+
+  // GPU pointers
+  PI *_PIs_gpu; 
+  Gate *_gates_gpu; 
+  PO *_POs_gpu;
+  size_t *_g_pi_results_gpu; 
+  size_t *_g_gate_results_gpu; 
+  size_t *_g_po_results_gpu; 
+  size_t *_found_fault_to_pattern_gpu; 
+  Fault *_faults_gpu;
+  Pattern *_patterns_gpu;
+  size_t *_gate_inputs_list_gpu;
+  size_t *_gate_inputs_list_from_gpu; // 0: PI, 1: PO
+  size_t *_gate_inputs_list_start_gpu;
 
   // parallel-cuda
   void _run_parallel_cuda();
-  void _run_good_case_cuda(const Pattern pattern, const size_t bits);
+  void _run_good_case_cuda(size_t rd, const size_t bits);
   void _run_bad_case_cuda(const Fault &fault, const Pattern pattern, const size_t bits);
   void _shift_to_correct_answer(size_t *results, const size_t bits, const size_t num_shift_gates);
 
