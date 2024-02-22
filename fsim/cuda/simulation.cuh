@@ -36,7 +36,7 @@ __global__ void _shift_to_correct_answer_gpu(size_t *outputs, ElementBase *input
 
 
 // print for check
-#define FSIM_DEBUG_PRINT_SIMULATION
+// #define FSIM_DEBUG_PRINT_SIMULATION
 // #define FSIM_DEBUG_PRINT_GRAPH
 // #define FSIM_DEBUG_PRINT_FAULTS
 // #define FSIM_DEBUG_PRINT_PATTERNS
@@ -131,7 +131,6 @@ private:
   // size_t *_b_po_results;
   // size_t *_found_fault_to_pattern;
   size_t *_gate_inputs_list;
-  size_t *_gate_inputs_list_from; // 0: PI, 1: PO
   size_t *_gate_inputs_list_start;
   size_t sum_inputs_gates;
 
@@ -150,10 +149,14 @@ private:
   size_t *_gate_inputs_list_from_gpu; // 0: PI, 1: PO
   size_t *_gate_inputs_list_start_gpu;
 
+  size_t *_b_pi_results_gpu; 
+  size_t *_b_gate_results_gpu; 
+  size_t *_b_po_results_gpu;   
+
   // parallel-cuda
   void _run_parallel_cuda();
-  void _run_good_case_cuda(size_t rd, const size_t bits);
-  void _run_bad_case_cuda(const Fault &fault, const Pattern pattern, const size_t bits);
+  void _run_good_case_cuda(const size_t rd, const size_t bits);
+  void _run_bad_case_cuda(const size_t rd, const size_t fault_num, const size_t bits);
   void _shift_to_correct_answer(size_t *results, const size_t bits, const size_t num_shift_gates);
 
   
