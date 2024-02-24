@@ -42,15 +42,18 @@ endif()
 option(FSIM_BUILD_TESTS "Enables builds of tests" ON)
 option(FSIM_BUILD_CUDA "Enables builds of cuda code" ON)
 
+# project-specific variables
+set(FSIM_3RD_PARTY_DIR ${PROJECT_SOURCE_DIR}/3rd-party)
+message(STATUS "FSIM_3RD_PARTY_DIR: " ${FSIM_3RD_PARTY_DIR})
+message(STATUS "CMAKE_CUDA_COMPILER: " ${CMAKE_CUDA_COMPILER})
+message(STATUS "CMAKE_CUDA_COMPILER_ID: " ${CMAKE_CUDA_COMPILER_ID})
+message(STATUS "CMAKE_CUDA_COMPILER_VERSION: " ${CMAKE_CUDA_COMPILER_VERSION})
+message(STATUS "CMAKE_CUDA_FLAGS: " ${CMAKE_CUDA_FLAGS})
+message(STATUS "FSIM_BUILD_CUDA: " ${FSIM_BUILD_CUDA})
+set(FSIM_CMAKE_DIR ${PROJECT_SOURCE_DIR}/cmake)
+
 # Turn on the verbose
 set(CMAKE_VERBOSE_MAKEFILE ON)
-
-
-# include the default directory
-include_directories(${PROJECT_SOURCE_DIR})
-
-add_library(default_settings INTERFACE)
-add_library(fsim::default_settings ALIAS default_settings)
 
 
 # -----------------------------------------------------------------------------
@@ -69,7 +72,39 @@ if(FSIM_BUILD_CUDA)
     message(FATAL_ERROR "\nfsim requires CUDA at least v11")
   endif()
 
+  # configure cuBLAS
+  message(STATUS "Configuring CUDA BLAS ...")
+  list(APPEND CMAKE_MODULE_PATH ${FSIM_CMAKE_DIR}/cuda_modules/)
+  find_package(cuBLAS)
+  message(STATUS "CUBLAS_FOUND: ${CUBLAS_FOUND}")
+  message(STATUS "CUBLAS_INCLUDE_DIRS: ${CUBLAS_INCLUDE_DIRS}")
+  message(STATUS "CUBLAS_LIBRARIES: ${CUBLAS_LIBRARIES}")
+
 endif()
+
+# # Add cuBLAS library if necessary
+# if (FSIM_BUILD_CUDA)
+#     target_link_libraries(${PROJECT_NAME} INTERFACE ${CUBLAS_LIBRARIES})
+#     target_include_directories(${PROJECT_NAME} INTERFACE ${CUBLAS_INCLUDE_DIRS})
+# endif()
+
+# # Add other settings
+# add_library(${PROJECT_NAME} INTERFACE)
+# target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
+# target_link_libraries(${PROJECT_NAME} INTERFACE Threads::Threads)
+# target_include_directories(${PROJECT_NAME} INTERFACE
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+#   $<INSTALL_INTERFACE:include/> 
+# )
+
+
+
+# include the default directory
+include_directories(${PROJECT_SOURCE_DIR})
+
+add_library(default_settings INTERFACE)
+add_library(fsim::default_settings ALIAS default_settings)
+
 
 # -----------------------------------------------------------------------------
 # fsim::default_setting
@@ -93,17 +128,6 @@ endif(FSIM_BUILD_CUDA)
 # -----------------------------------------------------------------------------
 # start build
 # -----------------------------------------------------------------------------
-
-# project-specific variables
-set(FSIM_3RD_PARTY_DIR ${PROJECT_SOURCE_DIR}/3rd-party)
-message(STATUS "FSIM_3RD_PARTY_DIR: " ${FSIM_3RD_PARTY_DIR})
-message(STATUS "CMAKE_CUDA_COMPILER: " ${CMAKE_CUDA_COMPILER})
-message(STATUS "CMAKE_CUDA_COMPILER_ID: " ${CMAKE_CUDA_COMPILER_ID})
-message(STATUS "CMAKE_CUDA_COMPILER_VERSION: " ${CMAKE_CUDA_COMPILER_VERSION})
-message(STATUS "CMAKE_CUDA_FLAGS: " ${CMAKE_CUDA_FLAGS})
-message(STATUS "FSIM_BUILD_CUDA: " ${FSIM_BUILD_CUDA})
-
-
 add_subdirectory(fsim)
 add_subdirectory(main)
 
@@ -123,11 +147,3 @@ endif(FSIM_BUILD_TESTS)
 # Enable test
 include(CTest)
 
-# -----------------------------------------------------------------------------
-# make run_tests (similiar to `make test`, but you can custom what you want to run)
-# -----------------------------------------------------------------------------
-# # Add a test target for the unit tests
-# add_custom_target(run_tests
-#   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-#   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-# )
