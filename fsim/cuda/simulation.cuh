@@ -49,6 +49,7 @@ __global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fault_val,
 // #define FSIM_DEBUG_PRINT_FAULTS
 // #define FSIM_DEBUG_PRINT_PATTERNS
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
+#define CUDA_GRAPH_CHECK
 
 
 class CUDASimulator {
@@ -162,7 +163,7 @@ private:
 
   // memory
   size_t *_params_gpu; // used for constructing cuda_graph parameters
-  size_t _num_paras = 8;
+  size_t _num_paras = 11;
   void _gpu_ask_copy_mem();
   void _free_all();
   
