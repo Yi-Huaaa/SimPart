@@ -8,6 +8,8 @@
 #include <queue>
 #include <string>
 #include <vector>
+#include <cuda_runtime_api.h>
+#include <cublas_v2.h>
 
 #include "simulation.cuh"
 
@@ -24,8 +26,8 @@ __global__ void _run_gate_gpu(size_t *inputs){
   }
 }
 
-// cudasimulator fucntions
-void CudaSimulator::read(const std::string &ckt_path, const std::string &flst_path, const std::string &ptn_path) {
+// CUDASimulator fucntions
+void CUDASimulator::read(const std::string &ckt_path, const std::string &flst_path, const std::string &ptn_path) {
 
   using std::string_literals::operator""s;
 
@@ -45,7 +47,7 @@ void CudaSimulator::read(const std::string &ckt_path, const std::string &flst_pa
   read(ckt, flst, ptn);
 }
 
-void CudaSimulator::read(std::istream &ckt, std::istream &flst, std::istream &ptn) {
+void CUDASimulator::read(std::istream &ckt, std::istream &flst, std::istream &ptn) {
   // gate
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires;
   #ifdef FSIM_DEBUG_PRINT_GRAPH
@@ -88,7 +90,7 @@ ForwardIterator remove_if(ForwardIterator first, ForwardIterator last, UnaryPred
 
 
 // Construct functions
-void CudaSimulator::_read_graph(std::istream &ckt) {
+void CUDASimulator::_read_graph(std::istream &ckt) {
   size_t sum_pi_gates_pos = _num_PIs + _num_inner_gates + _num_POs;
 
   // for topological sort
@@ -427,7 +429,7 @@ void CudaSimulator::_read_graph(std::istream &ckt) {
 #endif
 }
 
-void CudaSimulator::_read_fault(std::istream &flst) {
+void CUDASimulator::_read_fault(std::istream &flst) {
   // _faults.resize(_num_fault);
   cudaMallocManaged(&_faults, _num_fault*sizeof(Fault));
   for (size_t i = 0; i < _num_fault; i++) {
@@ -446,7 +448,7 @@ void CudaSimulator::_read_fault(std::istream &flst) {
 #endif
 }
 
-void CudaSimulator::_read_pattern(std::istream &ptn) {
+void CUDASimulator::_read_pattern(std::istream &ptn) {
   _num_rounds = (_num_pattern + SIZE_T_BITS - 1) / SIZE_T_BITS; // ceiling
 
   // _patterns.resize(_num_rounds);
@@ -466,70 +468,51 @@ void CudaSimulator::_read_pattern(std::istream &ptn) {
 #endif
 }
 
-void CudaSimulator::run(Mode mode, const size_t num_threads) {
+void CUDASimulator::run(Mode mode, const size_t num_threads) {
 
+// #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
+//     std::cout << "run _run_parallel_cuda\n";
+// #endif
+//     _run_parallel_cuda();
+// #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
+//   size_t m = static_cast<size_t>(mode);
+//   std::cout << "Mode: " << m << std::endl;
+//   // print_found_fault_to_pattern(_found_fault_to_pattern);
+// #endif
+
+  switch (mode) {
+  case Mode::CUDA:
 #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
-    std::cout << "run _run_parallel_cuda\n";
+    std::cout << "run _CUDA\n";
+    size_t m = static_cast<size_t>(mode);
+    std::cout << "Mode: " << m << std::endl;
 #endif
     _run_parallel_cuda();
+    break;
+  case Mode::CUDA_GRAPH:
 #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
+  std::cout << "run _CUDA_GRAPH\n";
   size_t m = static_cast<size_t>(mode);
-  std::cout << "Mode: CUDA\n";
-  // print_found_fault_to_pattern(_found_fault_to_pattern);
-#endif
+  std::cout << "Mode: " << m << std::endl;
+#endif  
+    _run_parallel_cuda_graph();
+    break;
+
+  }
+  #ifdef FSIM_DEBUG_PRINT_FAULT_TABLE
+    size_t m = static_cast<size_t>(mode);
+    std::cout << "Mode: " << m << std::endl;
+    print_found_fault_to_pattern(_found_fault_to_pattern);
+  #endif
 }
 
-void CudaSimulator::_run_parallel_cuda() {
+void CUDASimulator::_run_parallel_cuda() {
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   std::cout << "execute simulation._run_parallel cuda();" << '\n';
 #endif
 
-  // // Simulation
-  // cudaMallocManaged(&_g_pi_results, _num_PIs*sizeof(size_t));
-  // cudaMallocManaged(&_g_gate_results, _num_inner_gates*sizeof(size_t));
-  // cudaMallocManaged(&_g_po_results, _num_POs*sizeof(size_t));
-  // cudaMallocManaged(&_b_pi_results, _num_PIs*sizeof(size_t));
-  // cudaMallocManaged(&_b_gate_results, _num_inner_gates*sizeof(size_t));
-  // cudaMallocManaged(&_b_po_results, _num_POs*sizeof(size_t));
-  // cudaMallocManaged(&_found_fault_to_pattern, 2*_num_fault*sizeof(size_t));
-  
-
   // ask memory 
-  size_t sum_pi_gates_pos = _num_PIs+_num_inner_gates+_num_POs;
-
-  cudaMalloc((void**)&_PIs_gpu, _num_PIs*sizeof(PI));
-  cudaMalloc((void**)&_gates_gpu, _num_inner_gates*sizeof(Gate));
-  cudaMalloc((void**)&_POs_gpu, _num_POs*sizeof(PO));
-  cudaMalloc((void**)&_faults_gpu, _num_fault*sizeof(Fault));
-  cudaMalloc((void**)&_patterns_gpu, _num_rounds*sizeof(Pattern));
-
-  cudaMalloc((void**)&_g_pi_results_gpu, _num_PIs*sizeof(size_t));
-  cudaMalloc((void**)&_g_gate_results_gpu, _num_inner_gates*sizeof(size_t));
-  cudaMalloc((void**)&_g_po_results_gpu, _num_POs*sizeof(size_t));
-  cudaMalloc((void**)&_b_pi_results_gpu, _num_PIs*sizeof(size_t));
-  cudaMalloc((void**)&_b_gate_results_gpu, _num_inner_gates*sizeof(size_t));
-  cudaMalloc((void**)&_b_po_results_gpu, _num_POs*sizeof(size_t));
-  cudaMalloc((void**)&_found_fault_to_pattern_gpu, 2*_num_fault*sizeof(size_t));
-  
-  
-  cudaMalloc((void**)&_gate_inputs_list_gpu, sum_inputs_gates*sizeof(size_t));
-  cudaMalloc((void**)&_gate_inputs_list_start_gpu, sum_pi_gates_pos*sizeof(size_t));
-
-  // size_t *_b_pi_results; cudaMalloc((void**)&_b_pi_results, _num_PIs*sizeof(size_t));
-  // size_t *_b_gate_results; cudaMalloc((void**)&_b_gate_results, _num_inner_gates*sizeof(size_t));
-  // size_t *_b_po_results; cudaMalloc((void**)&_b_po_results, _num_POs*sizeof(size_t));  
-
-  // copy memory 
-  cudaMemcpy(_PIs_gpu, _PIs, _num_PIs*sizeof(PI), cudaMemcpyHostToDevice);
-  cudaMemcpy(_gates_gpu, _gates, _num_inner_gates*sizeof(Gate), cudaMemcpyHostToDevice);
-  cudaMemcpy(_POs_gpu, _POs, _num_POs*sizeof(PO), cudaMemcpyHostToDevice);
-  cudaMemcpy(_faults_gpu, _faults, _num_fault*sizeof(Fault), cudaMemcpyHostToDevice);
-  cudaMemcpy(_patterns_gpu, _patterns, _num_rounds*sizeof(Pattern), cudaMemcpyHostToDevice);
-  
-  cudaMemcpy(_gate_inputs_list_gpu, _gate_inputs_list, sum_inputs_gates*sizeof(size_t), cudaMemcpyHostToDevice);
-  cudaMemcpy(_gate_inputs_list_start_gpu, _gate_inputs_list_start, sum_pi_gates_pos*sizeof(size_t), cudaMemcpyHostToDevice);
-  
-  // cudaMemcpy(_gates_gpu[0]._inputs, _gates[0]._inputs, 2*sizeof(ElementBase*), cudaMemcpyHostToDevice);
+  _gpu_ask_copy_mem();
 
   for (size_t rd = 0; rd < _num_rounds; rd++) {
     size_t num_testcases_this_round =
@@ -542,7 +525,7 @@ void CudaSimulator::_run_parallel_cuda() {
     std::cout << "CUDA: Run Good case" << std::endl;
 #endif
 
-  _run_good_case_cuda(rd, num_testcases_this_round);
+    _run_good_case_cuda(rd, num_testcases_this_round);
 
     // bad simulation (fault simulation)
     for (size_t j = 0; j < _num_fault; j++) {
@@ -550,29 +533,12 @@ void CudaSimulator::_run_parallel_cuda() {
       _compare_g_b_results <<< 1, 1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
     }
   }
-
-  // free memory 
-  cudaFree(_PIs_gpu);
-  cudaFree(_gates_gpu);
-  cudaFree(_POs_gpu);
-  cudaFree(_faults_gpu);
-  cudaFree(_patterns_gpu);
-
-  cudaFree(_g_pi_results_gpu);
-  cudaFree(_g_gate_results_gpu);
-  cudaFree(_g_po_results_gpu);
-  cudaFree(_b_pi_results_gpu);
-  cudaFree(_b_gate_results_gpu);
-  cudaFree(_b_po_results_gpu);
-  cudaFree(_found_fault_to_pattern_gpu);
   
-  cudaFree(_gate_inputs_list_gpu);
-  cudaFree(_gate_inputs_list_start_gpu);
- 
+  // free mem
+  // _free_all();
 }
 
-
-void CudaSimulator::_run_good_case_cuda(const size_t rd, const size_t bits) {
+void CUDASimulator::_run_good_case_cuda(const size_t rd, const size_t bits) {
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   printf("insides _run_good_case_cuda\n");
 #endif  
@@ -582,7 +548,7 @@ void CudaSimulator::_run_good_case_cuda(const size_t rd, const size_t bits) {
   size_t num_blocks, num_threads;
 
 // Simulation
-  num_blocks = (_num_PIs > 1024) ? (_num_PIs >> 10) : (1); // 1;
+  num_blocks = (_num_PIs > 1024) ? ((_num_PIs + 1024 - 1) >> 10) : (1); // 1;  
   num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs); // _num_PIs;
   // printf("num_blocks = %ld, num_threads = %ld\n", num_blocks, num_threads);
   _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, 0, 0, 0, 0, _num_PIs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, pi_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
@@ -595,7 +561,8 @@ void CudaSimulator::_run_good_case_cuda(const size_t rd, const size_t bits) {
   // since the level_0 belongs to PI, the level_MAX belongs to POs
   size_t accum = 0;
   for (size_t i = 1; i < (_size_of_num_gates_per_level - 1); i++) {
-    num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] >> 10) : (1);//1;
+    
+    num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);//1;
     num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);// _num_gates_per_level[i];
     _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, 0, 0, 0, 0, _num_gates_per_level[i], _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, accum, gate_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
@@ -606,7 +573,317 @@ void CudaSimulator::_run_good_case_cuda(const size_t rd, const size_t bits) {
   }
 
   // POs
-  num_blocks = (_num_POs > 1024) ? (_num_POs >> 10) : (1); // 1;
+  num_blocks = (_num_POs > 1024) ? ((_num_POs + 1024 - 1) >> 10) : (1); // 1;
+  num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);// _num_POs; //_num_POs;
+  _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, 0, 0, 0, 0, _num_POs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, po_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  cudaDeviceSynchronize();  
+  printf("---\n");
+#endif  
+
+  // shift and copy answer to the good results
+  if (bits < SIZE_T_BITS) {
+    num_blocks = (_num_PIs > 1024) ? ((_num_PIs + 1024 - 1) >> 10) : (1); // 1;  
+    num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs);     
+    _shift_to_correct_answer_gpu <<< num_blocks, num_threads >>> (_g_pi_results_gpu, _PIs_gpu, bits, SIZE_T_BITS);
+    
+    num_blocks = (_num_inner_gates > 1024) ? (_num_inner_gates + 1024 - 1) >> 10 : (1);//1;
+    num_threads = (_num_inner_gates > 1024) ? (1024) : (_num_inner_gates);    
+    _shift_to_correct_answer_gpu <<< num_blocks, num_threads >>> (_g_gate_results_gpu, _gates_gpu, bits, SIZE_T_BITS);
+
+    num_blocks = (_num_POs > 1024) ? ((_num_POs + 1024 - 1) >> 10) : (1); // 1;
+    num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);    
+    _shift_to_correct_answer_gpu <<< num_blocks, num_threads >>> (_g_po_results_gpu, _POs_gpu, bits, SIZE_T_BITS);
+  }
+  // cudaDeviceSynchronize();
+}
+
+void CUDASimulator::_run_bad_case_cuda(const size_t rd, const size_t fault_num, const size_t bits) {  
+  size_t wrong_gate = _faults[fault_num]._gate_with_fault;
+  size_t fault_val = _faults[fault_num]._gate_SA_fault_val;
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  printf("wrong_gate = %ld, fault_val = %ld\n", wrong_gate, fault_val);
+#endif
+  size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs,
+  po_idx_accum = (_num_PIs + _num_inner_gates);
+  size_t bad_case = 1;
+  size_t idx_accum_sa = pi_idx_accum;
+  size_t num_blocks, num_threads;
+
+  // fault simulation
+  // size_t SA_fault = ((i + pi_idx_accum) == wrong_gate);
+  idx_accum_sa = pi_idx_accum;
+  num_blocks = (_num_PIs > 1024) ? ((_num_PIs + 1024 - 1) >> 10) : (1); // 1;  
+  num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs); // _num_PIs;
+  _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_PIs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, pi_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  cudaDeviceSynchronize();
+  printf("---\n");
+#endif  
+
+  // since the level_0 belongs to PI, the level_MAX belongs to POs
+  idx_accum_sa = gate_idx_accum;
+  size_t accum = 0;
+  for (size_t i = 1; i < (_size_of_num_gates_per_level - 1); i++) {
+    num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);//1;
+    num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);// _num_gates_per_level[i];
+    _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_gates_per_level[i], _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, accum, gate_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+    cudaDeviceSynchronize();
+    printf("---\n");
+#endif      
+    accum += _num_gates_per_level[i];
+  }
+
+  // POs
+  idx_accum_sa = po_idx_accum;
+  num_blocks = (_num_POs > 1024) ? ((_num_POs + 1024 - 1) >> 10) : (1); // 1;
+  num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);// _num_POs; //_num_POs;
+  _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_POs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, po_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  cudaDeviceSynchronize();  
+  printf("---\n");
+#endif  
+
+  // shift and copy answer to the good results
+  if (bits < SIZE_T_BITS) {
+    num_blocks = (_num_PIs > 1024) ? ((_num_PIs + 1024 - 1) >> 10) : (1); // 1;  
+    num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs);     
+    _shift_to_correct_answer_gpu <<< num_blocks, num_threads >>> (_b_pi_results_gpu, _PIs_gpu, bits, SIZE_T_BITS);
+    
+    num_blocks = (_num_inner_gates > 1024) ? (_num_inner_gates + 1024 - 1) >> 10 : (1);//1;
+    num_threads = (_num_inner_gates > 1024) ? (1024) : (_num_inner_gates);    
+    _shift_to_correct_answer_gpu <<< num_blocks, num_threads >>> (_b_gate_results_gpu, _gates_gpu, bits, SIZE_T_BITS);
+
+    num_blocks = (_num_POs > 1024) ? ((_num_POs + 1024 - 1) >> 10) : (1); // 1;
+    num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);    
+    _shift_to_correct_answer_gpu <<< num_blocks, num_threads >>> (_b_po_results_gpu, _POs_gpu, bits, SIZE_T_BITS);
+  }
+  // cudaDeviceSynchronize();
+}
+
+
+// error checking macro
+#define cudaCheckErrors(msg) \
+    do { \
+        cudaError_t __err = cudaGetLastError(); \
+        if (__err != cudaSuccess) { \
+            fprintf(stderr, "Fatal error: %s (%s at %s:%d)\n", \
+                msg, cudaGetErrorString(__err), \
+                __FILE__, __LINE__); \
+            fprintf(stderr, "*** FAILED - ABORTING\n"); \
+            exit(1); \
+        } \
+    } while (0)
+
+
+__global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fault_val, size_t idx_accum_sa, 
+                              size_t wrong_gate, size_t bad_case, size_t max_gate_num_per_level, 
+                              size_t idx_accum, size_t pi_g_po_idx_accum, 
+                              size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs) {
+
+
+  _params_gpu[0] = rd;
+  _params_gpu[1] = fault_val;
+  _params_gpu[2] = idx_accum_sa;
+  _params_gpu[3] = wrong_gate;
+  _params_gpu[4] = bad_case;
+  _params_gpu[5] = max_gate_num_per_level;
+  _params_gpu[6] = idx_accum;
+  _params_gpu[7] = pi_g_po_idx_accum;
+  _params_gpu[8] = _num_PIs;
+  _params_gpu[9] = _num_inner_gates;
+  _params_gpu[10] = _num_POs;
+}
+
+void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t graph) {
+  std::vector<cudaGraphNode_t> nodeDependencies;
+  size_t num_blocks, num_threads;
+  size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs,
+  po_idx_accum = (_num_PIs + _num_inner_gates);
+
+  void *kernelArgs[7];
+  kernelArgs[0] = (void *)&_PIs_gpu;
+  kernelArgs[1] = (void *)&_gates_gpu; 
+  kernelArgs[2] = (void *)&_POs_gpu; 
+  kernelArgs[3] = (void *)&_patterns_gpu; 
+  kernelArgs[4] = (void *)&_params_gpu; 
+  kernelArgs[5] = (void *)&_gate_inputs_list_gpu; 
+  kernelArgs[6] = (void *)&_gate_inputs_list_start_gpu; 
+
+  // construct PI node
+  cudaGraphNode_t kernelNode_PI;
+  cudaKernelNodeParams kernelNode_PI_Params {0};
+  num_blocks = (_num_PIs > 1024) ? ((_num_PIs + 1024 - 1) >> 10) : (1); // 1;  
+  num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs); // _num_PIs;
+  // _params_gpu, rd, 0, 0, 0, 0, _num_PIs, 0, pi_idx_accum, _num_PIs, _num_inner_gates, _num_POs
+  _change_params <<< 1, 1 >>> (_params_gpu, 0, 0, 0, 0, 0, _num_PIs, 0, pi_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
+  
+  // Adding PI node, as head node of graph
+  kernelNode_PI_Params.func = (void *)_run_gate_graph;
+  kernelNode_PI_Params.gridDim = dim3(num_blocks, 1, 1);
+  kernelNode_PI_Params.blockDim = dim3(num_threads, 1, 1);
+  kernelNode_PI_Params.sharedMemBytes = 0;
+  kernelNode_PI_Params.kernelParams = (void **)kernelArgs;
+  kernelNode_PI_Params.extra = NULL;  
+
+  // push node: PI
+  cudaGraphAddKernelNode(&kernelNode_PI, graph, NULL, 0, &kernelNode_PI_Params);
+  cudaCheckErrors("Adding kernelNode_PI failed");
+
+  nodeDependencies.push_back(kernelNode_PI); // manage dependecy vector
+
+
+  // construct gate nodes
+
+  size_t accum = 0;
+  for (size_t i = 1; i < (_size_of_num_gates_per_level - 1); i++) {
+    
+    // num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);//1;
+    // num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);// _num_gates_per_level[i];
+    // _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, 0, 0, 0, 0, _num_gates_per_level[i], _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, accum, gate_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
+
+    void *kernelArgs_gate[7];
+    kernelArgs_gate[0] = (void *)&_PIs_gpu;
+    kernelArgs_gate[1] = (void *)&_gates_gpu; 
+    kernelArgs_gate[2] = (void *)&_POs_gpu; 
+    kernelArgs_gate[3] = (void *)&_patterns_gpu; 
+    kernelArgs_gate[4] = (void *)&_params_gpu; 
+    kernelArgs_gate[5] = (void *)&_gate_inputs_list_gpu; 
+    kernelArgs_gate[6] = (void *)&_gate_inputs_list_start_gpu; 
+      
+
+    // construct PI node
+    cudaGraphNode_t kernelNode_gate;
+    cudaKernelNodeParams kernelNode_gate_Params {0};
+    num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);//1;
+    num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);// _num_gates_per_level[i];
+    // !!! here is the bug
+    _change_params <<< 1, 1 >>> (_params_gpu, 0, 0, 0, 0, 0, _num_gates_per_level[i], accum, gate_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
+        
+    // Adding nodes
+    kernelNode_gate_Params.func = (void *)_run_gate_graph;
+    kernelNode_gate_Params.gridDim = dim3(num_blocks, 1, 1);
+    kernelNode_gate_Params.blockDim = dim3(num_threads, 1, 1);
+    kernelNode_gate_Params.sharedMemBytes = 0;
+    kernelNode_gate_Params.kernelParams = (void **)kernelArgs_gate;
+    kernelNode_gate_Params.extra = NULL;  
+
+    // push node: gate
+    cudaGraphAddKernelNode(&kernelNode_gate, graph, NULL, 0, &kernelNode_gate_Params);
+    cudaCheckErrors("Adding kernelNode_gate failed");
+
+    nodeDependencies.clear();
+    nodeDependencies.push_back(kernelNode_gate); // manage dependecy vector
+    
+    nodeDependencies.clear();
+    accum += _num_gates_per_level[i];
+  }
+
+  // construct PO node
+
+
+
+
+  // check nodes
+  cudaGraphNode_t *nodes = NULL;
+  size_t numNodes = 0;
+  cudaGraphGetNodes(graph, nodes, &numNodes);
+  cudaCheckErrors("Graph get nodes failed");
+  printf("!!! Number of the nodes in the graph = %zu\n", numNodes);
+}
+
+void CUDASimulator::_run_parallel_cuda_graph() {
+  #ifdef FSIM_DEBUG_PRINT_SIMULATION
+  std::cout << "execute simulation._run_parallel cuda_graph();" << '\n';
+#endif
+
+  // ask memory 
+  _gpu_ask_copy_mem();
+  
+  // construct graph
+  cudaStream_t stream1;
+  cudaStreamCreateWithFlags(&stream1, cudaStreamNonBlocking);
+  cudaGraph_t graph; // main graph
+  cudaGraphCreate(&graph, 0); // create the graph
+  cudaCheckErrors("cudaGraphCreate failure");
+  
+  // construct_graph
+  _construct_cuda_graph(stream1, graph);
+
+  cudaGraphExec_t instance;
+  cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
+  cudaCheckErrors("Graph instantiation failed");
+
+
+  for (size_t rd = 0; rd < _num_rounds; rd++) {
+    size_t num_testcases_this_round =
+        ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
+            ? (SIZE_T_BITS)
+            : (_num_pattern % SIZE_T_BITS);
+
+    // good simulation
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+    std::cout << "CUDA GRAPH: Run Good case" << std::endl;
+#endif
+
+    _run_good_case_cuda_graph(rd, num_testcases_this_round, stream1, instance);
+
+    // bad simulation (fault simulation)
+    for (size_t j = 0; j < _num_fault; j++) {
+      _run_bad_case_cuda_graph(rd, j, num_testcases_this_round);
+      _compare_g_b_results <<< 1, 1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
+    }
+  }
+  
+  // // free mem
+  _free_all();
+}
+
+
+void CUDASimulator::_run_good_case_cuda_graph(const size_t rd, const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance) {
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  printf("insides _run_good_case_cuda_graph\n");
+#endif  
+  size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs,
+  po_idx_accum = (_num_PIs + _num_inner_gates);
+  size_t num_blocks, num_threads;
+
+// // Simulation
+//   num_blocks = (_num_PIs > 1024) ? ((_num_PIs + 1024 - 1) >> 10) : (1); // 1;  
+//   num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs); // _num_PIs;
+  
+//   _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, 0, 0, 0, 0, _num_PIs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, pi_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
+
+
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  cudaDeviceSynchronize();
+  printf("---\n");
+#endif  
+  
+  // since the level_0 belongs to PI, the level_MAX belongs to POs
+  size_t accum = 0;
+  for (size_t i = 1; i < (_size_of_num_gates_per_level - 1); i++) {
+    
+    num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);//1;
+    num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);// _num_gates_per_level[i];
+    _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, 0, 0, 0, 0, _num_gates_per_level[i], _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, accum, gate_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+    cudaDeviceSynchronize();
+    printf("---\n");
+#endif      
+    accum += _num_gates_per_level[i];
+  }
+
+
+  cudaGraphLaunch(instance, stream1);
+  cudaStreamSynchronize(stream1);    
+  cudaCheckErrors("Graph launch failed");
+  cudaDeviceSynchronize();
+
+
+  // POs
+  num_blocks = (_num_POs > 1024) ? ((_num_POs + 1024 - 1) >> 10) : (1); // 1;
   num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);// _num_POs; //_num_POs;
   _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, 0, 0, 0, 0, _num_POs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, po_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
@@ -629,23 +906,9 @@ void CudaSimulator::_run_good_case_cuda(const size_t rd, const size_t bits) {
     _shift_to_correct_answer_gpu <<< num_blocks, num_threads >>> (_g_po_results_gpu, _POs_gpu, bits, SIZE_T_BITS);
   }
   // cudaDeviceSynchronize();
-
-
-// #ifdef FSIM_DEBUG_PRINT_SIMULATION
-// function _shift_to_correct_answer_gpu can print the answer
-// #endif
 }
 
-__global__ void _shift_to_correct_answer_gpu(size_t *outputs, ElementBase *input_arr, const size_t bits, const size_t SIZE_T_BITS) {
-  size_t gate_idx = blockDim.x*blockIdx.x + threadIdx.x;
-  outputs[gate_idx] =  (input_arr[gate_idx]._output_value << (SIZE_T_BITS - bits));
-  outputs[gate_idx] >>= (SIZE_T_BITS - bits);
-#ifdef FSIM_DEBUG_PRINT_SIMULATION
-  printf("gate_idx = %ld, outputs[%ld] = %ld\n", gate_idx, gate_idx, outputs[gate_idx]);
-#endif
-}
-
-void CudaSimulator::_run_bad_case_cuda(const size_t rd, const size_t fault_num, const size_t bits) {  
+void CUDASimulator::_run_bad_case_cuda_graph(const size_t rd, const size_t fault_num, const size_t bits) {  
   size_t wrong_gate = _faults[fault_num]._gate_with_fault;
   size_t fault_val = _faults[fault_num]._gate_SA_fault_val;
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
@@ -660,7 +923,7 @@ void CudaSimulator::_run_bad_case_cuda(const size_t rd, const size_t fault_num, 
   // fault simulation
   // size_t SA_fault = ((i + pi_idx_accum) == wrong_gate);
   idx_accum_sa = pi_idx_accum;
-  num_blocks = (_num_PIs > 1024) ? (_num_PIs >> 10) : (1); // 1;
+  num_blocks = (_num_PIs > 1024) ? ((_num_PIs + 1024 - 1) >> 10) : (1); // 1;  
   num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs); // _num_PIs;
   _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_PIs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, pi_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
@@ -672,7 +935,7 @@ void CudaSimulator::_run_bad_case_cuda(const size_t rd, const size_t fault_num, 
   idx_accum_sa = gate_idx_accum;
   size_t accum = 0;
   for (size_t i = 1; i < (_size_of_num_gates_per_level - 1); i++) {
-    num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] >> 10) : (1);//1;
+    num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);//1;
     num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);// _num_gates_per_level[i];
     _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_gates_per_level[i], _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, accum, gate_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
@@ -684,7 +947,7 @@ void CudaSimulator::_run_bad_case_cuda(const size_t rd, const size_t fault_num, 
 
   // POs
   idx_accum_sa = po_idx_accum;
-  num_blocks = (_num_POs > 1024) ? (_num_POs >> 10) : (1); // 1;
+  num_blocks = (_num_POs > 1024) ? ((_num_POs + 1024 - 1) >> 10) : (1); // 1;
   num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);// _num_POs; //_num_POs;
   _run_gate <<< num_blocks, num_threads >>> (_PIs_gpu, _gates_gpu, _POs_gpu, _patterns_gpu, rd, fault_val, idx_accum_sa, wrong_gate, bad_case, _num_POs, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, 0, po_idx_accum, _num_PIs, _num_inner_gates, _num_POs);
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
@@ -694,15 +957,15 @@ void CudaSimulator::_run_bad_case_cuda(const size_t rd, const size_t fault_num, 
 
   // shift and copy answer to the good results
   if (bits < SIZE_T_BITS) {
-    num_blocks = (_num_PIs > 1024) ? (_num_PIs >> 10) : (1);
+    num_blocks = (_num_PIs > 1024) ? ((_num_PIs + 1024 - 1) >> 10) : (1); // 1;  
     num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs);     
     _shift_to_correct_answer_gpu <<< num_blocks, num_threads >>> (_b_pi_results_gpu, _PIs_gpu, bits, SIZE_T_BITS);
     
-    num_blocks = (_num_inner_gates > 1024) ? (_num_inner_gates >> 10) : (1); 
+    num_blocks = (_num_inner_gates > 1024) ? (_num_inner_gates + 1024 - 1) >> 10 : (1);//1;
     num_threads = (_num_inner_gates > 1024) ? (1024) : (_num_inner_gates);    
     _shift_to_correct_answer_gpu <<< num_blocks, num_threads >>> (_b_gate_results_gpu, _gates_gpu, bits, SIZE_T_BITS);
 
-    num_blocks = (_num_POs > 1024) ? (_num_POs >> 10) : (1);
+    num_blocks = (_num_POs > 1024) ? ((_num_POs + 1024 - 1) >> 10) : (1); // 1;
     num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);    
     _shift_to_correct_answer_gpu <<< num_blocks, num_threads >>> (_b_po_results_gpu, _POs_gpu, bits, SIZE_T_BITS);
   }
@@ -710,8 +973,16 @@ void CudaSimulator::_run_bad_case_cuda(const size_t rd, const size_t fault_num, 
 }
 
 
+__global__ void _shift_to_correct_answer_gpu(size_t *outputs, ElementBase *input_arr, const size_t bits, const size_t SIZE_T_BITS) {
+  size_t gate_idx = blockDim.x*blockIdx.x + threadIdx.x;
+  outputs[gate_idx] =  (input_arr[gate_idx]._output_value << (SIZE_T_BITS - bits));
+  outputs[gate_idx] >>= (SIZE_T_BITS - bits);
+#ifdef FSIM_DEBUG_PRINT_SIMULATION
+  printf("gate_idx = %ld, outputs[%ld] = %ld\n", gate_idx, gate_idx, outputs[gate_idx]);
+#endif
+}
+
 __global__ void _run_gate(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, const size_t rd, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t idx_accum, size_t pi_g_po_idx_accum, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs) {
-// __global__ void _run_gate(ElementBase *gate, Pattern *_patterns_gpu, const size_t rd, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level) {
   size_t t_idx = threadIdx.x;
   size_t b_idx = blockIdx.x;
   size_t gate_idx = blockDim.x * b_idx + t_idx + idx_accum; // tmp
@@ -727,6 +998,86 @@ __global__ void _run_gate(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern 
   // idx_accum: pi_idx_accum, gate_idx_accum, po_idx_accum, 
   size_t SA_fault = (((real_g_idx) == wrong_gate) & bad_case);
   // printf("SA_fault = %ld, real_g_idx = %ld, wrong_gate= %ld\n", SA_fault, real_g_idx, wrong_gate);
+
+  ElementBase *gate;
+  if (real_g_idx < _num_PIs) { // PI
+    gate = &(_PIs_gpu[gate_idx]);
+  } else if (real_g_idx < (_num_PIs+_num_inner_gates)) { // Gate
+    gate = &(_gates_gpu[gate_idx]);
+  } else { // PO
+    gate = &(_POs_gpu[gate_idx]);
+  }
+  
+  if (SA_fault) {
+    gate[0]._output_value = fault_val;
+    return;
+  }
+
+  switch (gate[0]._type) { 
+    case GateType::INV:
+      _apply_INV(gate[0], _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::AND:
+      _apply_AND(gate[0], _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::OR:
+      _apply_OR(gate[0], _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::XOR:
+      _apply_XOR(gate[0], _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::NAND:
+      _apply_NAND(gate[0], _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::NOR:
+      _apply_NOR(gate[0], _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::XNOR:
+      _apply_XNOR(gate[0], _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::MUX:
+      _apply_MUX(gate[0], _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::CLKBUF:
+      _apply_CLKBUF(gate[0], _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::PI:
+      _apply_PI(gate[0], pattern, gate_idx, _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::PO:
+      _apply_PO(gate[0], _PIs_gpu, _gates_gpu, _POs_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu, real_g_idx, _num_PIs, _num_inner_gates, _num_POs);
+    break;
+    case GateType::MAX_GATE_TYPE:
+    break;
+    }
+}
+
+__global__ void _run_gate_graph(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, size_t *_params_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu) {
+  // parameters
+  const size_t rd = _params_gpu[0];
+  const size_t fault_val = _params_gpu[1];
+  const size_t idx_accum_sa = _params_gpu[2];
+  const size_t wrong_gate = _params_gpu[3];
+  const size_t bad_case = _params_gpu[4];
+  const size_t max_gate_num_per_level = _params_gpu[5];
+  const size_t idx_accum = _params_gpu[6];
+  const size_t pi_g_po_idx_accum = _params_gpu[7];
+  const size_t _num_PIs = _params_gpu[8];
+  const size_t _num_inner_gates = _params_gpu[9];
+  const size_t _num_POs = _params_gpu[10];
+
+
+  size_t t_idx = threadIdx.x;
+  size_t b_idx = blockIdx.x;
+  size_t gate_idx = blockDim.x * b_idx + t_idx + idx_accum; // tmp
+  size_t real_g_idx = (gate_idx+pi_g_po_idx_accum); // used to judge is PI, Gate, PO
+    
+  if (gate_idx > (max_gate_num_per_level+idx_accum))
+    return;
+  Pattern &pattern = _patterns_gpu[rd];
+
+  // idx_accum: pi_idx_accum, gate_idx_accum, po_idx_accum, 
+  size_t SA_fault = (((real_g_idx) == wrong_gate) & bad_case);
 
   ElementBase *gate;
   if (real_g_idx < _num_PIs) { // PI
@@ -968,7 +1319,7 @@ size_t found_fault = 0;
 
 
 // todo: this can be merged into the __device__code for acceleration
-void CudaSimulator::_shift_to_correct_answer(size_t *results, const size_t bits, const size_t num_shift_gates) {
+void CUDASimulator::_shift_to_correct_answer(size_t *results, const size_t bits, const size_t num_shift_gates) {
   for (size_t i = 0; i < num_shift_gates; i++) {
     results[i] <<= (SIZE_T_BITS - bits);
     results[i] >>= (SIZE_T_BITS - bits);
@@ -976,7 +1327,7 @@ void CudaSimulator::_shift_to_correct_answer(size_t *results, const size_t bits,
 }
 
 // output file visualization graph
-void CudaSimulator::visualization_graph(const std::string &outputFile) {
+void CUDASimulator::visualization_graph(const std::string &outputFile) {
   using std::string_literals::operator""s;
   size_t pi_idx_accum = 0, gate_idx_accum = _num_PIs,
          po_idx_accum = (_num_PIs + _num_inner_gates);
@@ -1056,7 +1407,7 @@ void CudaSimulator::visualization_graph(const std::string &outputFile) {
 }
 
 // Function to convert GateType to string
-std::string CudaSimulator::gateTypeToString(GateType type) {
+std::string CUDASimulator::gateTypeToString(GateType type) {
   switch (type) {
   case GateType::INV:
     return "INV";
@@ -1086,6 +1437,74 @@ std::string CudaSimulator::gateTypeToString(GateType type) {
 }
 
 
+void CUDASimulator::_gpu_ask_copy_mem() {
+  size_t sum_pi_gates_pos = _num_PIs+_num_inner_gates+_num_POs;
+
+  cudaMalloc((void**)&_PIs_gpu, _num_PIs*sizeof(PI));
+  cudaMalloc((void**)&_gates_gpu, _num_inner_gates*sizeof(Gate));
+  cudaMalloc((void**)&_POs_gpu, _num_POs*sizeof(PO));
+  cudaMalloc((void**)&_faults_gpu, _num_fault*sizeof(Fault));
+  cudaMalloc((void**)&_patterns_gpu, _num_rounds*sizeof(Pattern));
+
+  cudaMalloc((void**)&_g_pi_results_gpu, _num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_g_gate_results_gpu, _num_inner_gates*sizeof(size_t));
+  cudaMalloc((void**)&_g_po_results_gpu, _num_POs*sizeof(size_t));
+  cudaMalloc((void**)&_b_pi_results_gpu, _num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_b_gate_results_gpu, _num_inner_gates*sizeof(size_t));
+  cudaMalloc((void**)&_b_po_results_gpu, _num_POs*sizeof(size_t));
+  cudaMalloc((void**)&_found_fault_to_pattern_gpu, 2*_num_fault*sizeof(size_t));
+  
+  cudaMalloc((void**)&_gate_inputs_list_gpu, sum_inputs_gates*sizeof(size_t));
+  cudaMalloc((void**)&_gate_inputs_list_start_gpu, sum_pi_gates_pos*sizeof(size_t));
+
+  cudaMalloc((void**)&_params_gpu, _num_paras*sizeof(size_t));
+  
+
+  // copy memory 
+  cudaMemcpy(_PIs_gpu, _PIs, _num_PIs*sizeof(PI), cudaMemcpyHostToDevice);
+  cudaMemcpy(_gates_gpu, _gates, _num_inner_gates*sizeof(Gate), cudaMemcpyHostToDevice);
+  cudaMemcpy(_POs_gpu, _POs, _num_POs*sizeof(PO), cudaMemcpyHostToDevice);
+  cudaMemcpy(_faults_gpu, _faults, _num_fault*sizeof(Fault), cudaMemcpyHostToDevice);
+  cudaMemcpy(_patterns_gpu, _patterns, _num_rounds*sizeof(Pattern), cudaMemcpyHostToDevice);
+  
+  cudaMemcpy(_gate_inputs_list_gpu, _gate_inputs_list, sum_inputs_gates*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(_gate_inputs_list_start_gpu, _gate_inputs_list_start, sum_pi_gates_pos*sizeof(size_t), cudaMemcpyHostToDevice);
+}
+
+void CUDASimulator::_free_all() {
+  // CPU 
+  // free(_gate_idx_to_tpg_order_idx);
+  // free(_PIs);
+  // free(_POs);
+  // free(_num_gates_per_level);
+  // free(_faults);
+  // free(_patterns);
+  // free(_gate_inputs_list);
+  // free(_gate_inputs_list_start);
+  // free(_found_fault_to_pattern);
+
+  // GPU
+  cudaFree(_PIs_gpu);
+  cudaFree(_gates_gpu);
+  cudaFree(_POs_gpu);
+  cudaFree(_faults_gpu);
+  cudaFree(_patterns_gpu);
+
+  cudaFree(_g_pi_results_gpu);
+  cudaFree(_g_gate_results_gpu);
+  cudaFree(_g_po_results_gpu);
+  cudaFree(_b_pi_results_gpu);
+  cudaFree(_b_gate_results_gpu);
+  cudaFree(_b_po_results_gpu);
+  cudaFree(_found_fault_to_pattern_gpu);
+  
+  cudaFree(_gate_inputs_list_gpu);
+  cudaFree(_gate_inputs_list_start_gpu); 
+
+  cudaFree(_params_gpu);
+}
+
+
 
 
 
@@ -1098,7 +1517,7 @@ std::string CudaSimulator::gateTypeToString(GateType type) {
 
 
 // debug: print functions
-void CudaSimulator::print_topological(
+void CUDASimulator::print_topological(
   const std::vector<std::vector<size_t>> &adj,
   const std::vector<size_t> &indegree,
   const std::vector<size_t> &order) const {
@@ -1124,7 +1543,7 @@ for (size_t i = 0; i < order.size(); i++) {
 std::cout << "\n";
 }
 
-void CudaSimulator::print_gate_input_order_table(std::vector<std::vector<size_t>> input_table) {
+void CUDASimulator::print_gate_input_order_table(std::vector<std::vector<size_t>> input_table) {
   std::cout << "\ngate_input_order_table:\n";
   for (size_t i = 0; i < input_table.size(); i++) {
     std::cout << "Gate_" << i << ": ";
@@ -1138,7 +1557,7 @@ void CudaSimulator::print_gate_input_order_table(std::vector<std::vector<size_t>
   std::cout << "\n=====\n\n";
 }
 
-void CudaSimulator::print_num_gates_per_level() const {
+void CUDASimulator::print_num_gates_per_level() const {
   std::cout << "\n=====\n\n";
   std::cout << "_num_gates_per_level: \n";
   for (size_t i = 0; i < _size_of_num_gates_per_level; i++) {
@@ -1147,7 +1566,7 @@ void CudaSimulator::print_num_gates_per_level() const {
   std::cout << "\n=====\n\n";
 }
 
-void CudaSimulator::print_ppg(const ElementBase &gate) const {
+void CUDASimulator::print_ppg(const ElementBase &gate) const {
   std::cout << "\n=====\n\n";
   std::cout << "mem_id: " << &gate << "\n";
   std::cout << "idx: " << gate._idx << "\n";
@@ -1162,7 +1581,7 @@ void CudaSimulator::print_ppg(const ElementBase &gate) const {
   std::cout << "output_value: " << gate._output_value << "\n";
 }
 
-void CudaSimulator::print_faults(const Fault *faults) const {
+void CUDASimulator::print_faults(const Fault *faults) const {
   std::cout << "\n=====\n\n"
             << "FSIM_DEBUG_PRINT_FAULTS\n";
   for (size_t i = 0; i < _num_fault; i++) {
@@ -1172,7 +1591,7 @@ void CudaSimulator::print_faults(const Fault *faults) const {
   std::cout << "\n=====\n\n";
 }
 
-void CudaSimulator::print_patterns(const Pattern *patterns,
+void CUDASimulator::print_patterns(const Pattern *patterns,
     const size_t round,
     const size_t num_PIs) const {
   std::cout << "\n=====\n\n";
@@ -1186,7 +1605,7 @@ void CudaSimulator::print_patterns(const Pattern *patterns,
   }
 }
 
-void CudaSimulator::print_bits_stack(const size_t size, const void *const ptr) const {
+void CUDASimulator::print_bits_stack(const size_t size, const void *const ptr) const {
   unsigned char *b = (unsigned char *)ptr;
   unsigned char byte;
   int i, j;
@@ -1199,7 +1618,7 @@ void CudaSimulator::print_bits_stack(const size_t size, const void *const ptr) c
   }
   std::cout << "\n";
 }
-void CudaSimulator::print_found_fault_to_pattern(const size_t *found_fault_to_pattern) const {
+void CUDASimulator::print_found_fault_to_pattern(const size_t *found_fault_to_pattern) const {
   for (size_t i = 0; i < (2 * _num_fault); i += 2) {
     if (found_fault_to_pattern[i] == 1) {
       std::cout << "fault_" << (i / 2) << " is found, with Pattern_"
@@ -1211,7 +1630,7 @@ void CudaSimulator::print_found_fault_to_pattern(const size_t *found_fault_to_pa
   std::cout << "\n=====\n\n";
 }
 
-void CudaSimulator::print_simulation_results(const size_t *pi_results, const size_t *gate_results, const size_t *po_results) const {
+void CUDASimulator::print_simulation_results(const size_t *pi_results, const size_t *gate_results, const size_t *po_results) const {
   for (size_t i = 0; i < _num_PIs; i++) {
     std::cout << "PI_" << i << ".output = " << pi_results[i] << "\n";
   }

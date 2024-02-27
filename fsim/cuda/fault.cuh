@@ -4,14 +4,14 @@
 #include <cstddef>
 
 // Forward declaration
-class CudaSimulator;
+class CUDASimulator;
 class ElementBase;
 class Pattern;
 
 
 class Fault {
 
-  friend class CudaSimulator;
+  friend class CUDASimulator;
 
 public:
   // accessor

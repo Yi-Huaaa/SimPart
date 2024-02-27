@@ -5,10 +5,7 @@
 #include <cublas_v2.h>
 #include <iostream>
 
-
 #include <fsim/cuda_graph/fsim_cuda_graph.cuh>
-
-
 
 // error checking macro
 #define cudaCheckErrors(msg) \
@@ -27,41 +24,27 @@
 
 // Simple short kernels
 __global__
-void kernel_a(float* x, float* y){
+void kernel_a(float* x, float* y, size_t tmp){
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < N) y[idx] += 1;
+    // if (idx == 1) printf("y[%d] = %.2lf\n", idx, y[idx]);
+    if (idx == 0) printf("tmp = %ld\n", tmp);
 }
 
 __global__
 void kernel_c(float* x, float* y){
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < N) y[idx] += 1;
+    // if (idx == 1) printf("y[%d] = %.2lf\n", idx, y[idx]);
 }
 
-
-__global__ void trytry (int *a) {
-  size_t t_idx = threadIdx.x;
-  printf("t_idx = %ld, val = %d\n", t_idx, a[t_idx]);
+__global__ void trytry(float *d_x, float *d_y){
+    for (size_t i = 0; i < 10; i++) {
+        d_x[i] = 1;
+    }
 }
 
 int main(int argc, char *argv[]){
-  // testing functions 
-  int num = 10;
-  int *a_cpu = (int*)malloc(num*sizeof(int));  memset(a_cpu, 0, num*sizeof(int));
-  
-  for (size_t i = 0; i < num; i++) {
-    a_cpu[i] = i*10;
-  }
-
-  int *a_gpu; cudaMalloc((void**)&a_gpu, num*sizeof(int));
-  cudaMemcpy(a_gpu, a_cpu, num*sizeof(int), cudaMemcpyHostToDevice);
-  
-  trytry <<< 1, num >>> (a_gpu);
-  
-  free(a_cpu);
-  cudaFree(a_gpu);
-
-
   cudaStream_t stream1;
 
   cudaStreamCreateWithFlags(&stream1, cudaStreamNonBlocking);
@@ -69,8 +52,6 @@ int main(int argc, char *argv[]){
   cublasHandle_t cublas_handle;
   cublasCreate(&cublas_handle);
   cublasSetStream(cublas_handle, stream1);
-
-
 
 
   // Set up host data and initialize
@@ -117,7 +98,8 @@ int main(int argc, char *argv[]){
   cudaCheckErrors("cudaGraphCreate failure");
 
   // kernel_a and kernel_c use same args
-  void *kernelArgs[2] = {(void *)&d_x, (void *)&d_y};
+  size_t tmp = 2;
+  void *kernelArgs[3] = {(void *)&d_x, (void *)&d_y, (void *)&tmp};
 
   int threads = 512;
   int blocks = (N + (threads - 1) / threads);
@@ -137,11 +119,13 @@ int main(int argc, char *argv[]){
   nodeDependencies.push_back(kernelNode1); // manage dependecy vector
 
   // Adding 2nd node, libraryNode, with kernelNode1 as dependency
+  // Stream capture provides a mechanism to create a graph from existing stream-based APIs:
+  // cudaStreamBeginCapture() and cudaStreamEndCapture()
   cudaStreamBeginCapture(stream1, cudaStreamCaptureModeGlobal);
   cudaCheckErrors("Stream capture begin failure");
 
   // Library call
-  cublasSaxpy(cublas_handle, N, &d_a, d_x, 1, d_y, 1);
+  cublasSaxpy(cublas_handle, N, &d_a, d_x, 1, d_y, 1); // d_y += d_a*d_x
   cudaCheckErrors("cublasSaxpy failure");
 
   cudaStreamEndCapture(stream1, &libraryGraph);
@@ -181,8 +165,11 @@ int main(int argc, char *argv[]){
 
   // Launch the graph instance 100 times
   for (int i = 0; i < 100; ++i){
-      cudaGraphLaunch(instance, stream1);
-      cudaStreamSynchronize(stream1);
+    printf("i = %d\n", i);
+    tmp = i; // un-usable
+    // trytry <<< 1, 1, 0, stream1 >>> (d_x, d_y);
+    cudaGraphLaunch(instance, stream1);
+    cudaStreamSynchronize(stream1);
   }
   cudaCheckErrors("Graph launch failed");
   cudaDeviceSynchronize();
@@ -194,7 +181,7 @@ int main(int argc, char *argv[]){
   cudaDeviceSynchronize();
 
   // Print out the first 25 values of h_y
-  for (int i = 0; i < 25; ++i){
+  for (int i = 0; i < 100; ++i){
       printf("%2.0f ", h_y[i]);
   }
   printf("\n");

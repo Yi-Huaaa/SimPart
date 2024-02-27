@@ -3,7 +3,8 @@
 
 #include <fsim/cuda/fsim_cuda.cuh>
 
-#define run_cuda
+// #define run_cuda
+#define run_cuda_graph
 // #define visualization
 // #define print_output
 // #define test_makefile
@@ -14,7 +15,7 @@ double round_to(double value, double precision = 1.0){
 
 int main(int argc, char *argv[]) {
   // user perspective
-  CudaSimulator simulator;
+  CUDASimulator simulator;
 
 #ifdef test_makefile
   simulator.do_hello();
@@ -38,10 +39,19 @@ int main(int argc, char *argv[]) {
 #ifdef run_cuda
   mode = 0;
   start = std::chrono::steady_clock::now();
-    simulator.run(CudaSimulator::Mode(static_cast<size_t>(mode)), 1);
+    simulator.run(CUDASimulator::Mode(static_cast<size_t>(mode)), 1);
   end = std::chrono::steady_clock::now();
   duration_CUDA = end - start;
 #endif
+  
+#ifdef run_cuda_graph
+  mode = 1;
+  start = std::chrono::steady_clock::now();
+    simulator.run(CUDASimulator::Mode(static_cast<size_t>(mode)), 1);
+  end = std::chrono::steady_clock::now();
+  duration_CUDA = end - start;
+#endif
+
 
 #ifdef visualization
   // write file: visualization_graph

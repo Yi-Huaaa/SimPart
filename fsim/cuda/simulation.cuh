@@ -5,6 +5,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cuda_runtime_api.h>
+#include <cublas_v2.h>
 
 #include "base_ppg.cuh"
 #include "fault.cuh"
@@ -21,6 +23,7 @@ __global__ void _run_gate_gpu(size_t *inputs);
 __global__ void _run_gate(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, const size_t rd, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t idx_accum, 
   size_t pi_g_po_idx_accum, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 __global__ void _compare_g_b_results(const size_t j, const size_t _num_POs, const size_t rd, size_t *_g_po_results_gpu, size_t *_b_po_results_gpu, size_t *_found_fault_to_pattern_gpu);
+__global__ void _run_gate_graph(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, size_t *_params_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu);
 
 __device__ __forceinline__ void _apply_INV(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 __device__ __forceinline__ void _apply_AND(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
@@ -35,16 +38,20 @@ __device__ __forceinline__ void _apply_PI(ElementBase &gate, const Pattern patte
 __device__ __forceinline__ void _apply_PO(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 __global__ void _shift_to_correct_answer_gpu(size_t *outputs, ElementBase *input_arr, const size_t bits, const size_t SIZE_T_BITS);
 
+__global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fault_val, size_t idx_accum_sa, 
+  size_t wrong_gate, size_t bad_case, size_t max_gate_num_per_level, 
+  size_t idx_accum, size_t pi_g_po_idx_accum, 
+  size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 
 // print for check
-// #define FSIM_DEBUG_PRINT_SIMULATION
+#define FSIM_DEBUG_PRINT_SIMULATION
 // #define FSIM_DEBUG_PRINT_GRAPH
 // #define FSIM_DEBUG_PRINT_FAULTS
 // #define FSIM_DEBUG_PRINT_PATTERNS
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
 
 
-class CudaSimulator {
+class CUDASimulator {
 
 // constexpr size_t SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
@@ -53,7 +60,11 @@ const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
 friend __global__ void _run_gate(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, const size_t rd, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t idx_accum, size_t pi_g_po_idx_accum, size_t _num_inner_gates, size_t _num_POs);
 friend __global__ void _shift_to_correct_answer_gpu(size_t *outputs, ElementBase *input_arr, const size_t bits, const size_t SIZE_T_BITS);
 friend __global__ void _compare_g_b_results(const size_t j, const size_t _num_POs, const size_t rd, size_t *_g_po_results_gpu, size_t *_b_po_results_gpu, size_t *_found_fault_to_pattern_gpu);
-
+friend __global__ void _run_gate_graph(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, size_t *_params_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu);
+friend __global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fault_val, size_t idx_accum_sa, 
+                              size_t wrong_gate, size_t bad_case, size_t max_gate_num_per_level, 
+                              size_t idx_accum, size_t pi_g_po_idx_accum, 
+                              size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 public:
  
   // testing functions 
@@ -77,7 +88,7 @@ public:
 // =======================================================================
 
   // cuda simulator functions 
-  enum class Mode { CUDA=0 };
+  enum class Mode { CUDA=0, CUDA_GRAPH };
 
   void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
@@ -125,13 +136,6 @@ private:
   void _read_pattern(std::istream &ptn);
 
   // Simulation
-  // size_t *_g_pi_results;
-  // size_t *_g_gate_results;
-  // size_t *_g_po_results;
-  // size_t *_b_pi_results;
-  // size_t *_b_gate_results;
-  // size_t *_b_po_results;
-  // size_t *_found_fault_to_pattern;
   size_t *_gate_inputs_list;
   size_t *_gate_inputs_list_start;
   size_t sum_inputs_gates;
@@ -156,15 +160,23 @@ private:
   size_t *_b_gate_results_gpu; 
   size_t *_b_po_results_gpu;   
 
+  // memory
+  size_t *_params_gpu; // used for constructing cuda_graph parameters
+  size_t _num_paras = 8;
+  void _gpu_ask_copy_mem();
+  void _free_all();
+  
   // parallel-cuda
   void _run_parallel_cuda();
   void _run_good_case_cuda(const size_t rd, const size_t bits);
   void _run_bad_case_cuda(const size_t rd, const size_t fault_num, const size_t bits);
   void _shift_to_correct_answer(size_t *results, const size_t bits, const size_t num_shift_gates);
 
-  
-  
-
+  // parallel-cuda-graph
+  void _construct_cuda_graph(cudaStream_t stream1, cudaGraph_t graph);
+  void _run_parallel_cuda_graph();
+  void _run_good_case_cuda_graph(const size_t rd, const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
+  void _run_bad_case_cuda_graph(const size_t rd, const size_t fault_num, const size_t bits);
 
   // print for debug
   void print_topological(const std::vector<std::vector<size_t>> &adj,

@@ -8,11 +8,11 @@
 #include "./base_ppg.cuh"
 
 // forward declaration 
-class CudaSimulator;
+class CUDASimulator;
 
 class PO : public ElementBase {
 
-  friend class CudaSimulator;
+  friend class CUDASimulator;
  
 public:
 

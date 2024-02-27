@@ -13,14 +13,14 @@
 #define default_output_value 0
 
 
-class CudaSimulator;
+class CUDASimulator;
 class ElementBase;
 class Pattern;
 class Fault;
 
 class Gate : public ElementBase {
 
-  friend class CudaSimulator;
+  friend class CUDASimulator;
   friend class PI;
   friend class PO; 
   
