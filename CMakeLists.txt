@@ -67,9 +67,9 @@ if(FSIM_BUILD_CUDA)
     message(FATAL_ERROR "\nNo CUDA compiler found")
   endif()
   enable_language(CUDA)
-  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS "11")
+  if(CMAKE_CUDA_COMPILER_VERSION VERSION_LESS "11") # need 12.2 (or higher)
     message(STATUS "CMAKE_CUDA_COMPILER_VERSION: ${CMAKE_CUDA_COMPILER_VERSION}")
-    message(FATAL_ERROR "\nfsim requires CUDA at least v11")
+    message(FATAL_ERROR "\nfsim requires CUDA at least v12 (Driver: version 550 or higher)")
   endif()
 
   # configure cuBLAS

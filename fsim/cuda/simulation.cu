@@ -752,10 +752,9 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
   // construct gate nodes
   void *kernelArgs_gate[7];
   size_t accum = 0;
-  std::vector<cudaGraphNode_t> kernelNode_gate;
-  std::vector<cudaKernelNodeParams> kernelNode_gate_Params;
-  kernelNode_gate.resize(_size_of_num_gates_per_level - 2);
-  kernelNode_gate_Params.resize(_size_of_num_gates_per_level - 2);
+  cudaGraphNode_t *kernelNode_gate = (cudaGraphNode_t *)malloc((_size_of_num_gates_per_level - 2)*sizeof(cudaGraphNode_t));
+  cudaKernelNodeParams *kernelNode_gate_Params = (cudaKernelNodeParams *)malloc((_size_of_num_gates_per_level - 2)*sizeof(cudaKernelNodeParams));
+  // printf("size: cudaGraphNode_t = %ld, _size_of_num_gates_per_level - 2 = %ld\n", sizeof(cudaGraphNode_t), _size_of_num_gates_per_level - 2);
 
   for (size_t i = 1; i < (_size_of_num_gates_per_level - 1); i++) {
     params_gpu_idx_accum += _num_paras;
@@ -788,8 +787,6 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
     cudaGraphAddKernelNode(&kernelNode_gate[i-1], graph, NULL, 0, &kernelNode_gate_Params[i-1]);
     cudaCheckErrors("Adding kernelNode_gate failed");
 
-    // nodeDependencies.clear();
-    // nodeDependencies.push_back(kernelNode_gate[i-1]); // manage dependecy vector    
     accum += _num_gates_per_level[i];
   }
 
@@ -833,6 +830,9 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
     cudaGraphAddDependencies(graph, &kernelNode_gate[i], &kernelNode_gate[i+1], 1);
   }
   cudaGraphAddDependencies(graph, &kernelNode_gate[_size_of_num_gates_per_level-3], &kernelNode_PO, 1);
+
+  free(kernelNode_gate);
+  free(kernelNode_gate_Params);
 
 #ifdef CUDA_GRAPH_CHECK
   cudaDeviceSynchronize();
@@ -1568,6 +1568,88 @@ void CUDASimulator::_free_all() {
 
 
 
+
+#ifdef test_cuGraphExecNodeSetParams
+__global__ void _change_params_test(size_t *_params_gpu_tmptmp, size_t num, size_t rd){
+  for (size_t i = 0; i < num; i++) {
+    _params_gpu_tmptmp[i] = rd;
+  }
+}
+
+__global__ void test_cuGraphExecNodeSetParams_gpu (size_t *_params_gpu_tmptmp, size_t num, size_t rd) {
+  printf("GPU: ");
+  for (size_t i = 0; i < num; i++) {
+    printf("%ld, ", _params_gpu_tmptmp[i]);
+  } printf("\n");
+}
+
+void CUDASimulator::test_cuGraphExecNodeSetParams_cpu () {
+  // construct graph
+  cudaStream_t stream1;
+  cudaStreamCreateWithFlags(&stream1, cudaStreamNonBlocking);
+  cudaGraph_t graph; // main graph
+  cudaGraphCreate(&graph, 0); // create the graph
+  cudaCheckErrors("cudaGraphCreate failure");
+  
+  size_t num = 10;
+  size_t rd = 100;
+  
+  // asking for memory 
+  cudaMalloc((void**)&_params_gpu_tmptmp, num*sizeof(size_t));
+
+  void *kernelArgs[3];
+  kernelArgs[0] = (void *)&_params_gpu_tmptmp;
+  kernelArgs[1] = (void *)&num;
+  kernelArgs[2] = (void *)&rd;
+
+  
+  cudaGraphNode_t kernelNode_test;
+  cudaKernelNodeParams kernelNode_test_Params {0};
+  size_t num_blocks = 1;
+  size_t num_threads = 1;
+  _change_params_test <<< 1, 1, 0, stream1 >>> (_params_gpu_tmptmp, num, rd);
+  cudaStreamSynchronize(stream1);    
+  cudaDeviceSynchronize();
+
+  // Adding node
+  kernelNode_test_Params.func = (void *)test_cuGraphExecNodeSetParams_gpu;
+  kernelNode_test_Params.gridDim = dim3(num_blocks, 1, 1);
+  kernelNode_test_Params.blockDim = dim3(num_threads, 1, 1);
+  kernelNode_test_Params.sharedMemBytes = 0;
+  kernelNode_test_Params.kernelParams = (void **)(kernelArgs);
+  kernelNode_test_Params.extra = NULL;  
+
+  // push node
+  cudaGraphAddKernelNode(&kernelNode_test, graph, NULL, 0, &kernelNode_test_Params);
+  // __host__ ​cudaError_t cudaGraphAddKernelNode ( cudaGraphNode_t* pGraphNode, cudaGraph_t graph, const cudaGraphNode_t* pDependencies, size_t numDependencies, const cudaKernelNodeParams* pNodeParams )
+
+  cudaCheckErrors("Adding kernelNode_test failed");
+
+  // Instantiate cudaGraph
+  cudaGraphExec_t instance;
+  cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
+  cudaCheckErrors("Graph instantiation failed");
+
+  // changed rd
+  for (size_t rd_cpu = 0; rd_cpu < 20; rd_cpu++) {
+    printf("CPU: rd = %ld\n", rd_cpu);
+    rd = rd_cpu;
+    
+    // change var
+    _change_params_test <<< 1, 1, 0, stream1 >>> (_params_gpu_tmptmp, num, rd);
+    cudaStreamSynchronize(stream1);    
+    // __host__ ​cudaError_t cudaGraphExecKernelNodeSetParams ( cudaGraphExec_t hGraphExec, cudaGraphNode_t node, const cudaKernelNodeParams* pNodeParams )
+    cudaGraphExecKernelNodeSetParams(instance, kernelNode_test, &kernelNode_test_Params);
+
+    cudaGraphLaunch(instance, stream1);
+    cudaStreamSynchronize(stream1);    
+    cudaCheckErrors("Graph launch failed");
+    printf("======\n\n");
+    cudaDeviceSynchronize();  
+  }
+
+}
+#endif  
 
 
 

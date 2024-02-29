@@ -44,13 +44,13 @@ __global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fault_val,
   size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 
 // print for check
-#define FSIM_DEBUG_PRINT_SIMULATION
+// #define FSIM_DEBUG_PRINT_SIMULATION
 // #define FSIM_DEBUG_PRINT_GRAPH
 // #define FSIM_DEBUG_PRINT_FAULTS
 // #define FSIM_DEBUG_PRINT_PATTERNS
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
 #define CUDA_GRAPH_CHECK
-
+// #define test_cuGraphExecNodeSetParams
 
 class CUDASimulator {
 
@@ -166,7 +166,16 @@ private:
   size_t _num_paras = 11;
   void _gpu_ask_copy_mem();
   void _free_all();
+
   
+// TESTING
+#ifdef test_cuGraphExecNodeSetParams  
+size_t *_params_gpu_tmptmp; // used for testing --> DELETE!
+void test_cuGraphExecNodeSetParams_cpu();
+#endif
+// TESTING
+
+
   // parallel-cuda
   void _run_parallel_cuda();
   void _run_good_case_cuda(const size_t rd, const size_t bits);
