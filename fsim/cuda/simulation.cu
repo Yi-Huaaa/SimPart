@@ -935,7 +935,7 @@ void CUDASimulator::_run_parallel_cuda_graph() {
                         &kernelNode_PO, &kernelNode_PO_Params, 
                         kernelArgs_PI, kernelArgs_gate, kernelArgs_PO, params_gpu_idx);
   
-  printf("debug! %d, %d, %p\n", kernelNode_PI_Params.gridDim.x, kernelNode_PI_Params.blockDim.x, kernelNode_PI_Params.kernelParams[4]);
+  // printf("debug! %d, %d, %p\n", kernelNode_PI_Params.gridDim.x, kernelNode_PI_Params.blockDim.x, kernelNode_PI_Params.kernelParams[4]);
 
   cudaGraphExec_t instance;
   cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
@@ -960,11 +960,11 @@ void CUDASimulator::_run_parallel_cuda_graph() {
     
     _run_good_case_cuda_graph(rd, num_testcases_this_round, stream1, instance);
 
-    // // bad simulation (fault simulation)
-    // for (size_t j = 0; j < _num_fault; j++) {
-    //   _run_bad_case_cuda_graph(rd, j, num_testcases_this_round);
-    //   _compare_g_b_results <<< 1, 1, 0, stream1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
-    // }
+    // bad simulation (fault simulation)
+    for (size_t j = 0; j < _num_fault; j++) {
+      _run_bad_case_cuda_graph(rd, j, num_testcases_this_round);
+      _compare_g_b_results <<< 1, 1, 0, stream1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
+    }
   }
   
   // // free mem

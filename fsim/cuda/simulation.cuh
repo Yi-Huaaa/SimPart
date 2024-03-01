@@ -45,12 +45,12 @@ __global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fault_val,
 __global__ void _update_params (size_t *_params_gpu, size_t _num_paras, size_t new_rd, size_t limit_sz);
 
 // print for check
-#define FSIM_DEBUG_PRINT_SIMULATION
+// #define FSIM_DEBUG_PRINT_SIMULATION
 // #define FSIM_DEBUG_PRINT_GRAPH
 // #define FSIM_DEBUG_PRINT_FAULTS
 // #define FSIM_DEBUG_PRINT_PATTERNS
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
-#define CUDA_GRAPH_CHECK
+// #define CUDA_GRAPH_CHECK
 // #define test_cuGraphExecNodeSetParams
 
 class CUDASimulator {
