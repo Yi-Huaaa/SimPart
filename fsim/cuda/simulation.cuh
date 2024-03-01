@@ -42,9 +42,10 @@ __global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fault_val,
   size_t wrong_gate, size_t bad_case, size_t max_gate_num_per_level, 
   size_t idx_accum, size_t pi_g_po_idx_accum, 
   size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__global__ void _update_params (size_t *_params_gpu, size_t _num_paras, size_t new_rd, size_t limit_sz);
 
 // print for check
-// #define FSIM_DEBUG_PRINT_SIMULATION
+#define FSIM_DEBUG_PRINT_SIMULATION
 // #define FSIM_DEBUG_PRINT_GRAPH
 // #define FSIM_DEBUG_PRINT_FAULTS
 // #define FSIM_DEBUG_PRINT_PATTERNS
@@ -183,7 +184,24 @@ void test_cuGraphExecNodeSetParams_cpu();
   void _shift_to_correct_answer(size_t *results, const size_t bits, const size_t num_shift_gates);
 
   // parallel-cuda-graph
-  void _construct_cuda_graph(cudaStream_t stream1, cudaGraph_t graph);
+  void _construct_cuda_graph(cudaStream_t stream1, cudaGraph_t graph, 
+                            cudaGraphNode_t *kernelNode_PI, 
+                            cudaKernelNodeParams *kernelNode_PI_Params,
+                            cudaGraphNode_t *kernelNode_gate, 
+                            cudaKernelNodeParams *kernelNode_gate_Params, 
+                            cudaGraphNode_t *kernelNode_PO, 
+                            cudaKernelNodeParams *kernelNode_PO_Params,
+                            void **kernelArgs_PI,
+                            void **kernelArgs_gate,
+                            void **kernelArgs_PO,
+                            size_t **params_gpu_idx);
+  void _update_cuda_graph_params(cudaStream_t stream1, cudaGraphExec_t instance, size_t new_rd, 
+                            cudaGraphNode_t *kernelNode_PI, 
+                            cudaKernelNodeParams *kernelNode_PI_Params,
+                            cudaGraphNode_t *kernelNode_gate, 
+                            cudaKernelNodeParams *kernelNode_gate_Params, 
+                            cudaGraphNode_t *kernelNode_PO, 
+                            cudaKernelNodeParams *kernelNode_PO_Params);
   void _run_parallel_cuda_graph();
   void _run_good_case_cuda_graph(const size_t rd, const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
   void _run_bad_case_cuda_graph(const size_t rd, const size_t fault_num, const size_t bits);

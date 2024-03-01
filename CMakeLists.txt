@@ -80,7 +80,10 @@ if(FSIM_BUILD_CUDA)
   message(STATUS "CUBLAS_INCLUDE_DIRS: ${CUBLAS_INCLUDE_DIRS}")
   message(STATUS "CUBLAS_LIBRARIES: ${CUBLAS_LIBRARIES}")
 
+  # Set the desired CUDA compute capability
+  set(CUDA_COMPUTE_CAPABILITY "86" CACHE STRING "CUDA compute capability")
 endif()
+
 
 # # Add cuBLAS library if necessary
 # if (FSIM_BUILD_CUDA)
