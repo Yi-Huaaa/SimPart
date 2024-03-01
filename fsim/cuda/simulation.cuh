@@ -200,14 +200,15 @@ void test_cuGraphExecNodeSetParams_cpu();
 
   void _run_good_case_cuda_graph(const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
   void _run_bad_case_cuda_graph(const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
-  void _update_cuda_graph_params(cudaStream_t stream1, cudaGraphExec_t instance, size_t new_rd, 
-                            cudaGraphNode_t *kernelNode_PI, 
-                            cudaKernelNodeParams *kernelNode_PI_Params,
-                            cudaGraphNode_t *kernelNode_gate, 
-                            cudaKernelNodeParams *kernelNode_gate_Params, 
-                            cudaGraphNode_t *kernelNode_PO, 
-                            cudaKernelNodeParams *kernelNode_PO_Params);
-  
+  void _update_cuda_graph_params(cudaStream_t stream1, cudaGraphExec_t instance, 
+                                size_t rd, size_t wrong_gate, size_t fault_val, size_t bad_case,  
+                                cudaGraphNode_t *kernelNode_PI, 
+                                cudaKernelNodeParams *kernelNode_PI_Params,
+                                cudaGraphNode_t *kernelNode_gate, 
+                                cudaKernelNodeParams *kernelNode_gate_Params, 
+                                cudaGraphNode_t *kernelNode_PO, 
+                                cudaKernelNodeParams *kernelNode_PO_Params);
+      
 
                         
   
