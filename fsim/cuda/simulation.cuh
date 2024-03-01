@@ -38,11 +38,12 @@ __device__ __forceinline__ void _apply_PI(ElementBase &gate, const Pattern patte
 __device__ __forceinline__ void _apply_PO(ElementBase &gate, PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t real_g_idx, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 __global__ void _shift_to_correct_answer_gpu(size_t *outputs, ElementBase *input_arr, const size_t bits, const size_t SIZE_T_BITS);
 
-__global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fault_val, size_t idx_accum_sa, 
-  size_t wrong_gate, size_t bad_case, size_t max_gate_num_per_level, 
-  size_t idx_accum, size_t pi_g_po_idx_accum, 
-  size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
-__global__ void _update_params (size_t *_params_gpu, size_t _num_paras, size_t new_rd, size_t limit_sz);
+__global__ void _set_params(size_t *_params_gpu, size_t rd, size_t fault_val, size_t idx_accum_sa, 
+                            size_t wrong_gate, size_t bad_case, size_t max_gate_num_per_level, 
+                            size_t idx_accum, size_t pi_g_po_idx_accum, 
+                            size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__global__ void _update_params_gpu (size_t *_params_gpu, size_t _num_paras, size_t limit_sz, 
+                                    size_t new_rd, size_t new_fault_val, size_t new_wrong_gate, size_t new_bad_case);
 
 // print for check
 // #define FSIM_DEBUG_PRINT_SIMULATION
@@ -51,7 +52,7 @@ __global__ void _update_params (size_t *_params_gpu, size_t _num_paras, size_t n
 // #define FSIM_DEBUG_PRINT_PATTERNS
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
 // #define CUDA_GRAPH_CHECK
-// #define test_cuGraphExecNodeSetParams
+// #define TEST_cuGraphExecNodeSetParams
 
 class CUDASimulator {
 
@@ -195,6 +196,10 @@ void test_cuGraphExecNodeSetParams_cpu();
                             void **kernelArgs_gate,
                             void **kernelArgs_PO,
                             size_t **params_gpu_idx);
+  void _run_parallel_cuda_graph();
+
+  void _run_good_case_cuda_graph(const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
+  void _run_bad_case_cuda_graph(const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
   void _update_cuda_graph_params(cudaStream_t stream1, cudaGraphExec_t instance, size_t new_rd, 
                             cudaGraphNode_t *kernelNode_PI, 
                             cudaKernelNodeParams *kernelNode_PI_Params,
@@ -202,9 +207,12 @@ void test_cuGraphExecNodeSetParams_cpu();
                             cudaKernelNodeParams *kernelNode_gate_Params, 
                             cudaGraphNode_t *kernelNode_PO, 
                             cudaKernelNodeParams *kernelNode_PO_Params);
-  void _run_parallel_cuda_graph();
-  void _run_good_case_cuda_graph(const size_t rd, const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
-  void _run_bad_case_cuda_graph(const size_t rd, const size_t fault_num, const size_t bits);
+  
+
+                        
+  
+  
+  
 
   // print for debug
   void print_topological(const std::vector<std::vector<size_t>> &adj,
