@@ -8,6 +8,9 @@
 #include <queue>
 #include <string>
 #include <vector>
+#include <list>
+#include <unordered_set>
+
 #include <cuda_runtime_api.h>
 #include <cublas_v2.h>
 
@@ -359,9 +362,6 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
 #endif  
   // new// new// new// new// new// new// new// new// new
   
-
-
-
   /** levelize */
   // levelize PIs -> set by the default_level (= 0), note: all PIs belond to the
   // level_0 , making the parallel in omp becomes easier levelize gates
@@ -404,7 +404,16 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   for (size_t i = 0; i < _max_level + 1; i++) {
     _max_gate_size_of_levels = (_num_gates_per_level[i] > _max_gate_size_of_levels) ? (_num_gates_per_level[i]) : (_max_gate_size_of_levels);
   }
-  
+
+
+
+#ifdef FSIM_PARTITION_FFR
+  // find FFR
+  _find_FFRs();
+  // merge small FFR
+  _merge_FFRs();
+#endif 
+
 #ifdef FSIM_DEBUG_PRINT_GRAPH
   printf("_max_level = %ld, _max_gate_size_of_levels = %ld\n", _max_level, _max_gate_size_of_levels);
   
@@ -429,6 +438,61 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
 #endif
 }
 
+
+void CUDASimulator::_DFS(std::vector<bool> &visited, std::list<size_t> &region, size_t gate_idx) {
+  region.push_front(gate_idx);
+  visited[gate_idx] = true;
+
+  for (size_t i = 0; i < _gates[gate_idx]._num_inputs; i++){
+    ElementBase *pre_gate = _gates[gate_idx]._inputs[i];
+    size_t tmp_idx = (pre_gate->_idx - _num_PIs);
+    if ((pre_gate->_type != GateType::PI) && (visited[tmp_idx] == false)) {
+      _DFS(visited, region, tmp_idx);
+    }
+  }
+}
+
+void CUDASimulator::_find_FFRs() { // find fanout-free regions
+  // check the nodes with inputs larger than 2
+  std::vector<size_t> gate_num_outputs;
+  gate_num_outputs.resize(_num_inner_gates);
+  for (size_t i = 0; i < _num_inner_gates; i++) {
+    for (size_t j = 0; j < _gates[i]._num_inputs; j++) {
+      if ((_gates[i]._inputs[j])->_type != GateType::PI) {
+        gate_num_outputs[((_gates[i]._inputs[j])->_idx)-_num_PIs]++;
+      }
+    }
+  }
+  
+  // back DFS
+  std::vector<bool> visited(_num_inner_gates, false);
+  for (size_t i = 0; i < gate_num_outputs.size(); i++) {
+    if (gate_num_outputs[i] != 1 && visited[i] == false) {
+      std::list<size_t> region;
+      _DFS(visited, region, i);
+      // printf("region.size() = %ld\n", region.size());
+      regions.push_back(region);
+    }
+  }
+  
+#ifdef FSIM_CHECK_FFR
+  printf("Fanout-Free Regions (FFR):\n"); 
+  for (size_t i = 0; i < regions.size(); ++i) {
+    printf("Region[%ld] (size = %ld): ", i+1, regions[i].size());
+    for (auto it = regions[i].begin(); it != regions[i].end(); ++it) {
+      printf("%ld, ", (*it)+_num_PIs);
+    }
+    printf("\n");
+  }
+#endif 
+}
+
+void CUDASimulator::_merge_FFRs() {
+  
+}
+
+
+
 void CUDASimulator::_read_fault(std::istream &flst) {
   // _faults.resize(_num_fault);
   cudaMallocManaged(&_faults, _num_fault*sizeof(Fault));
@@ -442,6 +506,8 @@ void CUDASimulator::_read_fault(std::istream &flst) {
     _faults[i]._gate_SA_fault_val =
         (fault_value) ? std::numeric_limits<size_t>::max() : (0);
   }
+
+  // todo: sort the faults 
 
 #ifdef FSIM_DEBUG_PRINT_FAULTS
   print_faults(_faults);
@@ -988,34 +1054,34 @@ void CUDASimulator::_run_parallel_cuda_graph() {
     std::cout << "CUDA GRAPH: Run Good case" << std::endl;
 #endif
     
-    // update to good case parameters
-    wrong_gate = 0;
-    fault_val = 0;
-    bad_case = 0;    
-    // update KernelNodes params (good case)
-    _update_cuda_graph_params(stream1, instance, rd, wrong_gate, fault_val, bad_case,
-                              &kernelNode_PI, &kernelNode_PI_Params,
-                              kernelNode_gate, kernelNode_gate_Params,
-                              &kernelNode_PO, &kernelNode_PO_Params);
+    // // update to good case parameters
+    // wrong_gate = 0;
+    // fault_val = 0;
+    // bad_case = 0;    
+    // // update KernelNodes params (good case)
+    // _update_cuda_graph_params(stream1, instance, rd, wrong_gate, fault_val, bad_case,
+    //                           &kernelNode_PI, &kernelNode_PI_Params,
+    //                           kernelNode_gate, kernelNode_gate_Params,
+    //                           &kernelNode_PO, &kernelNode_PO_Params);
     
-    _run_good_case_cuda_graph(num_testcases_this_round, stream1, instance);
+    // _run_good_case_cuda_graph(num_testcases_this_round, stream1, instance);
 
     
-    // bad simulation (fault simulation)
-    for (size_t j = 0; j < _num_fault; j++) {
-      // update to bad case parameters
-      wrong_gate = _faults[j]._gate_with_fault;
-      fault_val = _faults[j]._gate_SA_fault_val;
-      bad_case = 1;
-      // update KernelNodes params (bad case)
-      _update_cuda_graph_params(stream1, instance, rd, wrong_gate, fault_val, bad_case,
-                                &kernelNode_PI, &kernelNode_PI_Params,
-                                kernelNode_gate, kernelNode_gate_Params,
-                                &kernelNode_PO, &kernelNode_PO_Params);
+    // // bad simulation (fault simulation)
+    // for (size_t j = 0; j < _num_fault; j++) {
+    //   // update to bad case parameters
+    //   wrong_gate = _faults[j]._gate_with_fault;
+    //   fault_val = _faults[j]._gate_SA_fault_val;
+    //   bad_case = 1;
+    //   // update KernelNodes params (bad case)
+    //   _update_cuda_graph_params(stream1, instance, rd, wrong_gate, fault_val, bad_case,
+    //                             &kernelNode_PI, &kernelNode_PI_Params,
+    //                             kernelNode_gate, kernelNode_gate_Params,
+    //                             &kernelNode_PO, &kernelNode_PO_Params);
 
-      _run_bad_case_cuda_graph(num_testcases_this_round, stream1, instance);
-      _compare_g_b_results <<< 1, 1, 0, stream1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
-    }
+    //   _run_bad_case_cuda_graph(num_testcases_this_round, stream1, instance);
+    //   _compare_g_b_results <<< 1, 1, 0, stream1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
+    // }
   }
   
   // // free mem

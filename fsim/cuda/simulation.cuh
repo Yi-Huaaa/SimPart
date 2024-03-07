@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 #include <cuda_runtime_api.h>
+#include <unordered_set>
+#include <list>
 #include <cublas_v2.h>
 
 #include "base_ppg.cuh"
@@ -53,6 +55,8 @@ __global__ void _update_params_gpu (size_t *_params_gpu, size_t _num_paras, size
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
 // #define CUDA_GRAPH_CHECK
 // #define TEST_cuGraphExecNodeSetParams
+#define FSIM_PARTITION_FFR // partition_FFR
+#define FSIM_CHECK_FFR
 
 class CUDASimulator {
 
@@ -69,27 +73,6 @@ friend __global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fau
                               size_t idx_accum, size_t pi_g_po_idx_accum, 
                               size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 public:
- 
-  // testing functions 
-  void do_hello () {
-    printf("???\n");
-    helloCUDA <<< 1, 1 >>> ();
-    
-    _init();
-    _run_gate_gpu <<< 1, 1 >>> (inputs_gpu);
-    cudaDeviceSynchronize();
-
-    printf("check\n");
-    size_t num = 10;
-    for (size_t i = 0; i < num; i++) {
-      printf("%ld, ", inputs_gpu[i]);
-    } printf("\n");
-  }
-
-
-
-// =======================================================================
-
   // cuda simulator functions 
   enum class Mode { CUDA=0, CUDA_GRAPH };
 
@@ -137,6 +120,13 @@ private:
   void _read_graph(std::istream &ckt);
   void _read_fault(std::istream &flst);
   void _read_pattern(std::istream &ptn);
+
+  // Partition
+  void _find_FFRs();
+  std::vector<std::list<size_t>> regions;
+  void _DFS(std::vector<bool> &visited, std::list<size_t> &region, size_t gate_idx);
+  void _merge_FFRs();
+
 
   // Simulation
   size_t *_gate_inputs_list;

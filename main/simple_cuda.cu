@@ -5,10 +5,12 @@
 
 // #define run_cuda
 #define run_cuda_graph
+#define run_cuda_graph_partition
 // #define visualization
 // #define print_output
 // #define test_makefile
-#define TIMES 10
+#define TIMES 1 
+
 
 double round_to(double value, double precision = 1.0){
   return std::round(value / precision) * precision;
@@ -18,12 +20,8 @@ int main(int argc, char *argv[]) {
   // user perspective
   CUDASimulator simulator;
 
-#ifdef test_makefile
-  simulator.do_hello();
-#endif
-
   size_t mode;
-  std::chrono::duration<double> duration_read_data, duration_CUDA, duration_CUDA_GRAPH;
+  std::chrono::duration<double> duration_read_data, duration_CUDA, duration_CUDA_GRAPH, duration_CUDA_GRAPH_PARTITION;
 
   std::string ckt_path(argv[1]);
   std::string flst_path(argv[2]);
@@ -57,6 +55,16 @@ int main(int argc, char *argv[]) {
   }
 
 #endif
+  
+#ifdef run_cuda_graph_partition
+  mode = 2;
+  for (size_t t = 0; t < TIMES; t++) {
+    start = std::chrono::steady_clock::now();
+      simulator.run(CUDASimulator::Mode(static_cast<size_t>(mode)), 1);
+    end = std::chrono::steady_clock::now();
+    duration_CUDA_GRAPH_PARTITION += (end - start);
+  }
+#endif
 
   // write file: visualization_graph
 #ifdef visualization
@@ -70,6 +78,9 @@ int main(int argc, char *argv[]) {
 #endif
 #ifdef run_cuda_graph
   std::cout << "run_CUDA_GRAPH: " <<  round_to(((duration_CUDA_GRAPH.count()/TIMES))*1000, 0.001) << " ms\n";
+#endif
+#ifdef run_cuda_graph_partition
+  std::cout << "run_CUDA_GRAPH_PART: " <<  round_to(((duration_CUDA_GRAPH.count()/TIMES))*1000, 0.001) << " ms\n";
 #endif
 
   return 0;
