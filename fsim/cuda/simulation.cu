@@ -405,13 +405,17 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
     _max_gate_size_of_levels = (_num_gates_per_level[i] > _max_gate_size_of_levels) ? (_num_gates_per_level[i]) : (_max_gate_size_of_levels);
   }
 
-
-
 #ifdef FSIM_PARTITION_FFR
+  // todo: use "SMART POINTER"  / learn: difference between: "smart pointer," "unique pointer," and "shared pointer".
+  // note: in Java, every pointer is a smart poiniter, so after new, we have no need to free the memory 
   // find FFR
   _find_FFRs();
-  // merge small FFR
+  // split FFR: split those FFR whose (1) width is larger than 32; or (2) whose depth larger than the constraint
+  _split_FFRs();
+  // merge small FFR: merge those FFR whose width is less than 32
   _merge_FFRs();
+  // constrcut the FFR that is going to be copied in to the GPU memory 
+  _construct_FFRs();
 #endif 
 
 #ifdef FSIM_DEBUG_PRINT_GRAPH
@@ -470,7 +474,6 @@ void CUDASimulator::_find_FFRs() { // find fanout-free regions
     if (gate_num_outputs[i] != 1 && visited[i] == false) {
       std::list<size_t> region;
       _DFS(visited, region, i);
-      // printf("region.size() = %ld\n", region.size());
       regions.push_back(region);
     }
   }
@@ -485,6 +488,20 @@ void CUDASimulator::_find_FFRs() { // find fanout-free regions
     printf("\n");
   }
 #endif 
+}
+
+/**
+ * Two constraints:
+ * FSIM_FFR_MAX_WIDTH
+ * FSIM_FFR_MAX_DEPTH
+*/
+void CUDASimulator::_split_FFRs() {
+  
+  // split those FFRs whose width is larger than 32
+  
+  
+  // split those FFRs whose depth is larger than 32
+  
 }
 
 void CUDASimulator::_merge_FFRs() {

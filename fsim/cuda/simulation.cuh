@@ -16,6 +16,7 @@
 #include "pattern.cuh"
 #include "pi.cuh"
 #include "po.cuh"
+#include "FFR.cuh"
 
 
 // CUDA functions 
@@ -123,11 +124,16 @@ private:
 
   // Partition
   void _find_FFRs();
-  std::vector<std::list<size_t>> regions;
   void _DFS(std::vector<bool> &visited, std::list<size_t> &region, size_t gate_idx);
+  void _split_FFRs();
   void _merge_FFRs();
+  void _construct_FFRs();
 
+  std::vector<std::list<size_t>> regions;
+  FFR **_input_FFRs;
+  ElementBase *_FFR_gates[FSIM_FFR_MAX_DEPTH];
 
+  
   // Simulation
   size_t *_gate_inputs_list;
   size_t *_gate_inputs_list_start;

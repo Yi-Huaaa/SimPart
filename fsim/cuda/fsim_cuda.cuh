@@ -7,3 +7,4 @@
 #include "./gate.cuh"
 #include "./pattern.cuh"
 #include "./simulation.cuh"
+#include "./FFR.cuh"

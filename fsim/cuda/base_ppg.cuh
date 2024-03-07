@@ -18,6 +18,7 @@ class Fault;
 class PI;
 class Gate;
 class PO;
+class FFR;
 
 
 // TOOD: ElementType
