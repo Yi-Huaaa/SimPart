@@ -4,8 +4,8 @@
 #include <fsim/cuda/fsim_cuda.cuh>
 
 // #define run_cuda
-#define run_cuda_graph
-#define run_cuda_graph_partition
+// #define run_cuda_graph
+// #define run_cuda_graph_partition
 // #define visualization
 // #define print_output
 // #define test_makefile
@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
   std::cout << "run_CUDA_GRAPH: " <<  round_to(((duration_CUDA_GRAPH.count()/TIMES))*1000, 0.001) << " ms\n";
 #endif
 #ifdef run_cuda_graph_partition
-  std::cout << "run_CUDA_GRAPH_PART: " <<  round_to(((duration_CUDA_GRAPH.count()/TIMES))*1000, 0.001) << " ms\n";
+  std::cout << "run_CUDA_GRAPH_PART: " <<  round_to(((duration_CUDA_GRAPH_PARTITION.count()/TIMES))*1000, 0.001) << " ms\n";
 #endif
 
   return 0;

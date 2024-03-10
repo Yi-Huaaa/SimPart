@@ -58,6 +58,7 @@ __global__ void _update_params_gpu (size_t *_params_gpu, size_t _num_paras, size
 // #define TEST_cuGraphExecNodeSetParams
 #define FSIM_PARTITION_FFR // partition_FFR
 #define FSIM_CHECK_FFR
+// #define FSIM_LEVELIZAED_PARTITION
 
 class CUDASimulator {
 
@@ -123,15 +124,18 @@ private:
   void _read_pattern(std::istream &ptn);
 
   // Partition
-  void _find_FFRs();
-  void _DFS(std::vector<bool> &visited, std::list<size_t> &region, size_t gate_idx);
-  void _split_FFRs();
-  void _merge_FFRs();
-  void _construct_FFRs();
+// ----- FFR
+  void _find_split_merge_FFRs();
+  void _DFS(std::vector<bool> &visited, std::list<size_t> &FFR, size_t gate_idx, std::vector<std::list<size_t>> &bucket_list, size_t depth);
+  void _DFS_new(std::vector<bool> &visited, std::list<size_t> &subset, size_t gate_idx);
 
-  std::vector<std::list<size_t>> regions;
-  FFR **_input_FFRs;
-  ElementBase *_FFR_gates[FSIM_FFR_MAX_DEPTH];
+  std::vector<std::list<size_t>> FFRs;
+  size_t depth_constraint = 4;
+
+// -----
+
+  void _levelized_partition();
+  
 
   
   // Simulation

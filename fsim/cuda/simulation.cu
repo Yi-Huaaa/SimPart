@@ -408,15 +408,13 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
 #ifdef FSIM_PARTITION_FFR
   // todo: use "SMART POINTER"  / learn: difference between: "smart pointer," "unique pointer," and "shared pointer".
   // note: in Java, every pointer is a smart poiniter, so after new, we have no need to free the memory 
-  // find FFR
-  _find_FFRs();
-  // split FFR: split those FFR whose (1) width is larger than 32; or (2) whose depth larger than the constraint
-  _split_FFRs();
-  // merge small FFR: merge those FFR whose width is less than 32
-  _merge_FFRs();
-  // constrcut the FFR that is going to be copied in to the GPU memory 
-  _construct_FFRs();
+  _find_split_merge_FFRs();
 #endif 
+
+#ifdef FSIM_LEVELIZAED_PARTITION
+  _levelized_partition();
+
+#endif
 
 #ifdef FSIM_DEBUG_PRINT_GRAPH
   printf("_max_level = %ld, _max_gate_size_of_levels = %ld\n", _max_level, _max_gate_size_of_levels);
@@ -443,20 +441,95 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
 }
 
 
-void CUDASimulator::_DFS(std::vector<bool> &visited, std::list<size_t> &region, size_t gate_idx) {
-  region.push_front(gate_idx);
+void CUDASimulator::_DFS(std::vector<bool> &visited, std::list<size_t> &FFR, size_t gate_idx, std::vector<std::list<size_t>> &bucket_list, size_t depth) {
+  FFR.push_front(gate_idx);
+  visited[gate_idx] = true;
+  if (depth >= bucket_list.size()) {
+    std::list<size_t> tmp;
+    tmp.push_back(gate_idx);
+    bucket_list.push_back(tmp);
+  } else {
+    // printf("depth = %ld, gate_idx = %ld\n", depth, gate_idx+_num_PIs);
+    bucket_list[depth].push_front(gate_idx);
+  }
+
+  for (size_t i = 0; i < _gates[gate_idx]._num_inputs; i++){
+    ElementBase *pre_gate = _gates[gate_idx]._inputs[i];
+    size_t tmp_idx = (pre_gate->_idx - _num_PIs);
+    if ((pre_gate->_type != GateType::PI) && (visited[tmp_idx] == false)) {
+      _DFS(visited, FFR, tmp_idx, bucket_list, depth+1);
+    }
+  }
+}
+
+void CUDASimulator::_DFS_new(std::vector<bool> &visited, std::list<size_t> &subset, size_t gate_idx) {
+  subset.push_front(gate_idx);
   visited[gate_idx] = true;
 
   for (size_t i = 0; i < _gates[gate_idx]._num_inputs; i++){
     ElementBase *pre_gate = _gates[gate_idx]._inputs[i];
     size_t tmp_idx = (pre_gate->_idx - _num_PIs);
     if ((pre_gate->_type != GateType::PI) && (visited[tmp_idx] == false)) {
-      _DFS(visited, region, tmp_idx);
+      _DFS_new(visited, subset, tmp_idx);
     }
   }
 }
 
-void CUDASimulator::_find_FFRs() { // find fanout-free regions
+void CUDASimulator::_levelized_partition() {
+  /*
+  1. 
+  for i = 0 - all_level
+    A. for j in all nodes on this level
+      a. 走 有限制深度的 DFS
+      b. 紀錄每棵樹最大的寬度
+    B. Merge: 
+      a. 將剛走出來的 subsets 進行合併, w/ constraint_width = 32（合併是根據 A-b）
+  */
+  std::vector<bool> visited;
+  std::vector<std::list<size_t>> subsets;
+  std::vector<bool> merged; merged.resize(_num_inner_gates);
+  size_t now_merged_level = 0;
+  
+  printf("HELLO|n\n");
+  // Gate *now_gate = _gates[0];
+  //  Note: level_0 is PI
+  
+  size_t acc = 0;
+  for (size_t i = 1; i < (depth_constraint); i++) {
+    
+    // for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
+    //   size_t gate_idx = acc+j;
+    //   printf("i = %ld, gate_idx = %ld, gate_level = %ld\n", i, gate_idx, _gates[gate_idx]._level);
+    // } printf("\n");
+
+    acc += _num_gates_per_level[i];
+  }
+  // printf("\n=======================\n");    
+
+  for (size_t i = (depth_constraint); i < _size_of_num_gates_per_level; i++) { 
+    std::vector<std::list<size_t>> subset;
+    for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
+      size_t gate_idx = acc+j;
+      // printf("i = %ld, gate_idx = %ld, gate_level = %ld\n", i, gate_idx, _gates[gate_idx]._level);
+      // if (i != _gates[gate_idx]._level) {
+      //   printf("!!!!!i = %ld, gate_idx = %ld, gate_level = %ld\n", i, gate_idx, _gates[gate_idx]._level);
+      // }
+      
+      // if (visited[i] == false) {
+      //   std::list<size_t> subset; // temparol
+      //   _DFS_new(visited, subset, gate_idx);
+      //   subsets.push_back(subset);
+      // }
+    } printf("\n");
+    acc += _num_gates_per_level[i];
+  }
+
+
+
+}
+
+
+void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
   // check the nodes with inputs larger than 2
   std::vector<size_t> gate_num_outputs;
   gate_num_outputs.resize(_num_inner_gates);
@@ -470,43 +543,113 @@ void CUDASimulator::_find_FFRs() { // find fanout-free regions
   
   // back DFS
   std::vector<bool> visited(_num_inner_gates, false);
+  std::vector<std::vector<std::list<size_t>>> bucket_lists_for_all_FFRs;
   for (size_t i = 0; i < gate_num_outputs.size(); i++) {
     if (gate_num_outputs[i] != 1 && visited[i] == false) {
-      std::list<size_t> region;
-      _DFS(visited, region, i);
-      regions.push_back(region);
+      std::list<size_t> FFR; // temparol
+      std::vector<std::list<size_t>> bucket_list; // temparol
+      size_t depth = 0;
+      _DFS(visited, FFR, i, bucket_list, depth);
+      FFRs.push_back(FFR);
+      bucket_lists_for_all_FFRs.push_back(bucket_list);
     }
   }
   
+  std::vector<size_t> gate_to_FFR; gate_to_FFR.resize(_num_inner_gates);
+  for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) { // which FFR
+    for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) { // which level in the FFR
+      for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
+        gate_to_FFR[*it] = i; // which FFR
+      }
+    }
+  }
+
+  for (size_t i = 0; i < gate_to_FFR.size(); i++) {
+    printf("i = %ld, gate_to_FFR[%ld] = %ld\n", i, i, gate_to_FFR[i]);
+  }
+
+  // array: add the level of each subset 
+  // forward traversal of _gates (according to the topological sort results of gates) 
+  // help to assign the FFR's level
+  std::vector<size_t> FFRs_level; // the min level of gates in the subset
+  FFRs_level.resize(FFRs.size(), 0);
+  // traverse all gates
+  size_t accum_idx = 0;
+  // level_0: PI, level_last: PO
+  for (size_t i = 1; i < (_size_of_num_gates_per_level-1); i++) {
+    for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
+      size_t now_gate_idx = accum_idx+j;
+      size_t FFR_idx = gate_to_FFR[now_gate_idx];
+      for (size_t pg = 0; pg < _gates[now_gate_idx]._num_inputs; pg++) {
+        if ((_gates[now_gate_idx]._inputs[pg])->_type != GateType::PI){
+          size_t pre_gate_FFR_idx = gate_to_FFR[((_gates[now_gate_idx]._inputs[pg])->_idx) - _num_PIs];
+          if (pre_gate_FFR_idx != FFR_idx) { // not in the same FFR
+            size_t ret_FFR_level = FFRs_level[pre_gate_FFR_idx]+1; // next level of pregate's FFR's level
+            FFRs_level[FFR_idx] = (ret_FFR_level > FFRs_level[FFR_idx]) ? (ret_FFR_level) : (FFRs_level[FFR_idx]);          
+          }
+        }
+      }
+    }
+    accum_idx += _num_gates_per_level[i];
+  }
+
+
+  // Merge subsets
+  /**
+  * steps:
+  * 1. 切 FFR
+  * 2. 拉成長方形
+  *    (X) 
+  * 3. 深度切分：照 levelized 切分，每個 subset 都要有對應的 level zone
+  *     - tuned_var_1: 深度
+  * 4. levelized greedy 合併，寬度小於等於 32 (tuned_var_2) 要找可在這個 level 出現的 subset 去做合併。
+  *     - tuned_var_2: 深度
+  * 5. 
+  * 6. 
+  */
+
+
+
 #ifdef FSIM_CHECK_FFR
   printf("Fanout-Free Regions (FFR):\n"); 
-  for (size_t i = 0; i < regions.size(); ++i) {
-    printf("Region[%ld] (size = %ld): ", i+1, regions[i].size());
-    for (auto it = regions[i].begin(); it != regions[i].end(); ++it) {
-      printf("%ld, ", (*it)+_num_PIs);
-    }
-    printf("\n");
+  printf("There are %ld FFR in the circuit\n");
+  double acc = 0., percentage = 0.;
+  for (size_t i = 0; i < FFRs.size(); ++i) {
+    percentage = (FFRs[i].size()) / static_cast<double>(_num_inner_gates) * 100.0;
+    acc += percentage;
+    // if (FFRs[i].size() > 2) {
+      // printf("Region[%ld] (size = %ld (%.3f)), ", i, FFRs[i].size(), percentage);
+      // for (auto it = FFRs[i].begin(); it != FFRs[i].end(); ++it) {
+      //   printf("%ld, ", (*it)+_num_PIs);
+      // } printf("\n");
+    // }
   }
+  // printf("check: total_sum = %.2f, #gates = %ld\n", acc, _num_inner_gates);
+    for (size_t i = 0; i < FFRs.size(); ++i) {
+      printf("Region[%ld] (size = %ld): ", i, FFRs[i].size());
+      for (auto it = FFRs[i].begin(); it != FFRs[i].end(); ++it) {
+        printf("%ld, ", (*it)+_num_PIs);
+      } printf("\n");
+    }
+    
+  printf("=====\nCheck FFR bucket_list:\n");
+  for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
+    printf("Region[%ld] (size = %ld):\n", i, FFRs[i].size());
+    for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
+      printf("level %ld: ", j);
+      for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
+        printf("%ld, ", (*it)+_num_PIs);
+      } printf("\n");
+    } printf("\n");
+  } printf("=====\n\n");
+
+  printf("Check level of FFRs\n");
+  for (size_t i = 0; i < FFRs_level.size(); i++) {
+    printf("FFR_%ld, level = %ld\n", i, FFRs_level[i]);
+  } printf("===============\n\n\n\n\n\n\n\n\n\n");
 #endif 
 }
 
-/**
- * Two constraints:
- * FSIM_FFR_MAX_WIDTH
- * FSIM_FFR_MAX_DEPTH
-*/
-void CUDASimulator::_split_FFRs() {
-  
-  // split those FFRs whose width is larger than 32
-  
-  
-  // split those FFRs whose depth is larger than 32
-  
-}
-
-void CUDASimulator::_merge_FFRs() {
-  
-}
 
 
 
@@ -943,23 +1086,6 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
 #endif
 }
 
-// __global__ void _update_params_good_case_gpu (size_t *_params_gpu_idx_address, size_t _num_paras, size_t limit_sz, size_t new_rd) {
-//   // _params_gpu_idx_address
-//   size_t g_idx = blockIdx.x*blockDim.x + threadIdx.x;
-//   size_t address_start = g_idx*_num_paras;
-  
-//   if (address_start > (limit_sz))
-//     return;
-  
-//   _params_gpu_idx_address[address_start] = new_rd;
-//   // _params_gpu_idx_address[address_start+0] = new_rd; // rd
-//   // _params_gpu_idx_address[address_start+1] = new_rd; // fault_val
-//   // _params_gpu_idx_address[address_start+3] = new_rd; // wrong_gate
-//   // _params_gpu_idx_address[address_start+4] = new_rd; // bad_case
-
-//   // todo: add more things to be updated
-// }
-
 __global__ void _update_params_gpu (size_t *_params_gpu_idx_address, size_t _num_paras, size_t limit_sz, 
   size_t new_rd, size_t new_wrong_gate, size_t new_fault_val, size_t new_bad_case) {
   // _params_gpu_idx_address
@@ -1071,34 +1197,34 @@ void CUDASimulator::_run_parallel_cuda_graph() {
     std::cout << "CUDA GRAPH: Run Good case" << std::endl;
 #endif
     
-    // // update to good case parameters
-    // wrong_gate = 0;
-    // fault_val = 0;
-    // bad_case = 0;    
-    // // update KernelNodes params (good case)
-    // _update_cuda_graph_params(stream1, instance, rd, wrong_gate, fault_val, bad_case,
-    //                           &kernelNode_PI, &kernelNode_PI_Params,
-    //                           kernelNode_gate, kernelNode_gate_Params,
-    //                           &kernelNode_PO, &kernelNode_PO_Params);
+    // update to good case parameters
+    wrong_gate = 0;
+    fault_val = 0;
+    bad_case = 0;    
+    // update KernelNodes params (good case)
+    _update_cuda_graph_params(stream1, instance, rd, wrong_gate, fault_val, bad_case,
+                              &kernelNode_PI, &kernelNode_PI_Params,
+                              kernelNode_gate, kernelNode_gate_Params,
+                              &kernelNode_PO, &kernelNode_PO_Params);
     
-    // _run_good_case_cuda_graph(num_testcases_this_round, stream1, instance);
+    _run_good_case_cuda_graph(num_testcases_this_round, stream1, instance);
 
     
-    // // bad simulation (fault simulation)
-    // for (size_t j = 0; j < _num_fault; j++) {
-    //   // update to bad case parameters
-    //   wrong_gate = _faults[j]._gate_with_fault;
-    //   fault_val = _faults[j]._gate_SA_fault_val;
-    //   bad_case = 1;
-    //   // update KernelNodes params (bad case)
-    //   _update_cuda_graph_params(stream1, instance, rd, wrong_gate, fault_val, bad_case,
-    //                             &kernelNode_PI, &kernelNode_PI_Params,
-    //                             kernelNode_gate, kernelNode_gate_Params,
-    //                             &kernelNode_PO, &kernelNode_PO_Params);
+    // bad simulation (fault simulation)
+    for (size_t j = 0; j < _num_fault; j++) {
+      // update to bad case parameters
+      wrong_gate = _faults[j]._gate_with_fault;
+      fault_val = _faults[j]._gate_SA_fault_val;
+      bad_case = 1;
+      // update KernelNodes params (bad case)
+      _update_cuda_graph_params(stream1, instance, rd, wrong_gate, fault_val, bad_case,
+                                &kernelNode_PI, &kernelNode_PI_Params,
+                                kernelNode_gate, kernelNode_gate_Params,
+                                &kernelNode_PO, &kernelNode_PO_Params);
 
-    //   _run_bad_case_cuda_graph(num_testcases_this_round, stream1, instance);
-    //   _compare_g_b_results <<< 1, 1, 0, stream1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
-    // }
+      _run_bad_case_cuda_graph(num_testcases_this_round, stream1, instance);
+      _compare_g_b_results <<< 1, 1, 0, stream1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
+    }
   }
   
   // // free mem
@@ -1119,6 +1245,7 @@ void CUDASimulator::_run_good_case_cuda_graph(const size_t bits, cudaStream_t st
   
   cudaGraphLaunch(instance, stream1);
   cudaStreamSynchronize(stream1);
+  
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   cudaCheckErrors("Graph launch failed (_run_good_case_cuda_graph)");  
   cudaDeviceSynchronize();
