@@ -529,6 +529,7 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
   // levelized the FFRs
   // forward traversal of _gates (according to the topological sort results of gates) 
   // help to assign the FFR's level
+  size_t largest_FFR_level = 0;
   std::vector<size_t> FFRs_level; // the min level of gates in the subset
   FFRs_level.resize(bucket_lists_for_all_FFRs.size(), 0);
   // traverse all gates
@@ -543,33 +544,37 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
           size_t pre_gate_FFR_idx = gate_to_FFR[((_gates[now_gate_idx]._inputs[pg])->_idx) - _num_PIs];
           if (pre_gate_FFR_idx != FFR_idx) { // not in the same FFR
             size_t ret_FFR_level = FFRs_level[pre_gate_FFR_idx]+1; // next level of pregate's FFR's level
-            FFRs_level[FFR_idx] = (ret_FFR_level > FFRs_level[FFR_idx]) ? (ret_FFR_level) : (FFRs_level[FFR_idx]);          
+            FFRs_level[FFR_idx] = (ret_FFR_level > FFRs_level[FFR_idx]) ? (ret_FFR_level) : (FFRs_level[FFR_idx]);
+            largest_FFR_level = (ret_FFR_level > largest_FFR_level) ? (ret_FFR_level) : (largest_FFR_level);
           }
         }
       }
     }
     accum_idx += _num_gates_per_level[i];
   }
+  largest_FFR_level++;
 
-  // std::vector<size_t> depth_of_each_gates; depth_of_each_gates.resize(_num_inner_gates);
-  // for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) { 
-  //   for (int j = bucket_lists_for_all_FFRs[i].size()-1; j > -1; j--) {
-  //     for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
-  //       size_t gate_idx = (*it);
-  //       size_t ret_depth = 0;
-  //       for (size_t k = 0; k < _gates[gate_idx]._num_inputs; k++) {
-  //         size_t pre_gate_idx = (((_gates[gate_idx]._inputs[k])->_idx)-_num_PIs);
+#ifdef FSIM_CHECK_FFR
+  printf("largest_FFR_level = %ld\n", largest_FFR_level);
+#endif
 
-  //         if (((_gates[gate_idx]._inputs[k])->_type != GateType::PI) && 
-  //             (gate_to_FFR[gate_idx] == gate_to_FFR[pre_gate_idx])) { // in the same FFR
-  //           ret_depth = ((depth_of_each_gates[pre_gate_idx]+1) > ret_depth) ? ((depth_of_each_gates[pre_gate_idx]+1)) : (ret_depth);
-  //         }
-  //       }
-  //       // printf("gate_idx = %ld, ret_depth = %ld\n", gate_idx+_num_PIs, ret_depth);
-  //       depth_of_each_gates[gate_idx] = ret_depth;
-  //     }      
-  //   }
-  // }
+  std::vector<std::list<size_t>> FFR_levelization; FFR_levelization.resize(largest_FFR_level);
+  for (size_t i = 0; i < FFRs_level.size(); i++) {
+    FFR_levelization[FFRs_level[i]].push_back(i);
+  }
+
+#ifdef FSIM_CHECK_FFR
+  printf("FFR_levelization:\n");
+  for (size_t i = 0; i < largest_FFR_level; i++) {
+    printf("level_%ld: ", i);
+    for (auto it = FFR_levelization[i].begin(); it != FFR_levelization[i].end(); ++it) {
+      printf("%ld, ", (*it));
+    } printf("\n");
+  }
+#endif
+  
+
+  // merge the FFR according to the level, merging the FFRs on the same level
 
 
 
