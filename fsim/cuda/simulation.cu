@@ -443,7 +443,7 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
 
 
 
-void CUDASimulator::_DFS(std::vector<bool> &visited, size_t gate_idx, std::vector<std::list<size_t>> &bucket_list, size_t depth, std::queue<int> &source_queue) {
+void CUDASimulator::_DFS(std::vector<bool> &visited, size_t gate_idx, std::vector<std::list<size_t>> &bucket_list, size_t depth, std::queue<size_t> &source_queue) {
   // check depth: after adding this gate into this FFR
   if (depth >= depth_constraint_0) { // EXCEED
     source_queue.push(gate_idx);
@@ -488,7 +488,7 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
     }
   }
 
-  std::queue<int> source_queue; // source node to traverse gates
+  std::queue<size_t> source_queue; // source node to traverse gates
   for (size_t i = 0; i < gate_num_outputs.size(); i++) {
     if (gate_num_outputs[i] != 1) {
       source_queue.push(i);
@@ -530,8 +530,8 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
   // forward traversal of _gates (according to the topological sort results of gates) 
   // help to assign the FFR's level
   size_t largest_FFR_level = 0;
-  std::vector<size_t> FFRs_level; // the min level of gates in the subset
-  FFRs_level.resize(bucket_lists_for_all_FFRs.size(), 0);
+  std::vector<size_t> level_of_FFRs; // the level of each FFR 
+  level_of_FFRs.resize(bucket_lists_for_all_FFRs.size(), 0);
   // traverse all gates
   size_t accum_idx = 0;
   // level_0: PI, level_last: PO
@@ -543,8 +543,8 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
         if ((_gates[now_gate_idx]._inputs[pg])->_type != GateType::PI){
           size_t pre_gate_FFR_idx = gate_to_FFR[((_gates[now_gate_idx]._inputs[pg])->_idx) - _num_PIs];
           if (pre_gate_FFR_idx != FFR_idx) { // not in the same FFR
-            size_t ret_FFR_level = FFRs_level[pre_gate_FFR_idx]+1; // next level of pregate's FFR's level
-            FFRs_level[FFR_idx] = (ret_FFR_level > FFRs_level[FFR_idx]) ? (ret_FFR_level) : (FFRs_level[FFR_idx]);
+            size_t ret_FFR_level = level_of_FFRs[pre_gate_FFR_idx]+1; // next level of pregate's FFR's level
+            level_of_FFRs[FFR_idx] = (ret_FFR_level > level_of_FFRs[FFR_idx]) ? (ret_FFR_level) : (level_of_FFRs[FFR_idx]);
             largest_FFR_level = (ret_FFR_level > largest_FFR_level) ? (ret_FFR_level) : (largest_FFR_level);
           }
         }
@@ -559,9 +559,27 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
 #endif
 
   std::vector<std::list<size_t>> FFR_levelization; FFR_levelization.resize(largest_FFR_level);
-  for (size_t i = 0; i < FFRs_level.size(); i++) {
-    FFR_levelization[FFRs_level[i]].push_back(i);
+  for (size_t i = 0; i < level_of_FFRs.size(); i++) {
+    FFR_levelization[level_of_FFRs[i]].push_back(i);
   }
+// new one 
+  // vector: each level
+  // vector: each depth 
+  // vector: each FFR idx
+  std::vector<std::vector<std::vector<size_t>>> FFR_levelization_with_depth; 
+  // init
+  FFR_levelization_with_depth.resize(largest_FFR_level);
+  for (size_t i = 0; i < largest_FFR_level; i++) {
+    FFR_levelization_with_depth[i].resize(depth_constraint_0);
+  }
+  // add item
+  for (size_t i = 0; i < level_of_FFRs.size(); i++) {
+    // level, depth 
+    size_t lvl = level_of_FFRs[i];
+    size_t depth = (bucket_lists_for_all_FFRs[i].size())-1;
+    FFR_levelization_with_depth[lvl][depth].push_back(i);
+  }
+
 
 #ifdef FSIM_CHECK_FFR
   printf("FFR_levelization:\n");
@@ -571,10 +589,39 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
       printf("%ld, ", (*it));
     } printf("\n");
   }
+
+  printf("Check the FFR_levelization_with_depth:\n");
+  for (size_t i = 0; i < FFR_levelization_with_depth.size(); i++) {
+    printf("Level_%ld\n", i);
+    for (size_t j = 0; j < FFR_levelization_with_depth[i].size(); j++) {
+      printf("lvl %ld: ", j);
+      for (size_t k = 0; k < FFR_levelization_with_depth[i][j].size(); k++) {
+        printf("%ld, ", FFR_levelization_with_depth[i][j][k]);
+      } printf("\n");
+    } printf("\n\n");
+  }
 #endif
   
 
   // merge the FFR according to the level, merging the FFRs on the same level
+  /** Mergeing steps:
+  0. 確認 merge 前後的 #FFRs on the same level -> 確認該演算法的有效性
+  1. 分類：the list of FFRs (same level) according to its depth 
+  不用 sort
+  2. Merge 
+  */
+
+  for (size_t i = 0; i < largest_FFR_level; i++) { // all levels
+    // 分類 -> according the key, depth of the FFR，同一個深度在同一個 FFR 中
+    std::vector<std::queue<size_t>> FFR_queue; // the sorted FFRs for all levels
+    // pick up a deep FFR
+      // chose the shallow FFR to merge -> select the FFR from deep to shallow
+    // merge 完就被 pop out!!!
+
+
+
+
+  }
 
 
 
@@ -592,46 +639,16 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
     } printf("\n");
   } printf("=====\n\n");
 
-  printf("Check FFRs_level\n");
-  for (size_t i = 0; i < FFRs_level.size(); i++) {
-    printf("FFR_%ld, level = %ld\n", i, FFRs_level[i]);
+  printf("Check level_of_FFRs\n");
+  for (size_t i = 0; i < level_of_FFRs.size(); i++) {
+    printf("FFR_%ld, level = %ld\n", i, level_of_FFRs[i]);
   }
-
-
-  // printf("depth_of_each_gates:\n");
-  // for (size_t i = 0; i < _num_inner_gates; i++) {
-  //   printf("gate_%ld, dpeth = %ld\n", i+_num_PIs, depth_of_each_gates[i]);
-  // }
-
-  // printf("check FFR size:\n");
-  // for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
-  //   auto (gate_with_max_depth_in_this_FFR) = bucket_lists_for_all_FFRs[i][0].begin();
-  //   size_t g_idx = (*gate_with_max_depth_in_this_FFR);
-  //   size_t depth = depth_of_each_gates[g_idx];
-
-    
-  //   size_t width = 0;
-  //   for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
-  //     width = (bucket_lists_for_all_FFRs[i][j].size() > width) 
-  //             ? (bucket_lists_for_all_FFRs[i][j].size()) : (width);
-  //   }
-  //   // if (width > width_constraint_0) {
-  //   //   printf("EXCEED: FFR_%ld, width = %ld\n", i, width);
-  //   // } 
-  //   // if (depth > depth_constraint_0) {
-  //   //   printf("EXCEED: FFR_%ld, depth = %ld\n", i, depth);
-  //   // } 
-  //   // printf("--------\n");
-  // }
-
-  
-
-  // printf("Check level of FFRs\n");
-  // for (size_t i = 0; i < FFRs_level.size(); i++) {
-  //   printf("FFR_%ld, level = %ld\n", i, FFRs_level[i]);
-  // } 
   printf("===============\n\n\n\n\n");
 #endif 
+}
+
+void CUDASimulator::_merge_FFRs() {
+
 }
 
 
