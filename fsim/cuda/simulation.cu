@@ -442,15 +442,27 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
 
 
 
-void CUDASimulator::_DFS(std::vector<bool> &visited, std::list<size_t> &FFR, size_t gate_idx, std::vector<std::list<size_t>> &bucket_list, size_t depth) {
-  FFR.push_front(gate_idx);
+
+void CUDASimulator::_DFS(std::vector<bool> &visited, size_t gate_idx, std::vector<std::list<size_t>> &bucket_list, size_t depth, std::queue<int> &source_queue) {
+  // check depth: after adding this gate into this FFR
+  if (depth >= depth_constraint_0) { // EXCEED
+    source_queue.push(gate_idx);
+    return;
+  }
+
+  // check width: after adding this gate into this FFR
+  size_t width = (depth >= bucket_list.size()) ? (1) : (bucket_list[depth].size()+1);
+  if (width >= width_constraint_0) {
+    source_queue.push(gate_idx);
+    return;
+  }
+  
   visited[gate_idx] = true;
   if (depth >= bucket_list.size()) {
     std::list<size_t> tmp;
     tmp.push_back(gate_idx);
     bucket_list.push_back(tmp);
   } else {
-    // printf("depth = %ld, gate_idx = %ld\n", depth, gate_idx+_num_PIs);
     bucket_list[depth].push_front(gate_idx);
   }
 
@@ -458,23 +470,10 @@ void CUDASimulator::_DFS(std::vector<bool> &visited, std::list<size_t> &FFR, siz
     ElementBase *pre_gate = _gates[gate_idx]._inputs[i];
     size_t tmp_idx = (pre_gate->_idx - _num_PIs);
     if ((pre_gate->_type != GateType::PI) && (visited[tmp_idx] == false)) {
-      _DFS(visited, FFR, tmp_idx, bucket_list, depth+1);
+      _DFS(visited, tmp_idx, bucket_list, depth+1, source_queue);
     }
   }
 }
-
-// void CUDASimulator::_DFS_depth_split(std::vector<std::list<size_t>> &bucket_list, size_t depth, std::vector<size_t> &depth_of_each_gates, size_t gate_idx) {
-//   // if (depth_of_each_gates[gate_idx] >= depth_constraint_0) {
-//   //   for (size_t i = 0; i < _gates[gate_idx]._num_inputs; i++){
-//   //     size_t pre_gate_idx = ((_gates[gate_idx]._inputs[i])->_idx)-_num_PIs;
-//   //     if ((pre_gate->_type != GateType::PI) && gate_to_FFR[pre_gate_idx] == gate_to_FFR[gate_idx]) {
-//   //       _DFS_depth_split();
-//   //     }
-//   //   }
-//   // } else {
-//   //   return;
-//   // }
-// }
 
 
 void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
@@ -488,22 +487,38 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
       }
     }
   }
+
+  std::queue<int> source_queue; // source node to traverse gates
+  for (size_t i = 0; i < gate_num_outputs.size(); i++) {
+    if (gate_num_outputs[i] != 1) {
+      source_queue.push(i);
+    }
+  }
   
   // back DFS
   std::vector<bool> visited(_num_inner_gates, false);
   std::vector<std::vector<std::list<size_t>>> bucket_lists_for_all_FFRs;
-  for (size_t i = 0; i < gate_num_outputs.size(); i++) {
-    if (gate_num_outputs[i] != 1 && visited[i] == false) {
-      std::list<size_t> FFR; // temparol
-      std::vector<std::list<size_t>> bucket_list; // temparol
-      size_t depth = 0;
-      _DFS(visited, FFR, i, bucket_list, depth);
-      FFRs.push_back(FFR);
-      bucket_lists_for_all_FFRs.push_back(bucket_list);
+  while(source_queue.size() != 0 && visited[source_queue.front()] == false) {  
+    std::vector<std::list<size_t>> bucket_list; // temparol
+    size_t depth = 0;
+    _DFS(visited, source_queue.front(), bucket_list, depth, source_queue);
+    bucket_lists_for_all_FFRs.push_back(bucket_list);
+    source_queue.pop();
+  }
+
+  // check the queue utilization
+  size_t aaaa = 0;
+  for (size_t i = 0; i < _num_inner_gates; i++) {
+    aaaa += visited[i];
+    if (visited[i] == false) {
+      printf("false: i = %ld\n", i);
     }
   }
   
-
+  // bool answer = (aaaa == _num_inner_gates);
+  // printf("aaaa = %ld, #gates = %ld, ", aaaa, _num_inner_gates);
+  // printf("answer: %s", answer ? "True\n" : "False QAQ\n");
+  
   // map gate to its FFR
   std::vector<size_t> gate_to_FFR; gate_to_FFR.resize(_num_inner_gates);
   for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) { // which FFR
@@ -513,125 +528,68 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
       }
     }
   }
-
   
-  std::vector<size_t> depth_of_each_gates; depth_of_each_gates.resize(_num_inner_gates);
-  for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) { 
-    for (int j = bucket_lists_for_all_FFRs[i].size()-1; j > -1; j--) {
-      for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
-        size_t gate_idx = (*it);
-        size_t ret_depth = 0;
-        for (size_t k = 0; k < _gates[gate_idx]._num_inputs; k++) {
-          size_t pre_gate_idx = (((_gates[gate_idx]._inputs[k])->_idx)-_num_PIs);
-
-          if (((_gates[gate_idx]._inputs[k])->_type != GateType::PI) && 
-              (gate_to_FFR[gate_idx] == gate_to_FFR[pre_gate_idx])) { // in the same FFR
-            ret_depth = ((depth_of_each_gates[pre_gate_idx]+1) > ret_depth) ? ((depth_of_each_gates[pre_gate_idx]+1)) : (ret_depth);
-          }
-        }
-        // printf("gate_idx = %ld, ret_depth = %ld\n", gate_idx+_num_PIs, ret_depth);
-        depth_of_each_gates[gate_idx] = ret_depth;
-      }      
-    }
-  }
-
-  // // split 
-  // size_t ori_num_FFRs = 0;
-  // // depth 
-  // ori_num_FFRs = bucket_lists_for_all_FFRs.size();
-  // for (size_t i = 0; i < ori_num_FFRs; i++) { 
-  //   _DFS_depth_split(bucket_lists_for_all_FFRs[i], 0, depth_of_each_gates);
-  // }
-
-  // // width 
-  // 
-  // for (size_t i = 0; i < ; i++) { 
-  //   for (int j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
+  // std::vector<size_t> depth_of_each_gates; depth_of_each_gates.resize(_num_inner_gates);
+  // for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) { 
+  //   for (int j = bucket_lists_for_all_FFRs[i].size()-1; j > -1; j--) {
   //     for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
+  //       size_t gate_idx = (*it);
+  //       size_t ret_depth = 0;
+  //       for (size_t k = 0; k < _gates[gate_idx]._num_inputs; k++) {
+  //         size_t pre_gate_idx = (((_gates[gate_idx]._inputs[k])->_idx)-_num_PIs);
 
-  //     }      
-  //   }
-  // }  
-  
-
-
-
-
-
-  // // array: add the level of each subset 
-  // // forward traversal of _gates (according to the topological sort results of gates) 
-  // // help to assign the FFR's level
-  // std::vector<size_t> FFRs_level; // the min level of gates in the subset
-  // FFRs_level.resize(FFRs.size(), 0);
-  // // traverse all gates
-  // size_t accum_idx = 0;
-  // // level_0: PI, level_last: PO
-  // for (size_t i = 1; i < (_size_of_num_gates_per_level-1); i++) {
-  //   for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
-  //     size_t now_gate_idx = accum_idx+j;
-  //     size_t FFR_idx = gate_to_FFR[now_gate_idx];
-  //     for (size_t pg = 0; pg < _gates[now_gate_idx]._num_inputs; pg++) {
-  //       if ((_gates[now_gate_idx]._inputs[pg])->_type != GateType::PI){
-  //         size_t pre_gate_FFR_idx = gate_to_FFR[((_gates[now_gate_idx]._inputs[pg])->_idx) - _num_PIs];
-  //         if (pre_gate_FFR_idx != FFR_idx) { // not in the same FFR
-  //           size_t ret_FFR_level = FFRs_level[pre_gate_FFR_idx]+1; // next level of pregate's FFR's level
-  //           FFRs_level[FFR_idx] = (ret_FFR_level > FFRs_level[FFR_idx]) ? (ret_FFR_level) : (FFRs_level[FFR_idx]);          
+  //         if (((_gates[gate_idx]._inputs[k])->_type != GateType::PI) && 
+  //             (gate_to_FFR[gate_idx] == gate_to_FFR[pre_gate_idx])) { // in the same FFR
+  //           ret_depth = ((depth_of_each_gates[pre_gate_idx]+1) > ret_depth) ? ((depth_of_each_gates[pre_gate_idx]+1)) : (ret_depth);
   //         }
   //       }
-  //     }
+  //       // printf("gate_idx = %ld, ret_depth = %ld\n", gate_idx+_num_PIs, ret_depth);
+  //       depth_of_each_gates[gate_idx] = ret_depth;
+  //     }      
   //   }
-  //   accum_idx += _num_gates_per_level[i];
   // }
 
 
 
 #ifdef FSIM_CHECK_FFR
-  printf("Fanout-Free Regions (FFR):\n"); 
-  // printf("There are %ld FFR in the circuit\n");
+  printf("Fanout-Free Regions (FFRs = %ld): \n", bucket_lists_for_all_FFRs.size()); 
 
-  // for (size_t i = 0; i < FFRs.size(); ++i) {
-  //   printf("Region[%ld] (size = %ld): ", i, FFRs[i].size());
-  //   for (auto it = FFRs[i].begin(); it != FFRs[i].end(); ++it) {
-  //     printf("%ld, ", (*it)+_num_PIs);
-  //   } printf("\n");
-  // }
-
-  // printf("=====\nCheck FFR bucket_list:\n");
-  // for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
-  //   printf("Region[%ld] (size = %ld):\n", i, bucket_lists_for_all_FFRs[i].size());
-  //   for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
-  //     printf("level %ld: ", j);
-  //     for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
-  //       printf("%ld, ", (*it)+_num_PIs);
-  //     } printf("\n");
-  //   } printf("\n");
-  // } printf("=====\n\n");
+  printf("=====\nCheck FFR bucket_list:\n");
+  for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
+    printf("Region[%ld] (size = %ld):\n", i, bucket_lists_for_all_FFRs[i].size());
+    for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
+      printf("level %ld: ", j);
+      for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
+        printf("%ld, ", (*it)+_num_PIs);
+      } printf("\n");
+    } printf("\n");
+  } printf("=====\n\n");
 
   // printf("depth_of_each_gates:\n");
   // for (size_t i = 0; i < _num_inner_gates; i++) {
   //   printf("gate_%ld, dpeth = %ld\n", i+_num_PIs, depth_of_each_gates[i]);
   // }
 
-  printf("check FFR size:\n");
-  for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
-    auto (gate_with_max_depth_in_this_FFR) = bucket_lists_for_all_FFRs[i][0].begin();
-    size_t g_idx = (*gate_with_max_depth_in_this_FFR);
-    size_t depth = depth_of_each_gates[g_idx];
+  // printf("check FFR size:\n");
+  // for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
+  //   auto (gate_with_max_depth_in_this_FFR) = bucket_lists_for_all_FFRs[i][0].begin();
+  //   size_t g_idx = (*gate_with_max_depth_in_this_FFR);
+  //   size_t depth = depth_of_each_gates[g_idx];
 
     
-    size_t width = 0;
-    for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
-      width = (bucket_lists_for_all_FFRs[i][j].size() > width) 
-              ? (bucket_lists_for_all_FFRs[i][j].size()) : (width);
-    }
-    // if (width > width_constraint_0) {
-    //   printf("EXCEED: FFR_%ld, width = %ld\n", i, width);
-    // } 
-    // if (depth > depth_constraint_0) {
-    //   printf("EXCEED: FFR_%ld, depth = %ld\n", i, depth);
-    // } 
-    // printf("--------\n");
-  }
+  //   size_t width = 0;
+  //   for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
+  //     width = (bucket_lists_for_all_FFRs[i][j].size() > width) 
+  //             ? (bucket_lists_for_all_FFRs[i][j].size()) : (width);
+  //   }
+  //   // if (width > width_constraint_0) {
+  //   //   printf("EXCEED: FFR_%ld, width = %ld\n", i, width);
+  //   // } 
+  //   // if (depth > depth_constraint_0) {
+  //   //   printf("EXCEED: FFR_%ld, depth = %ld\n", i, depth);
+  //   // } 
+  //   // printf("--------\n");
+  // }
 
   
 

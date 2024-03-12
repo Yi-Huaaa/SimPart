@@ -126,16 +126,18 @@ private:
   // Partition
 // ----- FFR
   void _find_split_merge_FFRs();
-  void _DFS(std::vector<bool> &visited, std::list<size_t> &FFR, size_t gate_idx, 
-            std::vector<std::list<size_t>> &bucket_list, size_t depth);
+  // void _DFS(std::vector<bool> &visited, std::list<size_t> &FFR, size_t gate_idx, 
+  //           std::vector<std::list<size_t>> &bucket_list, size_t depth);
+  void _DFS(std::vector<bool> &visited, size_t gate_idx, 
+            std::vector<std::list<size_t>> &bucket_list, size_t depth,
+            std::queue<int> &source_queue);
 
-  std::vector<std::list<size_t>> FFRs;
   size_t depth_constraint_0 = 4;
   size_t width_constraint_0 = 32;
   // size_t depth_constraint_1 = 4;
 
 
-  void _DFS_depth_split(std::vector<std::list<size_t>> &bucket_list, size_t depth, std::vector<size_t> &depth_of_each_gates);
+  // void _DFS_depth_split(std::vector<std::list<size_t>> &bucket_list, size_t depth, std::vector<size_t> &depth_of_each_gates);
   
 
 // -----
