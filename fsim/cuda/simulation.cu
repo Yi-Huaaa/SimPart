@@ -506,18 +506,15 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
     source_queue.pop();
   }
 
+#ifdef FSIM_CHECK_FFR
   // check the queue utilization
-  size_t aaaa = 0;
-  for (size_t i = 0; i < _num_inner_gates; i++) {
-    aaaa += visited[i];
-    if (visited[i] == false) {
-      printf("false: i = %ld\n", i);
-    }
-  }
-  
-  // bool answer = (aaaa == _num_inner_gates);
-  // printf("aaaa = %ld, #gates = %ld, ", aaaa, _num_inner_gates);
-  // printf("answer: %s", answer ? "True\n" : "False QAQ\n");
+  size_t aaccum = 0;
+  for (size_t i = 0; i < _num_inner_gates; i++)
+    aaccum += visited[i];
+  bool answer = (aaccum == _num_inner_gates);
+  printf("aaccum = %ld, #gates = %ld, ", aaccum, _num_inner_gates);
+  printf("answer: %s", answer ? "True\n" : "False QAQ\n");
+#endif
   
   // map gate to its FFR
   std::vector<size_t> gate_to_FFR; gate_to_FFR.resize(_num_inner_gates);
@@ -529,6 +526,31 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
     }
   }
   
+  // levelized the FFRs
+  // forward traversal of _gates (according to the topological sort results of gates) 
+  // help to assign the FFR's level
+  std::vector<size_t> FFRs_level; // the min level of gates in the subset
+  FFRs_level.resize(bucket_lists_for_all_FFRs.size(), 0);
+  // traverse all gates
+  size_t accum_idx = 0;
+  // level_0: PI, level_last: PO
+  for (size_t i = 1; i < (_size_of_num_gates_per_level-1); i++) {
+    for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
+      size_t now_gate_idx = accum_idx+j;
+      size_t FFR_idx = gate_to_FFR[now_gate_idx];
+      for (size_t pg = 0; pg < _gates[now_gate_idx]._num_inputs; pg++) {
+        if ((_gates[now_gate_idx]._inputs[pg])->_type != GateType::PI){
+          size_t pre_gate_FFR_idx = gate_to_FFR[((_gates[now_gate_idx]._inputs[pg])->_idx) - _num_PIs];
+          if (pre_gate_FFR_idx != FFR_idx) { // not in the same FFR
+            size_t ret_FFR_level = FFRs_level[pre_gate_FFR_idx]+1; // next level of pregate's FFR's level
+            FFRs_level[FFR_idx] = (ret_FFR_level > FFRs_level[FFR_idx]) ? (ret_FFR_level) : (FFRs_level[FFR_idx]);          
+          }
+        }
+      }
+    }
+    accum_idx += _num_gates_per_level[i];
+  }
+
   // std::vector<size_t> depth_of_each_gates; depth_of_each_gates.resize(_num_inner_gates);
   // for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) { 
   //   for (int j = bucket_lists_for_all_FFRs[i].size()-1; j > -1; j--) {
@@ -564,6 +586,12 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
       } printf("\n");
     } printf("\n");
   } printf("=====\n\n");
+
+  printf("Check FFRs_level\n");
+  for (size_t i = 0; i < FFRs_level.size(); i++) {
+    printf("FFR_%ld, level = %ld\n", i, FFRs_level[i]);
+  }
+
 
   // printf("depth_of_each_gates:\n");
   // for (size_t i = 0; i < _num_inner_gates; i++) {
