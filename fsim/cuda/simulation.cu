@@ -441,6 +441,7 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
 }
 
 
+
 void CUDASimulator::_DFS(std::vector<bool> &visited, std::list<size_t> &FFR, size_t gate_idx, std::vector<std::list<size_t>> &bucket_list, size_t depth) {
   FFR.push_front(gate_idx);
   visited[gate_idx] = true;
@@ -462,71 +463,18 @@ void CUDASimulator::_DFS(std::vector<bool> &visited, std::list<size_t> &FFR, siz
   }
 }
 
-void CUDASimulator::_DFS_new(std::vector<bool> &visited, std::list<size_t> &subset, size_t gate_idx) {
-  subset.push_front(gate_idx);
-  visited[gate_idx] = true;
-
-  for (size_t i = 0; i < _gates[gate_idx]._num_inputs; i++){
-    ElementBase *pre_gate = _gates[gate_idx]._inputs[i];
-    size_t tmp_idx = (pre_gate->_idx - _num_PIs);
-    if ((pre_gate->_type != GateType::PI) && (visited[tmp_idx] == false)) {
-      _DFS_new(visited, subset, tmp_idx);
-    }
-  }
-}
-
-void CUDASimulator::_levelized_partition() {
-  /*
-  1. 
-  for i = 0 - all_level
-    A. for j in all nodes on this level
-      a. 走 有限制深度的 DFS
-      b. 紀錄每棵樹最大的寬度
-    B. Merge: 
-      a. 將剛走出來的 subsets 進行合併, w/ constraint_width = 32（合併是根據 A-b）
-  */
-  std::vector<bool> visited;
-  std::vector<std::list<size_t>> subsets;
-  std::vector<bool> merged; merged.resize(_num_inner_gates);
-  size_t now_merged_level = 0;
-  
-  printf("HELLO|n\n");
-  // Gate *now_gate = _gates[0];
-  //  Note: level_0 is PI
-  
-  size_t acc = 0;
-  for (size_t i = 1; i < (depth_constraint); i++) {
-    
-    // for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
-    //   size_t gate_idx = acc+j;
-    //   printf("i = %ld, gate_idx = %ld, gate_level = %ld\n", i, gate_idx, _gates[gate_idx]._level);
-    // } printf("\n");
-
-    acc += _num_gates_per_level[i];
-  }
-  // printf("\n=======================\n");    
-
-  for (size_t i = (depth_constraint); i < _size_of_num_gates_per_level; i++) { 
-    std::vector<std::list<size_t>> subset;
-    for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
-      size_t gate_idx = acc+j;
-      // printf("i = %ld, gate_idx = %ld, gate_level = %ld\n", i, gate_idx, _gates[gate_idx]._level);
-      // if (i != _gates[gate_idx]._level) {
-      //   printf("!!!!!i = %ld, gate_idx = %ld, gate_level = %ld\n", i, gate_idx, _gates[gate_idx]._level);
-      // }
-      
-      // if (visited[i] == false) {
-      //   std::list<size_t> subset; // temparol
-      //   _DFS_new(visited, subset, gate_idx);
-      //   subsets.push_back(subset);
-      // }
-    } printf("\n");
-    acc += _num_gates_per_level[i];
-  }
-
-
-
-}
+// void CUDASimulator::_DFS_depth_split(std::vector<std::list<size_t>> &bucket_list, size_t depth, std::vector<size_t> &depth_of_each_gates, size_t gate_idx) {
+//   // if (depth_of_each_gates[gate_idx] >= depth_constraint_0) {
+//   //   for (size_t i = 0; i < _gates[gate_idx]._num_inputs; i++){
+//   //     size_t pre_gate_idx = ((_gates[gate_idx]._inputs[i])->_idx)-_num_PIs;
+//   //     if ((pre_gate->_type != GateType::PI) && gate_to_FFR[pre_gate_idx] == gate_to_FFR[gate_idx]) {
+//   //       _DFS_depth_split();
+//   //     }
+//   //   }
+//   // } else {
+//   //   return;
+//   // }
+// }
 
 
 void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
@@ -555,6 +503,8 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
     }
   }
   
+
+  // map gate to its FFR
   std::vector<size_t> gate_to_FFR; gate_to_FFR.resize(_num_inner_gates);
   for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) { // which FFR
     for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) { // which level in the FFR
@@ -564,89 +514,132 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
     }
   }
 
-  for (size_t i = 0; i < gate_to_FFR.size(); i++) {
-    printf("i = %ld, gate_to_FFR[%ld] = %ld\n", i, i, gate_to_FFR[i]);
-  }
+  
+  std::vector<size_t> depth_of_each_gates; depth_of_each_gates.resize(_num_inner_gates);
+  for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) { 
+    for (int j = bucket_lists_for_all_FFRs[i].size()-1; j > -1; j--) {
+      for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
+        size_t gate_idx = (*it);
+        size_t ret_depth = 0;
+        for (size_t k = 0; k < _gates[gate_idx]._num_inputs; k++) {
+          size_t pre_gate_idx = (((_gates[gate_idx]._inputs[k])->_idx)-_num_PIs);
 
-  // array: add the level of each subset 
-  // forward traversal of _gates (according to the topological sort results of gates) 
-  // help to assign the FFR's level
-  std::vector<size_t> FFRs_level; // the min level of gates in the subset
-  FFRs_level.resize(FFRs.size(), 0);
-  // traverse all gates
-  size_t accum_idx = 0;
-  // level_0: PI, level_last: PO
-  for (size_t i = 1; i < (_size_of_num_gates_per_level-1); i++) {
-    for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
-      size_t now_gate_idx = accum_idx+j;
-      size_t FFR_idx = gate_to_FFR[now_gate_idx];
-      for (size_t pg = 0; pg < _gates[now_gate_idx]._num_inputs; pg++) {
-        if ((_gates[now_gate_idx]._inputs[pg])->_type != GateType::PI){
-          size_t pre_gate_FFR_idx = gate_to_FFR[((_gates[now_gate_idx]._inputs[pg])->_idx) - _num_PIs];
-          if (pre_gate_FFR_idx != FFR_idx) { // not in the same FFR
-            size_t ret_FFR_level = FFRs_level[pre_gate_FFR_idx]+1; // next level of pregate's FFR's level
-            FFRs_level[FFR_idx] = (ret_FFR_level > FFRs_level[FFR_idx]) ? (ret_FFR_level) : (FFRs_level[FFR_idx]);          
+          if (((_gates[gate_idx]._inputs[k])->_type != GateType::PI) && 
+              (gate_to_FFR[gate_idx] == gate_to_FFR[pre_gate_idx])) { // in the same FFR
+            ret_depth = ((depth_of_each_gates[pre_gate_idx]+1) > ret_depth) ? ((depth_of_each_gates[pre_gate_idx]+1)) : (ret_depth);
           }
         }
-      }
+        // printf("gate_idx = %ld, ret_depth = %ld\n", gate_idx+_num_PIs, ret_depth);
+        depth_of_each_gates[gate_idx] = ret_depth;
+      }      
     }
-    accum_idx += _num_gates_per_level[i];
   }
 
+  // // split 
+  // size_t ori_num_FFRs = 0;
+  // // depth 
+  // ori_num_FFRs = bucket_lists_for_all_FFRs.size();
+  // for (size_t i = 0; i < ori_num_FFRs; i++) { 
+  //   _DFS_depth_split(bucket_lists_for_all_FFRs[i], 0, depth_of_each_gates);
+  // }
 
-  // Merge subsets
-  /**
-  * steps:
-  * 1. 切 FFR
-  * 2. 拉成長方形
-  *    (X) 
-  * 3. 深度切分：照 levelized 切分，每個 subset 都要有對應的 level zone
-  *     - tuned_var_1: 深度
-  * 4. levelized greedy 合併，寬度小於等於 32 (tuned_var_2) 要找可在這個 level 出現的 subset 去做合併。
-  *     - tuned_var_2: 深度
-  * 5. 
-  * 6. 
-  */
+  // // width 
+  // 
+  // for (size_t i = 0; i < ; i++) { 
+  //   for (int j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
+  //     for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
+
+  //     }      
+  //   }
+  // }  
+  
+
+
+
+
+
+  // // array: add the level of each subset 
+  // // forward traversal of _gates (according to the topological sort results of gates) 
+  // // help to assign the FFR's level
+  // std::vector<size_t> FFRs_level; // the min level of gates in the subset
+  // FFRs_level.resize(FFRs.size(), 0);
+  // // traverse all gates
+  // size_t accum_idx = 0;
+  // // level_0: PI, level_last: PO
+  // for (size_t i = 1; i < (_size_of_num_gates_per_level-1); i++) {
+  //   for (size_t j = 0; j < _num_gates_per_level[i]; j++) {
+  //     size_t now_gate_idx = accum_idx+j;
+  //     size_t FFR_idx = gate_to_FFR[now_gate_idx];
+  //     for (size_t pg = 0; pg < _gates[now_gate_idx]._num_inputs; pg++) {
+  //       if ((_gates[now_gate_idx]._inputs[pg])->_type != GateType::PI){
+  //         size_t pre_gate_FFR_idx = gate_to_FFR[((_gates[now_gate_idx]._inputs[pg])->_idx) - _num_PIs];
+  //         if (pre_gate_FFR_idx != FFR_idx) { // not in the same FFR
+  //           size_t ret_FFR_level = FFRs_level[pre_gate_FFR_idx]+1; // next level of pregate's FFR's level
+  //           FFRs_level[FFR_idx] = (ret_FFR_level > FFRs_level[FFR_idx]) ? (ret_FFR_level) : (FFRs_level[FFR_idx]);          
+  //         }
+  //       }
+  //     }
+  //   }
+  //   accum_idx += _num_gates_per_level[i];
+  // }
 
 
 
 #ifdef FSIM_CHECK_FFR
   printf("Fanout-Free Regions (FFR):\n"); 
-  printf("There are %ld FFR in the circuit\n");
-  double acc = 0., percentage = 0.;
-  for (size_t i = 0; i < FFRs.size(); ++i) {
-    percentage = (FFRs[i].size()) / static_cast<double>(_num_inner_gates) * 100.0;
-    acc += percentage;
-    // if (FFRs[i].size() > 2) {
-      // printf("Region[%ld] (size = %ld (%.3f)), ", i, FFRs[i].size(), percentage);
-      // for (auto it = FFRs[i].begin(); it != FFRs[i].end(); ++it) {
-      //   printf("%ld, ", (*it)+_num_PIs);
-      // } printf("\n");
-    // }
-  }
-  // printf("check: total_sum = %.2f, #gates = %ld\n", acc, _num_inner_gates);
-    for (size_t i = 0; i < FFRs.size(); ++i) {
-      printf("Region[%ld] (size = %ld): ", i, FFRs[i].size());
-      for (auto it = FFRs[i].begin(); it != FFRs[i].end(); ++it) {
-        printf("%ld, ", (*it)+_num_PIs);
-      } printf("\n");
-    }
-    
-  printf("=====\nCheck FFR bucket_list:\n");
-  for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
-    printf("Region[%ld] (size = %ld):\n", i, FFRs[i].size());
-    for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
-      printf("level %ld: ", j);
-      for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
-        printf("%ld, ", (*it)+_num_PIs);
-      } printf("\n");
-    } printf("\n");
-  } printf("=====\n\n");
+  // printf("There are %ld FFR in the circuit\n");
 
-  printf("Check level of FFRs\n");
-  for (size_t i = 0; i < FFRs_level.size(); i++) {
-    printf("FFR_%ld, level = %ld\n", i, FFRs_level[i]);
-  } printf("===============\n\n\n\n\n\n\n\n\n\n");
+  // for (size_t i = 0; i < FFRs.size(); ++i) {
+  //   printf("Region[%ld] (size = %ld): ", i, FFRs[i].size());
+  //   for (auto it = FFRs[i].begin(); it != FFRs[i].end(); ++it) {
+  //     printf("%ld, ", (*it)+_num_PIs);
+  //   } printf("\n");
+  // }
+
+  // printf("=====\nCheck FFR bucket_list:\n");
+  // for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
+  //   printf("Region[%ld] (size = %ld):\n", i, bucket_lists_for_all_FFRs[i].size());
+  //   for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
+  //     printf("level %ld: ", j);
+  //     for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
+  //       printf("%ld, ", (*it)+_num_PIs);
+  //     } printf("\n");
+  //   } printf("\n");
+  // } printf("=====\n\n");
+
+  // printf("depth_of_each_gates:\n");
+  // for (size_t i = 0; i < _num_inner_gates; i++) {
+  //   printf("gate_%ld, dpeth = %ld\n", i+_num_PIs, depth_of_each_gates[i]);
+  // }
+
+  printf("check FFR size:\n");
+  for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
+    auto (gate_with_max_depth_in_this_FFR) = bucket_lists_for_all_FFRs[i][0].begin();
+    size_t g_idx = (*gate_with_max_depth_in_this_FFR);
+    size_t depth = depth_of_each_gates[g_idx];
+
+    
+    size_t width = 0;
+    for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
+      width = (bucket_lists_for_all_FFRs[i][j].size() > width) 
+              ? (bucket_lists_for_all_FFRs[i][j].size()) : (width);
+    }
+    // if (width > width_constraint_0) {
+    //   printf("EXCEED: FFR_%ld, width = %ld\n", i, width);
+    // } 
+    // if (depth > depth_constraint_0) {
+    //   printf("EXCEED: FFR_%ld, depth = %ld\n", i, depth);
+    // } 
+    // printf("--------\n");
+  }
+
+  
+
+  // printf("Check level of FFRs\n");
+  // for (size_t i = 0; i < FFRs_level.size(); i++) {
+  //   printf("FFR_%ld, level = %ld\n", i, FFRs_level[i]);
+  // } 
+  printf("===============\n\n\n\n\n");
 #endif 
 }
 
