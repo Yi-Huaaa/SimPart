@@ -565,8 +565,10 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
 // new one 
   // vector: each level
   // vector: each depth 
-  // vector: each FFR idx
-  std::vector<std::vector<std::vector<size_t>>> FFR_levelization_with_depth; 
+  // queue: each FFR idx
+  // FFR_levelization_with_depth: the candidate FFRs on the same level
+  // size (deep) as key sorted into differnt queue for the smae level
+  std::vector<std::vector<std::queue<size_t>>> FFR_levelization_with_depth; 
   // init
   FFR_levelization_with_depth.resize(largest_FFR_level);
   for (size_t i = 0; i < largest_FFR_level; i++) {
@@ -577,78 +579,105 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
     // level, depth 
     size_t lvl = level_of_FFRs[i];
     size_t depth = (bucket_lists_for_all_FFRs[i].size())-1;
-    FFR_levelization_with_depth[lvl][depth].push_back(i);
+    FFR_levelization_with_depth[lvl][depth].push(i);
   }
 
 
 #ifdef FSIM_CHECK_FFR
-  printf("FFR_levelization:\n");
-  for (size_t i = 0; i < largest_FFR_level; i++) {
-    printf("level_%ld: ", i);
-    for (auto it = FFR_levelization[i].begin(); it != FFR_levelization[i].end(); ++it) {
-      printf("%ld, ", (*it));
-    } printf("\n");
-  }
+  // printf("FFR_levelization:\n");
+  // for (size_t i = 0; i < largest_FFR_level; i++) {
+  //   printf("level_%ld: ", i);
+  //   for (auto it = FFR_levelization[i].begin(); it != FFR_levelization[i].end(); ++it) {
+  //     printf("%ld, ", (*it));
+  //   } printf("\n");
+  // }
 
-  printf("Check the FFR_levelization_with_depth:\n");
+  printf("\nCheck the FFR_levelization_with_depth:\n");
+  std::queue<size_t> tmp;
   for (size_t i = 0; i < FFR_levelization_with_depth.size(); i++) {
     printf("Level_%ld\n", i);
     for (size_t j = 0; j < FFR_levelization_with_depth[i].size(); j++) {
       printf("lvl %ld: ", j);
-      for (size_t k = 0; k < FFR_levelization_with_depth[i][j].size(); k++) {
-        printf("%ld, ", FFR_levelization_with_depth[i][j][k]);
+      while (!FFR_levelization_with_depth[i][j].empty()) {
+        size_t element = FFR_levelization_with_depth[i][j].front(); // Access the front element
+        FFR_levelization_with_depth[i][j].pop(); // Remove the front element
+        tmp.push(element);
+        printf("%ld, ", element);
       } printf("\n");
+      while (!tmp.empty()) {
+        size_t element = tmp.front();
+        tmp.pop();
+        FFR_levelization_with_depth[i][j].push(element);
+      }
     } printf("\n\n");
   }
 #endif
   
 
   // merge the FFR according to the level, merging the FFRs on the same level
-  /** Mergeing steps:
-  0. 確認 merge 前後的 #FFRs on the same level -> 確認該演算法的有效性
-  1. 分類：the list of FFRs (same level) according to its depth 
-  不用 sort
-  2. Merge 
-  */
 
-  for (size_t i = 0; i < largest_FFR_level; i++) { // all levels
-    // 分類 -> according the key, depth of the FFR，同一個深度在同一個 FFR 中
-    std::vector<std::queue<size_t>> FFR_queue; // the sorted FFRs for all levels
-    // pick up a deep FFR
-      // chose the shallow FFR to merge -> select the FFR from deep to shallow
-    // merge 完就被 pop out!!!
+  std::queue<size_t> merge_candidate_source_queue; // the FFR are going to be merged
+  std::vector<std::vector<size_t>> merged_FFRs; // used to stored FFR, store the gate_idx merged in this FFR
+  for (size_t level = 0; level < largest_FFR_level; level++) { // all levels
+    size_t total_FFRs_need_to_merge = 0;
+    for (size_t sub_level = 0; sub_level < depth_constraint_0; sub_level++) {
+      total_FFRs_need_to_merge += FFR_levelization_with_depth[level][sub_level].size();
+    }
+    // start to merged  
+    size_t candidate_FFR_idx;
+    size_t picked_sub_level = depth_constraint_0;
+    std::vector<size_t> DOF; // degree of freedom
+    DOF.resize(depth_constraint_0, width_constraint_0);
+    while(total_FFRs_need_to_merge > num_merged_FFRs) {
+      // 先算出剩下的自由度
+      
+      // 然後再去找東西來 merge
+      _valid_merged_FFR(DOF, DOF);
 
-
-
-
+      // 有合併，因此 index ++
+      num_merged_FFRs++;
+    }
   }
 
 
 
 #ifdef FSIM_CHECK_FFR
-  printf("Fanout-Free Regions (FFRs = %ld): \n", bucket_lists_for_all_FFRs.size()); 
+  // printf("Fanout-Free Regions (FFRs = %ld): \n", bucket_lists_for_all_FFRs.size()); 
 
-  printf("=====\nCheck FFR bucket_list:\n");
-  for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
-    printf("Region[%ld] (size = %ld):\n", i, bucket_lists_for_all_FFRs[i].size());
-    for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
-      printf("level %ld: ", j);
-      for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
-        printf("%ld, ", (*it)+_num_PIs);
-      } printf("\n");
-    } printf("\n");
-  } printf("=====\n\n");
+  // printf("=====\nCheck FFR bucket_list:\n");
+  // for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
+  //   printf("Region[%ld] (size = %ld):\n", i, bucket_lists_for_all_FFRs[i].size());
+  //   for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
+  //     printf("level %ld: ", j);
+  //     for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
+  //       printf("%ld, ", (*it)+_num_PIs);
+  //     } printf("\n");
+  //   } printf("\n");
+  // } printf("=====\n\n");
 
-  printf("Check level_of_FFRs\n");
-  for (size_t i = 0; i < level_of_FFRs.size(); i++) {
-    printf("FFR_%ld, level = %ld\n", i, level_of_FFRs[i]);
-  }
+  // printf("Check level_of_FFRs\n");
+  // for (size_t i = 0; i < level_of_FFRs.size(); i++) {
+  //   printf("FFR_%ld, level = %ld\n", i, level_of_FFRs[i]);
+  // }
   printf("===============\n\n\n\n\n");
 #endif 
 }
 
-void CUDASimulator::_merge_FFRs() {
+void CUDASimulator::_valid_merged_FFR(std::vector<size_t> DOF, std::vector<size_t> candidate_FFR) {
+  int depth_FFR_candi = candidate_FFR.size();
 
+  for (int i = depth_FFR_candi; i > -1; i--) {
+    size_t valid_zone_start = ;
+    size_t valid_zone_end = ;
+    // try to find a level to merge
+    for (int sub_level = (depth_constraint_0-1); sub_level > -1; sub_level--) {
+
+    
+    }
+  }
+
+
+  
 }
 
 

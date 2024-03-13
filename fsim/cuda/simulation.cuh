@@ -133,8 +133,7 @@ private:
   void _merge_FFRs();  
   size_t depth_constraint_0 = 4;
   size_t width_constraint_0 = 32;
-  // size_t depth_constraint_1 = 4;
-
+  void _valid_merged_FFR(std::vector<size_t> DOF, std::vector<size_t> candidate_FFR);
 
   // void _DFS_depth_split(std::vector<std::list<size_t>> &bucket_list, size_t depth, std::vector<size_t> &depth_of_each_gates);
   
