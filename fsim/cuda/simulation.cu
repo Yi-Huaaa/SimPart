@@ -526,10 +526,26 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
     }
   }
   
+#ifdef FSIM_CHECK_FFR
+  printf("Fanout-Free Regions (FFRs = %ld): \n", bucket_lists_for_all_FFRs.size()); 
+
+  printf("\nCheck FFR bucket_list:\n");
+  for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
+    printf("Region[%ld] (size = %ld):\n", i, bucket_lists_for_all_FFRs[i].size());
+    for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
+      printf("level %ld: ", j);
+      for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
+        printf("%ld, ", (*it)+_num_PIs);
+      } printf("\n");
+    } printf("\n");
+  } printf("\n\n");
+
+#endif 
+
   // levelized the FFRs
   // forward traversal of _gates (according to the topological sort results of gates) 
   // help to assign the FFR's level
-  size_t largest_FFR_level = 0;
+  size_t largest_FFR_level = 0; // MAX number of level for FFRs
   std::vector<size_t> level_of_FFRs; // the level of each FFR 
   level_of_FFRs.resize(bucket_lists_for_all_FFRs.size(), 0);
   // traverse all gates
@@ -562,7 +578,14 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
   for (size_t i = 0; i < level_of_FFRs.size(); i++) {
     FFR_levelization[level_of_FFRs[i]].push_back(i);
   }
-// new one 
+
+#ifdef FSIM_CHECK_FFR
+  printf("Check level_of_FFRs\n");
+  for (size_t i = 0; i < level_of_FFRs.size(); i++) {
+    printf("FFR_%ld, level = %ld\n", i, level_of_FFRs[i]);
+  }
+#endif 
+
   // vector: each level
   // vector: each depth 
   // queue: each FFR idx
@@ -612,72 +635,159 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
     } printf("\n\n");
   }
 #endif
-  
-
-  // merge the FFR according to the level, merging the FFRs on the same level
-
-  std::queue<size_t> merge_candidate_source_queue; // the FFR are going to be merged
-  std::vector<std::vector<size_t>> merged_FFRs; // used to stored FFR, store the gate_idx merged in this FFR
-  for (size_t level = 0; level < largest_FFR_level; level++) { // all levels
-    size_t total_FFRs_need_to_merge = 0;
-    for (size_t sub_level = 0; sub_level < depth_constraint_0; sub_level++) {
-      total_FFRs_need_to_merge += FFR_levelization_with_depth[level][sub_level].size();
-    }
-    // start to merged  
-    size_t candidate_FFR_idx;
-    size_t picked_sub_level = depth_constraint_0;
-    std::vector<size_t> DOF; // degree of freedom
-    DOF.resize(depth_constraint_0, width_constraint_0);
-    while(total_FFRs_need_to_merge > num_merged_FFRs) {
-      // 先算出剩下的自由度
-      
-      // 然後再去找東西來 merge
-      _valid_merged_FFR(DOF, DOF);
-
-      // 有合併，因此 index ++
-      num_merged_FFRs++;
+  // compute number of FFRs in each level 
+  std::vector<size_t> num_FFRs_in_this_level; num_FFRs_in_this_level.resize(largest_FFR_level, 0);
+  for (size_t level = 0; level < largest_FFR_level; level++) {
+    for (size_t d = 0; d < depth_constraint_0; d++) {
+      num_FFRs_in_this_level[level] += FFR_levelization_with_depth[level][d].size();
     }
   }
+
+  // merge the FFR according to the level, merging the FFRs on the same level
+  // vector: level, 
+  std::vector<std::vector<std::vector<std::vector<size_t>>>> merged_FFRs; // used to store FFR, store the gate_idx merged in this FFR
+  merged_FFRs.resize(largest_FFR_level);
+  for (size_t level = 0; level < largest_FFR_level; level++) { // all levels
+    size_t num_merged_FFRs = 0;
+    std::vector<std::vector<size_t>> merged_FFR; merged_FFR.resize(depth_constraint_0);
+    while (num_FFRs_in_this_level[level] > num_merged_FFRs) {
+      
+      // printf("num_FFRs_in_this_level[%ld] = %ld (w/ num_merged_FFRs = %ld)\n", level, num_FFRs_in_this_level[level], num_merged_FFRs);
+      bool merged_FFR_full = false; 
+      // update, pick a new candidate FFR to merge
+      for (int sl = (depth_constraint_0-1); sl > -1 ; sl--) { // pick from the largest FFR
+        size_t num_FFRs_in_this_sub_level = FFR_levelization_with_depth[level][sl].size();
+        while (num_FFRs_in_this_sub_level--) {
+          // printf("sl = %ld, num_FFRs_in_this_sub_level = %ld\n", sl, num_FFRs_in_this_sub_level);
+          // pick candidate FFR to merge
+          size_t candidate_FFR_idx = FFR_levelization_with_depth[level][sl].front();
+          FFR_levelization_with_depth[level][sl].pop();
+          // // if valid then merge -> in the same function 
+          if (_valid_and_merged_FFR(bucket_lists_for_all_FFRs[candidate_FFR_idx], sl+1, merged_FFR, merged_FFR_full)) {
+            num_merged_FFRs++;        
+          } else {
+            // push_back 
+            FFR_levelization_with_depth[level][sl].push(candidate_FFR_idx);
+          }
+          // test whether the merged box is full 
+          if (merged_FFR_full || (num_merged_FFRs == num_FFRs_in_this_level[level])) { // merged_FFR_full or all FFRs have been merged
+            // printf("Inside here\n");
+            merged_FFRs[level].push_back(merged_FFR);
+            merged_FFR.clear(); merged_FFR.resize(depth_constraint_0);
+            merged_FFR_full = false;
+          }
+        }
+      }
+      if (!merged_FFR.empty()) {
+        merged_FFRs[level].push_back(merged_FFR);
+        merged_FFR.clear(); merged_FFR.resize(depth_constraint_0);
+        merged_FFR_full = false;
+      }
+
+    }
+    // printf("---\n\n");
+  }
+
+#ifdef FSIM_PARTITION_CORRECTNESS
+  // only uesd for testing the partition algo
+  std::vector<bool> test_merge; test_merge.resize(_num_inner_gates);
+  for (size_t level = 0; level < largest_FFR_level; level++) { // all levels
+    for (size_t i = 0; i < merged_FFRs[level].size(); i++) {
+      for (size_t sl = 0; sl < depth_constraint_0; sl++) { // each sub-level in the FFRs
+        for (size_t gate = 0; gate < merged_FFRs[level][i][sl].size(); gate++) {
+          size_t ele = merged_FFRs[level][i][sl][gate];
+          test_merge[ele] = true;
+        } 
+      } 
+    } 
+  }
+  for (size_t i = 0; i < _num_inner_gates; i++) {
+    if (test_merge[i] == false) {
+      printf("QQ: %ld\n", i);
+    }
+  }
+  // only uesd for testing the partition algo
+#endif
 
 
 
 #ifdef FSIM_CHECK_FFR
-  // printf("Fanout-Free Regions (FFRs = %ld): \n", bucket_lists_for_all_FFRs.size()); 
+  printf("Check num_FFRs_in_this_level\n"); // compute number of FFRs in each level 
+  for (size_t level = 0; level < largest_FFR_level; level++) {
+    printf("num_FFRs_in_this_level[%ld] = %ld\n", level, num_FFRs_in_this_level[level]);
+  }
 
-  // printf("=====\nCheck FFR bucket_list:\n");
-  // for (size_t i = 0; i < bucket_lists_for_all_FFRs.size(); i++) {
-  //   printf("Region[%ld] (size = %ld):\n", i, bucket_lists_for_all_FFRs[i].size());
-  //   for (size_t j = 0; j < bucket_lists_for_all_FFRs[i].size(); j++) {
-  //     printf("level %ld: ", j);
-  //     for (auto it = bucket_lists_for_all_FFRs[i][j].begin(); it != bucket_lists_for_all_FFRs[i][j].end(); ++it) {
-  //       printf("%ld, ", (*it)+_num_PIs);
-  //     } printf("\n");
-  //   } printf("\n");
-  // } printf("=====\n\n");
+  printf("Check _valid_and_merged_FFR results\n");
+  for (size_t level = 0; level < largest_FFR_level; level++) { // all levels
+    printf("merged_FFRs.size() = %ld\n", merged_FFRs.size());
+    for (size_t i = 0; i < merged_FFRs[level].size(); i++) {
+      printf("FFR_%ld:\n", i);
+      for (size_t sl = 0; sl < depth_constraint_0; sl++) { // each sub-level in the FFRs
+        printf("sub_level_%ld: ", sl);
+        for (size_t gate = 0; gate < merged_FFRs[level][i][sl].size(); gate++) {
+          printf("%ld, ", merged_FFRs[level][i][sl][gate]+_num_PIs);
+        } printf("\n");
+      } printf("\n");
+    } printf("--- \n");
+  }
 
-  // printf("Check level_of_FFRs\n");
-  // for (size_t i = 0; i < level_of_FFRs.size(); i++) {
-  //   printf("FFR_%ld, level = %ld\n", i, level_of_FFRs[i]);
-  // }
-  printf("===============\n\n\n\n\n");
+  printf("==============================\n\n\n\n\n");
 #endif 
+
 }
 
-void CUDASimulator::_valid_merged_FFR(std::vector<size_t> DOF, std::vector<size_t> candidate_FFR) {
-  int depth_FFR_candi = candidate_FFR.size();
-
-  for (int i = depth_FFR_candi; i > -1; i--) {
-    size_t valid_zone_start = ;
-    size_t valid_zone_end = ;
-    // try to find a level to merge
-    for (int sub_level = (depth_constraint_0-1); sub_level > -1; sub_level--) {
-
-    
+bool CUDASimulator::_valid_and_merged_FFR(std::vector<std::list<size_t>> &bucket_lists_for_FFRs,
+                                          size_t FFR_level,
+                                          std::vector<std::vector<size_t>> &merged_FFR, 
+                                          bool &merged_FFR_full) {
+  
+  
+  // check the validation
+  // check all possible solutions
+  // size_t valid_start = 0, valid_zone_range = 1;
+  // printf("Into _valid_and_merged_FFR, FFR_level = %ld\n", FFR_level);
+  bool ret = false;
+  std::vector<size_t> insert_level;
+  int previous_merge_level = -1;
+  for (int sl = 0; sl < int(FFR_level); sl++) { // 將 FFR 的 level 塞進去
+    ret = false;
+    for (int i = previous_merge_level+1; i < (int(depth_constraint_0) - (int(FFR_level) - sl) + 1); i++) {
+      // printf("merged_FFR[%ld].size() = %ld, bucket_lists_for_FFRs[sl].size() = %ld\n", i, merged_FFR[i].size(), bucket_lists_for_FFRs[sl].size());
+      if ((merged_FFR[i].size() + bucket_lists_for_FFRs[sl].size()) 
+                  <= width_constraint_0) { // merged successfully 
+        // record which layer
+        insert_level.push_back(i);
+        previous_merge_level = i;
+        ret = true;
+        break;
+      }
+    }
+    // if one layer cannot be merged into any level of this merged_FFR
+    if (ret == false) {
+      return ret;
     }
   }
 
+  // printf("Come to merge\n");
+  // merge
+  for (size_t i = 0; i < insert_level.size(); i++) {
+    while(!bucket_lists_for_FFRs[i].empty()) {
+      size_t element = bucket_lists_for_FFRs[i].front();
+      bucket_lists_for_FFRs[i].pop_front();
+      // printf("element = %ld\n", element);
+      merged_FFR[insert_level[i]].push_back(element);
+    }
+  }
 
+  // check: merged_FFR_full
+  merged_FFR_full = true;
+  for (size_t i = 0; i < depth_constraint_0; i++) {
+    merged_FFR_full = merged_FFR_full && (merged_FFR[i].size() == width_constraint_0);
+  }
+  // if (merged_FFR_full == true)
+  //   printf("in_v merged_FFR_full = %B\n", merged_FFR_full);
   
+  return ret;
 }
 
 

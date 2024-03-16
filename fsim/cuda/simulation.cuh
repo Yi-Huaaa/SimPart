@@ -56,9 +56,11 @@ __global__ void _update_params_gpu (size_t *_params_gpu, size_t _num_paras, size
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
 // #define CUDA_GRAPH_CHECK
 // #define TEST_cuGraphExecNodeSetParams
-#define FSIM_PARTITION_FFR // partition_FFR
-#define FSIM_CHECK_FFR
 // #define FSIM_LEVELIZAED_PARTITION
+#define FSIM_PARTITION_FFR // partition_FFR
+// #define FSIM_CHECK_FFR
+#define FSIM_PARTITION_CORRECTNESS
+
 
 class CUDASimulator {
 
@@ -133,11 +135,10 @@ private:
   void _merge_FFRs();  
   size_t depth_constraint_0 = 4;
   size_t width_constraint_0 = 32;
-  void _valid_merged_FFR(std::vector<size_t> DOF, std::vector<size_t> candidate_FFR);
-
-  // void _DFS_depth_split(std::vector<std::list<size_t>> &bucket_list, size_t depth, std::vector<size_t> &depth_of_each_gates);
-  
-
+  bool _valid_and_merged_FFR(std::vector<std::list<size_t>> &bucket_lists_for_FFRs,
+                            size_t FFR_level,
+                            std::vector<std::vector<size_t>> &merged_FFR, 
+                            bool &merged_FFR_full);
 // -----
 
   void _levelized_partition();
