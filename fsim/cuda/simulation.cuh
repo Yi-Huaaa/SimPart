@@ -52,10 +52,10 @@ __global__ void _update_params_gpu (size_t *_params_gpu, size_t _num_paras, size
 __global__ void print_merged_FFRs_gpu (size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx, size_t _num_PIs, size_t depth_constraint_0, size_t _num_inner_gates, size_t aa);
 
 // partition
-__global__ void _set_params_partition(size_t *_params_gpu, size_t rd, size_t fault_val, size_t idx_accum_sa, 
+__global__ void _set_params_partition(size_t *_params_gpu, size_t rd, size_t fault_val, size_t depth_constraint_0, 
                             size_t wrong_gate, size_t bad_case, size_t max_gate_num_per_level, 
                             size_t idx_accum, size_t pi_g_po_idx_accum, 
-                            size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs, size_t depth_constraint_0);
+                            size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 
 // print for check
 // #define FSIM_DEBUG_PRINT_SIMULATION
@@ -148,7 +148,7 @@ private:
 
   void _merge_FFRs();  
   size_t depth_constraint_0 = 4;
-  size_t width_constraint_0 = 32;
+  size_t width_constraint_0 = 256;
   size_t _largest_FFR_level;
   // store the FFR on each level ->  which FFRs are on this FFR-level 
   std::vector<std::list<size_t>> FFR_levelization; 
