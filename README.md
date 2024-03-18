@@ -17,6 +17,13 @@
 	- .flst: fault list file
 	- .ptn: pattern list file
 
+## Nsight profile
+```
+sudo /usr/local/cuda-12.3/bin/ncu  --import-source yes --section SchedulerStats --section WarpStateStats --section SourceCounters  --set full --section MemoryWorkloadAnalysis_Tables -o rep -f ./main/simple_cuda ../benchmark/c_circuits/c7552.ckt ../benchmark/c_circuits/c7552.flst ../benchmark/c_circuits/c7552.ptn visualization_graph.txt 
+```
+
+
+
 
 ## Records
 * CudaManaged memory version - commit: ADD large circuits input - random2 (sz: b18), random3 (sz: b19)

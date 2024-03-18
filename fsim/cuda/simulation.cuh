@@ -131,7 +131,7 @@ private:
   Fault *_faults;
 
   size_t _num_pattern; // total number of patterns that need to be tested
-  size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
+  size_t _num_rounds;  // ceiling(_num_paㄓttern/SIZE_T_BITS)
   Pattern *_patterns;
 
   // Construct
@@ -148,7 +148,7 @@ private:
 
   void _merge_FFRs();  
   size_t depth_constraint_0 = 4;
-  size_t width_constraint_0 = 256;
+  size_t width_constraint_0 = 1024;
   size_t _largest_FFR_level;
   // store the FFR on each level ->  which FFRs are on this FFR-level 
   std::vector<std::list<size_t>> FFR_levelization; 
@@ -244,7 +244,7 @@ void test_cuGraphExecNodeSetParams_cpu();
                                 cudaGraphNode_t *kernelNode_gate, 
                                 cudaKernelNodeParams *kernelNode_gate_Params, 
                                 cudaGraphNode_t *kernelNode_PO, 
-                                cudaKernelNodeParams *kernelNode_PO_Params);
+                                cudaKernelNodeParams *kernelNode_PO_Params, size_t start_idx, size_t end_idx);
  
   
   // parallel-cuda-graph-partition

@@ -20,6 +20,7 @@ target_compile_options(simple PRIVATE
   -Wextra
   -Wfatal-errors
   -Wshadow
+  -O3
 )
 
 # Set compiler flags for the "main" target
@@ -28,8 +29,7 @@ target_compile_options(simple_cuda PRIVATE
   -Wextra
   -Wfatal-errors
   -Wshadow
-  -g
-  -G
+  -O3
 )
 
 
@@ -39,4 +39,5 @@ target_compile_options(simple_cuda_graph PRIVATE
   -Wextra
   -Wfatal-errors
   -Wshadow
+  -O3
 )

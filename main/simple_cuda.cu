@@ -9,7 +9,7 @@
 // #define visualization
 // #define print_output
 // #define test_makefile
-#define TIMES 1 
+#define TIMES 3
 
 
 double round_to(double value, double precision = 1.0){
