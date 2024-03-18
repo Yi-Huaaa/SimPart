@@ -1567,7 +1567,7 @@ __global__ void _set_params_partition(size_t *_params_gpu_idx_address, size_t rd
   _params_gpu_idx_address[9] = _num_inner_gates;
   _params_gpu_idx_address[10] = _num_POs;
 }
-
+ 
 
 void CUDASimulator::_construct_cuda_graph_partition(
                     cudaStream_t stream1, cudaGraph_t graph, 
