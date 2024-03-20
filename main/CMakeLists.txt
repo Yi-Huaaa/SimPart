@@ -29,7 +29,8 @@ target_compile_options(simple_cuda PRIVATE
   -Wextra
   -Wfatal-errors
   -Wshadow
-  -O3
+  -g
+  -G
 )
 
 

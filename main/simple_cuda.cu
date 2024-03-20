@@ -4,12 +4,12 @@
 #include <fsim/cuda/fsim_cuda.cuh>
 
 // #define run_cuda
-// #define run_cuda_graph
-#define run_cuda_graph_partition
+#define run_cuda_graph
+// #define run_cuda_graph_partition
 // #define visualization
 // #define print_output
 // #define test_makefile
-#define TIMES 3
+#define TIMES 1
 
 
 double round_to(double value, double precision = 1.0){
@@ -48,6 +48,7 @@ int main(int argc, char *argv[]) {
 #ifdef run_cuda_graph
   mode = 1;
   for (size_t t = 0; t < TIMES; t++) {
+    // printf("t = %ld\n", t);
     start = std::chrono::steady_clock::now();
       simulator.run(CUDASimulator::Mode(static_cast<size_t>(mode)), 1);
     end = std::chrono::steady_clock::now();
@@ -59,6 +60,7 @@ int main(int argc, char *argv[]) {
 #ifdef run_cuda_graph_partition
   mode = 2;
   for (size_t t = 0; t < TIMES; t++) {
+    // printf("t = %ld\n", t);
     start = std::chrono::steady_clock::now();
       simulator.run(CUDASimulator::Mode(static_cast<size_t>(mode)), 1);
     end = std::chrono::steady_clock::now();
