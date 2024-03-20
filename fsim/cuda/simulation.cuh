@@ -83,7 +83,7 @@ __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_f
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
 // #define FSIM_DEBUG_GPU_INPUTS
 
-#define CUDA_GRAPH_CHECK
+// #define CUDA_GRAPH_CHECK
 // #define TEST_cuGraphExecNodeSetParams
 
 #define FSIM_LEVELIZAED_PARTITION

@@ -1407,7 +1407,7 @@ void CUDASimulator::_run_parallel_cuda_graph() {
     // wrong_gate = 0;
     fault_num = 0;
     bad_case = 0;   
-    // printf("RD = %ld (_num_rounds = %ld)\n", rd, _num_rounds) ;
+    printf("RD = %ld (_num_rounds = %ld)\n", rd, _num_rounds) ;
     // update KernelNodes params (good case)
     cudaCheckErrors("WTF failed");
     _update_cuda_graph_params(stream1, instance, rd, fault_num, bad_case,
@@ -1415,8 +1415,7 @@ void CUDASimulator::_run_parallel_cuda_graph() {
                               kernelNode_gate, kernelNode_gate_Params,
                               &kernelNode_PO, &kernelNode_PO_Params, 0, _size_of_num_gates_per_level - 2);
 
-    
-    cudaCheckErrors("so sad failed");
+    cudaCheckErrors("_update_cuda_graph_params failed");
 
     _run_good_case_cuda_graph(num_testcases_this_round, stream1, instance);
 
@@ -1485,6 +1484,7 @@ void CUDASimulator::_run_good_case_cuda_graph(const size_t bits, cudaStream_t st
   
   cudaGraphLaunch(instance, stream1);
   cudaCheckErrors("Graph launch failed (_run_good_case_cuda_graph)");  
+  // printf("\n");
   cudaStreamSynchronize(stream1);
   cudaCheckErrors("cudaStreamSynchronize (_run_good_case_cuda_graph) failed");
   // cudaDeviceSynchronize();
@@ -2228,13 +2228,8 @@ __device__ __forceinline__ void _apply_MUX(size_t gate_idx, size_t num_inputs, s
 }
 
 __device__ __forceinline__ void _apply_CLKBUF(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu) {
-  // ElementBase *now_gate = gate._inputs[0];
-  // size_t ret = (now_gate)->_output_value;
-
-  // gate._output_value = ret;
-
   size_t start_location = _gate_inputs_list_start_gpu[gate_idx];
-  size_t ret = _pi_gate_po_output_res_gpu[_gate_inputs_list_gpu[start_location]];
+  _pi_gate_po_output_res_gpu[gate_idx] = _pi_gate_po_output_res_gpu[_gate_inputs_list_gpu[start_location]];
 }
 
 __device__ __forceinline__ void _apply_PI(size_t gate_idx, size_t *_pi_gate_po_output_res_gpu, size_t pattern_val) {
