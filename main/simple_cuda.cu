@@ -3,8 +3,8 @@
 
 #include <fsim/cuda/fsim_cuda.cuh>
 
-// #define run_cuda
-#define run_cuda_graph
+#define run_cuda
+// #define run_cuda_graph
 // #define run_cuda_graph_partition
 // #define visualization
 // #define print_output
