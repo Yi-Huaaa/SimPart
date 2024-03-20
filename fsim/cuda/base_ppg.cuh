@@ -48,7 +48,7 @@ class ElementBase {
   friend __global__ void _run_gate_graph_partition(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, size_t *_params_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx);
 
   friend __global__ void _run_gate(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
-                                GateType *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
+                                size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
                                 size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
                                 size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
                                 const size_t rd, const size_t fault_num, const size_t bad_case, 
