@@ -9,3 +9,9 @@ benchmark/opentimer_dump/netcard_iccad.txt
 benchmark/opentimer_dump/mgc_edit_dist_iccad.txt
 benchmark/opentimer_dump/mgc_matrix_mult_iccad.txt
 
+benchmark/large_circuits/b19_iccad.ckt
+benchmark/large_circuits/leon2_iccad_eval.ckt
+benchmark/large_circuits/leon3mp_iccad.ckt
+benchmark/large_circuits/mgc_edit_dist_iccad.ckt
+benchmark/large_circuits/mgc_matrix_mult_iccad.ckt
+benchmark/large_circuits/netcard_iccad.ckt

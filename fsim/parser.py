@@ -1,5 +1,5 @@
 # should change the filename
-with open("../benchmark/opentimer_dump/c5315.txt", "r") as f:
+with open("../benchmark/opentimer_dump/b19_iccad.txt", "r") as f:
     lines = f.read().split("\n")
 
 # get the index of each section
@@ -27,13 +27,47 @@ connections = [
     if "->" in x
 ]
 
+pin_d = {
+    'CLKBUF':{'A':  1, 'Z':  0},
+    'INV':   {'A':  1, 'ZN': 0},
+    'NAND2': {'A1': 1, 'A2': 2, 'ZN': 0},
+    'NAND3': {'A1': 1, 'A2': 2, 'A3': 3, 'ZN': 0},
+    'NAND4': {'A1': 1, 'A2': 2, 'A3': 3, 'A4': 4, 'ZN': 0},
+    'NOR2':  {'A1': 1, 'A2': 2, 'ZN': 0},
+    'NOR3':  {'A1': 1, 'A2': 2, 'A3': 3, 'ZN': 0},
+    'NOR4':  {'A1': 1, 'A2': 2, 'A3': 3, 'A4': 4, 'ZN': 0},
+    'AOI21': {'A':  1, 'B1': 2, 'B2': 3, 'ZN': 0}, # change to NAND3
+    'AOI22': {'A1': 1, 'A2': 2, 'B1': 3, 'B2': 4, 'ZN': 0}, # change to NAND4
+    'DFF':   {'D':  1, 'CK': 2, 'Q':  0}, # change to NAND2
+    'OAI21': {'A':  1, 'B1': 2, 'B2': 3, 'ZN': 0}, # change to NOR3
+    'OAI22': {'A1': 1, 'A2': 2, 'B1': 3, 'B2': 4, 'ZN': 0}, # change to NOR4
+}
+
+# IMPORTANT: note: for unchanged gates, their order should be the same as in C code
+gate_enum_d = {
+    'INV': 0,
+    'AND': 1,
+    'OR': 2,
+    'XOR': 3,
+    'NAND': 4,
+    'NOR': 5,
+    'XNOR': 6,
+    'MUX': 7,
+    'CLKBUF': 8,
+    'AOI21': 4, # change to NAND3
+    'AOI22': 4, # change to NAND4
+    'DFF': 4, # change to NAND2
+    'OAI21': 5, # change to NOR3
+    'OAI22': 5, # change to NOR4
+}
+
+# a mapping from gate name to the key that will be used to lookup the pin_d table
+gate_name_to_pin_d_key = {x[0]: x[1].split('_')[0] for x in cells}
 
 def gate_enum_to_id(s):
-    # ! IMPORTANT: note: should be the same as in C code
-    gate_enum = ["INV", "AND", "OR", "XOR", "NAND", "NOR", "XNOR", "MUX", "CLKBUF"]
-    for idx, enum in enumerate(gate_enum):
+    for enum in gate_enum_d:
         if s.startswith(enum):
-            return idx
+            return gate_enum_d[enum]
     raise Exception(f"{s} is an unknown gate name")
 
 
@@ -62,28 +96,28 @@ gate_d = {y: idx for idx, y in enumerate(pis + pos + [x[0] for x in cells])}
 # -----
 # Y/Z/ZN: 0, A/A1: 1, B/A2: 2, A3: 3, A4: 4, S: 5
 # for MUX -> input hope to be in order of (A, B, S) = (1, 2, 5)
-pin_d = {
-    "Y": 0,
-    "Z": 0,
-    "ZN": 0,
-    "A": 1,
-    "A1": 1,
-    "B": 2,
-    "A2": 2,
-    "A3": 3,
-    "A4": 4,
-    "S": 5,
-}
-
+# pin_d = {
+#     "Y": 0,
+#     "Z": 0,
+#     "ZN": 0,
+#     "A": 1,
+#     "A1": 1,
+#     "B": 2,
+#     "A2": 2,
+#     "A3": 3,
+#     "A4": 4,
+#     "S": 5,
+# }
 
 def get_gate_and_pin_id(s):
     if ":" in s:
         gate_name, pin_name = s.split(":")
-        return gate_d[gate_name], pin_d[pin_name]
+        pin_d_key = gate_name_to_pin_d_key[gate_name]
+        return gate_d[gate_name], pin_d[pin_d_key][pin_name]
     elif s in pis:
-        return gate_d[s], pin_d["Z"]
+        return gate_d[s], 0
     elif s in pos:
-        return gate_d[s], pin_d["A"]
+        return gate_d[s], 1
     else:
         raise Exception(f"{s} is an unknown gate:pin")
 
