@@ -187,7 +187,7 @@ private:
 
   void _merge_FFRs();  
   size_t depth_constraint_0 = 4;
-  size_t width_constraint_0 = 512; 
+  size_t width_constraint_0 = 512;
   size_t _largest_FFR_level;
   // store the FFR on each level ->  which FFRs are on this FFR-level 
   std::vector<std::list<size_t>> FFR_levelization; 

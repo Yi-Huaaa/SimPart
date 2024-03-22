@@ -10,6 +10,7 @@
 // #define print_output
 // #define test_makefile
 #define TIMES 1
+#define FSIM_SHOW_ONLY_RUNTIME_OF_RUN
 
 
 double round_to(double value, double precision = 1.0){
@@ -73,6 +74,7 @@ int main(int argc, char *argv[]) {
   simulator.visualization_graph(outputfile_path);
 #endif 
 
+#ifdef FSIM_SHOWALL
   std::cout << "Execution Time:\n";
   std::cout << "read_data: " << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
 #ifdef run_cuda
@@ -83,6 +85,19 @@ int main(int argc, char *argv[]) {
 #endif
 #ifdef run_cuda_graph_partition
   std::cout << "run_CUDA_GRAPH_PART: " <<  round_to(((duration_CUDA_GRAPH_PARTITION.count()/TIMES))*1000, 0.001) << " ms\n";
+#endif
+#endif
+
+#ifdef FSIM_SHOW_ONLY_RUNTIME_OF_RUN
+#ifdef run_cuda
+  std::cout << round_to(((duration_CUDA.count()/TIMES))*1000, 0.001) << "\n";
+#endif
+#ifdef run_cuda_graph
+  std::cout << round_to(((duration_CUDA_GRAPH.count()/TIMES))*1000, 0.001) << "\n";
+#endif
+#ifdef run_cuda_graph_partition
+  std::cout << round_to(((duration_CUDA_GRAPH_PARTITION.count()/TIMES))*1000, 0.001) << "\n";
+#endif
 #endif
 
   return 0;

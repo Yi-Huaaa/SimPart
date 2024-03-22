@@ -2841,26 +2841,26 @@ void CUDASimulator::print_topological(
   const std::vector<std::vector<size_t>> &adj,
   const std::vector<size_t> &indegree,
   const std::vector<size_t> &order) const {
-std::cout << "\n=====\n\nadj:\n";
-for (size_t i = 0; i < adj.size(); i++) {
-  std::cout << i << " = [";
-  for (size_t v_len = 0; v_len < adj[i].size(); v_len++) {
-    std::cout << adj[i][v_len] << ", ";
+  std::cout << "\n=====\n\nadj:\n";
+  for (size_t i = 0; i < adj.size(); i++) {
+    std::cout << i << " = [";
+    for (size_t v_len = 0; v_len < adj[i].size(); v_len++) {
+      std::cout << adj[i][v_len] << ", ";
+    }
+    std::cout << "]\n";
   }
-  std::cout << "]\n";
-}
-std::cout << "\n";
+  std::cout << "\n";
 
-std::cout << "Indegree:\n";
-for (size_t i = 0; i < indegree.size(); i++) {
-  std::cout << i << " = [" << indegree[i] << "]\n";
-}
+  std::cout << "Indegree:\n";
+  for (size_t i = 0; i < indegree.size(); i++) {
+    std::cout << i << " = [" << indegree[i] << "]\n";
+  }
 
-std::cout << "Order:\n";
-for (size_t i = 0; i < order.size(); i++) {
-  std::cout << order[i] << ", ";
-}
-std::cout << "\n";
+  std::cout << "Order:\n";
+  for (size_t i = 0; i < order.size(); i++) {
+    std::cout << order[i] << ", ";
+  }
+  std::cout << "\n";
 }
 
 void CUDASimulator::print_gate_input_order_table(std::vector<std::vector<size_t>> input_table) {
