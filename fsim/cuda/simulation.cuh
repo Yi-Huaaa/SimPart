@@ -8,6 +8,7 @@
 #include <cuda_runtime_api.h>
 #include <list>
 #include <cublas_v2.h>
+#include <set>
 
 #include "base_ppg.cuh"
 #include "fault.cuh"
@@ -60,13 +61,14 @@ __global__ void _update_params_gpu (size_t *_params_gpu_idx_address, size_t _num
 
 
 // partition
-__global__ void _run_gate_graph_partition(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, size_t *_params_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx);
-__global__ void _set_params_partition(size_t *_params_gpu, size_t rd, size_t fault_val, size_t depth_constraint_0, 
-                            size_t wrong_gate, size_t bad_case, size_t max_gate_num_per_level, 
-                            size_t idx_accum, size_t pi_g_po_idx_accum, 
-                            size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__global__ void _run_gate_graph_partition(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
+                                          size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
+                                          size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
+                                          size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
+                                          size_t *_params_gpu,
+                                          size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx);
 
-__global__ void print_merged_FFRs_gpu (size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx, size_t _num_PIs, size_t depth_constraint_0, size_t _num_inner_gates, size_t aa);
+__global__ void print_merged_FFRs_gpu (size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx, size_t sum_pi_gates_pos, size_t aa);
 
 // for FSIM_DEBUG_GPU_INPUTS
 __global__ void print_pi_gate_po_gate_type_gpu(size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_num_inputs_gpu, size_t num);
@@ -86,10 +88,10 @@ __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_f
 // #define CUDA_GRAPH_CHECK
 // #define TEST_cuGraphExecNodeSetParams
 
-#define FSIM_LEVELIZAED_PARTITION
+// #define FSIM_LEVELIZAED_PARTITION
 
 // #define FSIM_CHECK_FFR
-// #define FSIM_PARTITION_FFR // partition_FFR
+#define FSIM_PARTITION_FFR // partition_FFR
 // #define FSIM_PARTITION_CORRECTNESS
 
 
@@ -120,7 +122,12 @@ friend __global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fau
                               size_t idx_accum, size_t pi_g_po_idx_accum, 
                               size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 
-friend __global__ void _run_gate_graph_partition(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, size_t *_params_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx);
+friend __global__ void _run_gate_graph_partition(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
+                                                size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
+                                                size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
+                                                size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
+                                                size_t *_params_gpu,
+                                                size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx);
 
 
 public:
@@ -179,7 +186,7 @@ private:
             std::queue<size_t> &source_queue);
 
   void _merge_FFRs();  
-  size_t depth_constraint_0 = 2;
+  size_t depth_constraint_0 = 4;
   size_t width_constraint_0 = 512; 
   size_t _largest_FFR_level;
   // store the FFR on each level ->  which FFRs are on this FFR-level 
@@ -194,6 +201,10 @@ private:
   size_t _num_FFRs;
   // merged_FFRs: used to store FFR, store the gate_idx merged in this FFR
   std::vector<std::vector<std::vector<std::vector<size_t>>>> merged_FFRs; 
+  std::vector<size_t> merged_FFRs_level; // store the level of each FFRs after merged
+  // used to help construct the PARTITION CUDA GRAPHs
+  std::vector<std::set<size_t>> merged_FFRs_dependency; // recoed the "inputs" of each merged FFRs
+
   
 // ---- FFR parition
 
@@ -306,7 +317,7 @@ void test_cuGraphExecNodeSetParams_cpu();
                                       void **kernelArgs_PI,
                                       void **kernelArgs_gate,
                                       void **kernelArgs_PO,
-                                      size_t **params_gpu_idx);
+                                      size_t **params_gpu_idx, size_t num_func_inputs);
   void _run_good_case_cuda_graph_partition(const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
   void _run_bad_case_cuda_graph_partition(const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);  
                         
