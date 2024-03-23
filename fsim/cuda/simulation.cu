@@ -434,8 +434,7 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
 #ifdef FSIM_PARTITION_FFR
   // todo: use "SMART POINTER"  / learn: difference between: "smart pointer," "unique pointer," and "shared pointer".
   // note: in Java, every pointer is a smart poiniter, so after new, we have no need to free the memory 
-  
-  // _num_FFRs = 100;
+
   _find_split_merge_FFRs();
 #endif 
 
@@ -667,14 +666,18 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
   // vector: level, 
   merged_FFRs.resize(_largest_FFR_level);
   for (size_t level = 0; level < _largest_FFR_level; level++) { // all levels
+    // printf("level = %zu\n", level);
+
     size_t num_merged_FFRs = 0;
     std::vector<std::vector<size_t>> merged_FFR; merged_FFR.resize(depth_constraint_0);
     while (num_FFRs_in_this_level[level] > num_merged_FFRs) {
       
       // printf("num_FFRs_in_this_level[%ld] = %ld (w/ num_merged_FFRs = %ld)\n", level, num_FFRs_in_this_level[level], num_merged_FFRs);
       bool merged_FFR_full = false; 
+      size_t debug_check_FFR = 0;
       // update, pick a new candidate FFR to merge
       for (int sl = (depth_constraint_0-1); sl > -1 ; sl--) { // pick from the largest FFR
+        // printf("level = %zu, sl = %zu\n", level, sl);
         size_t num_FFRs_in_this_sub_level = FFR_levelization_with_depth[level][sl].size();
         while (num_FFRs_in_this_sub_level--) {
           // printf("sl = %ld, num_FFRs_in_this_sub_level = %ld\n", sl, num_FFRs_in_this_sub_level);
@@ -690,17 +693,24 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
           }
           // test whether the merged box is full 
           if (merged_FFR_full || (num_merged_FFRs == num_FFRs_in_this_level[level])) { // merged_FFR_full or all FFRs have been merged
+            // printf("inside merged_FFR_full || (num_merged_FFRs == num_FFRs_in_this_level[level]\n");
             merged_FFRs[level].push_back(merged_FFR);
+            debug_check_FFR++;
             merged_FFR.clear(); merged_FFR.resize(depth_constraint_0);
             merged_FFRs_level.push_back(level+1); // since level 0 is PI
             merged_FFR_full = false;
           }
         }
       }
-      bool need_to_push_in = true;
+      bool need_to_push_in = false;
+      // 至少有一層大於 0 就要 push 出去了
       for (size_t ii = 0; ii < depth_constraint_0; ii++) {
-        need_to_push_in &= (merged_FFR[ii].size() > 0);
+        need_to_push_in |= (merged_FFR[ii].size() > 0);
       }
+      // if ((debug_check_FFR == 0)) {
+      //   printf("need_to_push_in = %d\n", need_to_push_in);
+      //   exit(1);
+      // }
       if (need_to_push_in) {
         // printf("Inside here, merged_FFRs[%ld].size() = %ld, merged_FFR.size() = %ld\n", level, merged_FFRs[level].size(), merged_FFR.size());
         merged_FFRs[level].push_back(merged_FFR);
@@ -713,8 +723,10 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
 
   _num_FFRs = 0; 
   for (size_t i = 0; i < _largest_FFR_level; i++) {
+    // printf("i = %zu, _num_FFRs = %zu\n", i, _num_FFRs);
     _num_FFRs += merged_FFRs[i].size();
   }
+  // printf("_largest_FFR_level = %ld\n", _largest_FFR_level);
   
 #ifdef FSIM_CHECK_FFR
   printf("PP _num_FFRs = %ld, merged_FFRs_level.size() = %ld\n", _num_FFRs, merged_FFRs_level.size());

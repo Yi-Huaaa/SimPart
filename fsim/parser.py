@@ -1,6 +1,12 @@
+import sys
+
+# python parser.py <input> <output> <mode>
+
 # should change the filename
-with open("../benchmark/opentimer_dump/b19_iccad.txt", "r") as f:
+with open(sys.argv[1], "r") as f:
     lines = f.read().split("\n")
+outfile = open(sys.argv[2], "w")
+mode = sys.argv[3]
 
 # get the index of each section
 start_pi_idx = lines.index("// Start PIs")
@@ -121,18 +127,87 @@ def get_gate_and_pin_id(s):
     else:
         raise Exception(f"{s} is an unknown gate:pin")
 
+# remove loops
+from collections import deque
+
+source = deque(pis)
+visited = set()
+
+while source:
+    if mode == 'bfs':
+        cur = source.popleft()
+    elif mode == 'dfs':
+        cur = source.pop()
+    else:
+        raise Exception('unknown mode')
+    
+    if cur in visited:
+        continue
+    visited.add(cur)
+
+    # debug
+    if len(visited) % 100000 == 0:
+        print('progress', len(visited))
+
+    for post in ['', ':Z', ':ZN', ':Q']:
+        if cur + post in connections_d:
+            outputs = connections_d[cur + post]
+            break
+    else:
+        if cur in pos:
+            continue
+        raise Exception('not found!')
+
+    outputs = [x.split(':')[0] for x in outputs]
+    for out in outputs:
+        if out in visited:
+            connections_d[cur + post] = {
+                x for x in connections_d[cur + post]
+                if not x.startswith(out)
+            }
+        else:
+            source.append(out)
 
 # output
-print(len(pis))
-print(len(pos))
-print(len(cells))
+print(len(pis), file=outfile)
+print(len(pos), file=outfile)
+print(len(cells), file=outfile)
 
-print(len(connections_d))
+print(len(connections_d), file=outfile)
 for k, v in connections_d.items():
     print(
         " ".join(map(str, get_gate_and_pin_id(k))),
         len(v),
         *map(lambda x: " ".join(map(str, x)), map(get_gate_and_pin_id, v)),
+        file=outfile
     )
 
-print(" ".join(map(str, gate_type_ids)))
+print(" ".join(map(str, gate_type_ids)), file=outfile)
+
+# def find(s):
+#     s = s.split(':')[0]
+#     result = []
+#     for k, v in connections_d.items():
+#         for vv in v:
+#             if s in vv: result.append(k)
+#     return result
+
+# cur = 'ris_22_'
+# seen = set()
+# while True:
+#     if ':' in cur:
+#         gate_name = cur.split(":")[0]
+#         pin_d_key = gate_name_to_pin_d_key[gate_name]
+#     else:
+#         pin_d_key = None
+#     print('cur', cur, get_gate_and_pin_id(cur), pin_d_key)
+
+#     if cur.startswith('in'):
+#         break
+    
+#     assert cur not in seen, 'loop!'
+#     seen.add(cur)
+    
+#     l = find(cur)
+#     assert l, 'not l'
+#     cur = l[0]
