@@ -2153,8 +2153,9 @@ __global__ void _run_gate_graph_partition(size_t *_gate_inputs_list_gpu, size_t 
   const size_t depth_constraint_0 = _params_gpu[4]; // means the dpeth of the FFRs, this would be different from FFRs
   const size_t _num_PIs = _params_gpu[5];
 
-  size_t t_idx = threadIdx.x;
-  size_t b_idx = blockIdx.x;
+  // size_t t_idx = threadIdx.x;
+  // size_t b_idx = blockIdx.x;
+  size_t tb_idx = blockIdx.x*blockDim.x + threadIdx.x;
 
   for (size_t sl = 0; sl < depth_constraint_0; sl++) {
     // 要記錄的是：
@@ -2164,11 +2165,11 @@ __global__ void _run_gate_graph_partition(size_t *_gate_inputs_list_gpu, size_t 
     size_t start_gate_idx = merged_FFRs_gpu_idx[idx_idx];
     size_t num_gates_in_this_sublevel = merged_FFRs_gpu_idx[idx_idx+1] - merged_FFRs_gpu_idx[idx_idx];
 
-    if (num_gates_in_this_sublevel > t_idx) {
-      size_t real_g_idx = merged_FFRs_gpu[start_gate_idx+t_idx];
+    if (num_gates_in_this_sublevel > tb_idx) {
+      size_t real_g_idx = merged_FFRs_gpu[start_gate_idx+tb_idx];
       size_t SA_fault = (((real_g_idx) == _fault_gate_idx_gpu[fault_num]) & bad_case);
-      // if (t_idx == 0)
-      //   printf("sl = %ld, t_idx = %ld (real_g_idx = %ld), idx_idx = %ld, start_gate_idx = %ld, num_gates_in_this_sublevel = %ld\n", sl, t_idx, real_g_idx, idx_idx, start_gate_idx, num_gates_in_this_sublevel);
+      // if (tb_idx == 0)
+      //   printf("sl = %ld, tb_idx = %ld (real_g_idx = %ld), idx_idx = %ld, start_gate_idx = %ld, num_gates_in_this_sublevel = %ld\n", sl, t_idx, real_g_idx, idx_idx, start_gate_idx, num_gates_in_this_sublevel);
 
       if (SA_fault) {
         _pi_gate_po_output_res_gpu[real_g_idx] = _fault_SA_fault_val_gpu[fault_num];
