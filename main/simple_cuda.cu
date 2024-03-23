@@ -10,8 +10,8 @@
 // #define print_output
 // #define test_makefile
 #define TIMES 1
-#define FSIM_SHOWALL
-// #define FSIM_SHOW_ONLY_RUNTIME_OF_RUN
+// #define FSIM_SHOWALL
+#define FSIM_SHOW_ONLY_RUNTIME_OF_RUN
 
 
 double round_to(double value, double precision = 1.0){

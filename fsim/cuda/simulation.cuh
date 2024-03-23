@@ -186,8 +186,8 @@ private:
             std::queue<size_t> &source_queue);
 
   void _merge_FFRs();  
-  size_t depth_constraint_0 = 3;
-  size_t width_constraint_0 = 512;
+  size_t depth_constraint_0 = 4;
+  size_t width_constraint_0 = 4096;
   size_t _largest_FFR_level;
   // store the FFR on each level ->  which FFRs are on this FFR-level 
   std::vector<std::list<size_t>> FFR_levelization; 
@@ -204,6 +204,7 @@ private:
   std::vector<size_t> merged_FFRs_level; // store the level of each FFRs after merged
   // used to help construct the PARTITION CUDA GRAPHs
   std::vector<std::set<size_t>> merged_FFRs_dependency; // recoed the "inputs" of each merged FFRs
+  std::vector<size_t> max_number_of_gates_of_FFR; // used to decide the number of thread in each FFR
 
   
 // ---- FFR parition

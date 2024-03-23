@@ -13,6 +13,7 @@
 #include <vector>
 #include <list>
 #include <set>
+#include <cmath>
 
 #include <cuda_runtime_api.h>
 #include <cublas_v2.h>
@@ -795,15 +796,47 @@ void CUDASimulator::_find_split_merge_FFRs() { // find fanout-free FFRs
     }
   }
 
+  // 0323 compute the #threads and blocks in each block
+  max_number_of_gates_of_FFR.resize(_num_FFRs+2);
+  size_t accum = 0;
+
+  // PI
+  max_number_of_gates_of_FFR[accum] = size_t(int((_num_PIs+31) & (-32))); // round to 32x
+  accum++;
+
+  // merged_FFRs
+  size_t to_set_max_threads = 0; 
+  for (size_t lvl = 0; lvl < merged_FFRs.size(); lvl++) {
+    for (size_t ffr = 0; ffr < merged_FFRs[lvl].size(); ffr++) {
+      for (int sl = merged_FFRs[lvl][ffr].size()-1; sl > -1 ; sl--) { // sub-level 
+          to_set_max_threads = (merged_FFRs[lvl][ffr][sl].size() > to_set_max_threads) 
+                            ? (merged_FFRs[lvl][ffr][sl].size()) : (to_set_max_threads);
+      }
+      max_number_of_gates_of_FFR[accum] = size_t(int((to_set_max_threads+31) & (-32))); // round to 32x
+      to_set_max_threads = 0;
+      accum++;
+    }
+  }
+
+  // PO
+  max_number_of_gates_of_FFR[accum] = size_t(int((_num_POs+31) & (-32))); // round to 32x
+  accum++;
+
 #ifdef FSIM_CHECK_FFR  
   printf("merged_FFRs_dependency:\n");
-  for (size_t i = 0; i < merged_FFRs_dependency.size(); ++i) {
+  for (size_t i = 0; i < _num_FFRs+2; ++i) {
     printf("merged_FFR_%zu dependencies: ", i);
     for (auto it = merged_FFRs_dependency[i].begin(); it != merged_FFRs_dependency[i].end(); ++it) {
         printf("%zu ", *it);
     }
     printf("\n");
   }  
+
+  printf("_num_FFRs+2 = %zu, accum = %zu\n, max_number_of_gates_of_FFR: \n", _num_FFRs+2, accum);
+  for (size_t i = 0; i < max_number_of_gates_of_FFR.size(); i++) {
+    printf("max_number_of_gates_of_FFR[%zu] = %zu\n", i, max_number_of_gates_of_FFR[i]);
+  }
+
 #endif  
 #ifdef FSIM_PARTITION_CORRECTNESS
   // only uesd for testing the partition algo
@@ -1672,8 +1705,8 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
   kernelArgs_PI[9] = (void *)&merged_FFRs_gpu;
   kernelArgs_PI[10] = (void *)&merged_FFRs_gpu_idx;
 
-  num_blocks = (_num_PIs > 1024) ? ((_num_PIs + 1024 - 1) >> 10) : (1); // 1;  
-  num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs); // _num_PIs;
+  num_blocks = (max_number_of_gates_of_FFR[0] > 1024) ? ((max_number_of_gates_of_FFR[0] + 1024 - 1) >> 10) : (1); // 1;  
+  num_threads = (max_number_of_gates_of_FFR[0] > 1024) ? (1024) : (max_number_of_gates_of_FFR[0]); // _num_PIs;
 
   size_t rd = 0;
   size_t fault_num = 0;
@@ -1719,8 +1752,10 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
     kernelArgs_gate[i*num_func_inputs+10] = (void *)&merged_FFRs_gpu_idx;
 
     // construct gate node
-    num_blocks = 1;
-    num_threads = width_constraint_0;
+    num_blocks = (max_number_of_gates_of_FFR[i+1] > 1024) ? ((max_number_of_gates_of_FFR[i+1] + 1024 - 1) >> 10) : (1);
+    num_threads = (max_number_of_gates_of_FFR[i+1] > 1024) ? (1024) : (max_number_of_gates_of_FFR[i+1]);
+    // num_blocks = 1;
+    // num_threads = width_constraint_0;
 
     _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[kernelNode_idx], rd, fault_num, bad_case, kernelNode_idx, depth_constraint_0, _num_PIs);
     cudaDeviceSynchronize();
@@ -1759,8 +1794,8 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
   kernelArgs_PO[9] = (void *)&merged_FFRs_gpu; 
   kernelArgs_PO[10] = (void *)&merged_FFRs_gpu_idx; 
 
-  num_blocks = (_num_POs > 1024) ? ((_num_POs + 1024 - 1) >> 10) : (1); // 1;
-  num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);
+  num_blocks = (max_number_of_gates_of_FFR[_num_FFRs+1] > 1024) ? ((max_number_of_gates_of_FFR[_num_FFRs+1] + 1024 - 1) >> 10) : (1); // 1;  
+  num_threads = (max_number_of_gates_of_FFR[_num_FFRs+1] > 1024) ? (1024) : (max_number_of_gates_of_FFR[_num_FFRs+1]); // _num_PIs;
   _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[kernelNode_idx], rd, fault_num, bad_case, kernelNode_idx, depth_constraint_0, _num_PIs);
   cudaDeviceSynchronize();  
   cudaCheckErrors("PO _set_params cudaDeviceSynchronize failed");
