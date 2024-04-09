@@ -93,6 +93,8 @@ __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_f
 // #define FSIM_CHECK_FFR
 #define FSIM_PARTITION_FFR // partition_FFR
 // #define FSIM_PARTITION_CORRECTNESS
+// #define FSIM_PREPARED_SECOND_RD_MERGED_FFRS
+
 
 
 
@@ -180,35 +182,67 @@ private:
   void _read_pattern(std::istream &ptn);
 
 // ---- FFR parition
-  void _find_split_merge_FFRs();
+  void _find_split_merge_FFRs(std::vector<bool> &visited, 
+                              std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs, 
+                              std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs_tmp, 
+                              std::vector<size_t> &gate_to_FFR, std::vector<std::list<size_t>> &FFR_levelization,
+                              std::vector<size_t> &level_of_FFRs, 
+                              size_t width_constraint, size_t depth_constraint);
+  void _find_split_merge_FFRs_2(std::vector<bool> &visited, 
+                              std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs, 
+                              std::vector<size_t> &gate_to_FFR, std::vector<std::list<size_t>> &FFR_levelization,
+                              std::vector<size_t> &level_of_FFRs, 
+                              size_t width_constraint, size_t depth_constraint);                              
   void _DFS(std::vector<bool> &visited, size_t gate_idx, 
             std::vector<std::list<size_t>> &bucket_list, size_t depth,
-            std::queue<size_t> &source_queue);
+            std::queue<size_t> &source_queue, size_t width_constraint, size_t depth_constraint);
+
+  // merged_FFRs
+  void _merged_FFRs_func (std::vector<std::vector<std::queue<size_t>>> &FFR_levelization_with_depth,
+                          std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs);
+  void _prepared_for_second_rd_merged_FFRs(std::vector<bool> &visited, 
+                                          std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs_tmp,
+                                          std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs_2, 
+                                          std::vector<size_t> &level_of_FFRs);
 
   void _merge_FFRs();  
-  size_t depth_constraint_0 = 2;
-  size_t width_constraint_0 = 4096;
+  const size_t width_constraint_0 = 1024;
+  const size_t depth_constraint_0 = 2; 
+  const size_t width_constraint_1 = 32; // 32
+  const size_t depth_constraint_1 = 4; // 4
+  
+  
+  // size_t depth_constraint_2 = 8; // 大測資：5, 6, 7, 8, 5, 6
+  // size_t width_constraint_2 = ;
+
+
   size_t _largest_FFR_level;
-  // store the FFR on each level ->  which FFRs are on this FFR-level 
-  std::vector<std::list<size_t>> FFR_levelization; 
+  
   // compute number of FFRs in each level 
   std::vector<size_t> num_FFRs_in_this_level;
   bool _valid_and_merged_FFR(std::vector<std::list<size_t>> &bucket_lists_for_FFRs,
                             size_t FFR_level,
                             std::vector<std::vector<size_t>> &merged_FFR, 
-                            bool &merged_FFR_full);
+                            bool &merged_FFR_full, size_t width_constraint, size_t depth_constraint);
+
+
+  size_t _second_part_start_merged_FFRs_level;
+  // size_t _last_merged_FFRs_levels [6] = {6, 6, 7, 8, 5, 6,};
+  const size_t _num_level_merged_FFRs_second_rd = 6;
+
+
   // after merge
   size_t _num_FFRs;
   // merged_FFRs: used to store FFR, store the gate_idx merged in this FFR
-  std::vector<std::vector<std::vector<std::vector<size_t>>>> merged_FFRs; 
+  std::vector<std::vector<std::vector<std::vector<size_t>>>> _merged_FFRs; 
   std::vector<size_t> merged_FFRs_level; // store the level of each FFRs after merged
   // used to help construct the PARTITION CUDA GRAPHs
-  std::vector<std::set<size_t>> merged_FFRs_dependency; // recoed the "inputs" of each merged FFRs
+  std::vector<std::set<size_t>> _merged_FFRs_dependency; // recoed the "inputs" of each merged FFRs
   std::vector<size_t> max_number_of_gates_of_FFR; // used to decide the number of thread in each FFR
 
   
 // ---- FFR parition
-
+  void _find_CUDA_GRAPH_dependency();
   
   // Simulation
   size_t *_gate_inputs_list;
@@ -265,10 +299,10 @@ private:
 // ---- FFR parition
 
 // TESTING
-// #ifdef TEST_cuGraphExecNodeSetParams  
-size_t *_params_gpu_tmptmp; // used for testing --> DELETE!
-void test_cuGraphExecNodeSetParams_cpu();
-// #endif
+#ifdef TEST_cuGraphExecNodeSetParams  
+  size_t *_params_gpu_tmptmp; // used for testing --> DELETE!
+  void test_cuGraphExecNodeSetParams_cpu();
+#endif
 // TESTING
 
 
