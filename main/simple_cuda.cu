@@ -5,7 +5,7 @@
 
 // #define run_cuda
 // #define run_cuda_graph
-// #define run_cuda_graph_partition
+#define run_cuda_graph_partition
 // #define visualization
 // #define print_output
 // #define test_makefile

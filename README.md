@@ -1,6 +1,6 @@
 # Fault-simulation
 
-## Build adn run
+## Build and run
 
 ```
 ~$ mkdir build

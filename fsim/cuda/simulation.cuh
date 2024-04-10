@@ -188,28 +188,20 @@ private:
                               std::vector<size_t> &gate_to_FFR, std::vector<std::list<size_t>> &FFR_levelization,
                               std::vector<size_t> &level_of_FFRs, 
                               size_t width_constraint, size_t depth_constraint);
-  void _find_split_merge_FFRs_2(std::vector<bool> &visited, 
-                              std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs, 
-                              std::vector<size_t> &gate_to_FFR, std::vector<std::list<size_t>> &FFR_levelization,
-                              std::vector<size_t> &level_of_FFRs, 
-                              size_t width_constraint, size_t depth_constraint);                              
+
   void _DFS(std::vector<bool> &visited, size_t gate_idx, 
             std::vector<std::list<size_t>> &bucket_list, size_t depth,
             std::queue<size_t> &source_queue, size_t width_constraint, size_t depth_constraint);
 
   // merged_FFRs
   void _merged_FFRs_func (std::vector<std::vector<std::queue<size_t>>> &FFR_levelization_with_depth,
-                          std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs);
-  void _prepared_for_second_rd_merged_FFRs(std::vector<bool> &visited, 
-                                          std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs_tmp,
-                                          std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs_2, 
-                                          std::vector<size_t> &level_of_FFRs);
+                          std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs,
+                        size_t width_constraint, size_t depth_constraint);
 
   void _merge_FFRs();  
   const size_t width_constraint_0 = 1024;
   const size_t depth_constraint_0 = 2; 
-  const size_t width_constraint_1 = 32; // 32
-  const size_t depth_constraint_1 = 4; // 4
+
   
   
   // size_t depth_constraint_2 = 8; // 大測資：5, 6, 7, 8, 5, 6
