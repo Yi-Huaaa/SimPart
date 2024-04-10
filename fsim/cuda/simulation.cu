@@ -442,8 +442,6 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   std::vector<bool> visited(_num_inner_gates, false);
   _largest_FFR_level = 0; // MAX number of level for FFRs
   std::vector<std::vector<std::list<size_t>>> bucket_lists_for_all_FFRs;
-  std::vector<std::vector<std::list<size_t>>> bucket_lists_for_all_FFRs_tmp;
-  std::vector<std::vector<std::list<size_t>>> bucket_lists_for_all_FFRs_2;
   _second_part_start_merged_FFRs_level = SIZE_MAX; //
   std::vector<size_t> gate_to_FFR; 
   std::vector<size_t> level_of_FFRs;
@@ -451,7 +449,7 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   std::vector<std::list<size_t>> FFR_levelization; 
 
 
-  _find_split_merge_FFRs(visited, bucket_lists_for_all_FFRs, bucket_lists_for_all_FFRs_tmp, 
+  _find_split_merge_FFRs(visited, bucket_lists_for_all_FFRs, 
                          gate_to_FFR, FFR_levelization, level_of_FFRs, 
                          width_constraint_0, depth_constraint_0);
   
@@ -527,7 +525,6 @@ void CUDASimulator::_DFS(std::vector<bool> &visited, size_t gate_idx, std::vecto
 
 void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited, 
                                     std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs,
-                                    std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs_tmp,
                                     std::vector<size_t> &gate_to_FFR, std::vector<std::list<size_t>> &FFR_levelization, 
                                     std::vector<size_t> &level_of_FFRs,
                                     size_t width_constraint, size_t depth_constraint) { // find fanout-free FFRs
@@ -578,9 +575,6 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
   printf("aaccum = %ld, #gates = %ld, ", aaccum, _num_inner_gates);
   printf("answer: %s", answer ? "True\n" : "False QAQ\n");
 #endif
-  
-  // copy bucket_lists_for_all_FFRs
-  bucket_lists_for_all_FFRs_tmp = bucket_lists_for_all_FFRs;
 
   // map gate to its FFR
   // std::vector<size_t> gate_to_FFR; 

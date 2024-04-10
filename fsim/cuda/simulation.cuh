@@ -184,7 +184,6 @@ private:
 // ---- FFR parition
   void _find_split_merge_FFRs(std::vector<bool> &visited, 
                               std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs, 
-                              std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs_tmp, 
                               std::vector<size_t> &gate_to_FFR, std::vector<std::list<size_t>> &FFR_levelization,
                               std::vector<size_t> &level_of_FFRs, 
                               size_t width_constraint, size_t depth_constraint);
