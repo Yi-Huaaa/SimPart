@@ -181,16 +181,19 @@ private:
   void _read_fault(std::istream &flst);
   void _read_pattern(std::istream &ptn);
 
-// ---- FFR parition
+  // ---- FFR parition
+  std::vector<std::vector<std::list<size_t>>> _bucket_lists_for_all_FFRs;
+  // store the FFR on each level ->  which FFRs are on this FFR-level 
+  std::vector<std::vector<size_t>> _FFR_levelization;
   void _find_split_merge_FFRs(std::vector<bool> &visited, 
-                              std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs, 
-                              std::vector<size_t> &gate_to_FFR, std::vector<std::list<size_t>> &FFR_levelization,
+                              std::vector<size_t> &gate_to_FFR, 
                               std::vector<size_t> &level_of_FFRs, 
                               size_t width_constraint, size_t depth_constraint);
 
   void _DFS(std::vector<bool> &visited, size_t gate_idx, 
             std::vector<std::list<size_t>> &bucket_list, size_t depth,
-            std::queue<size_t> &source_queue, size_t width_constraint, size_t depth_constraint);
+            std::queue<size_t> &source_queue, 
+            size_t width_constraint, size_t depth_constraint);
 
   // merged_FFRs
   void _merged_FFRs_func (std::vector<std::vector<std::queue<size_t>>> &FFR_levelization_with_depth,
@@ -200,6 +203,9 @@ private:
   void _merge_FFRs();  
   const size_t width_constraint_0 = 1024;
   const size_t depth_constraint_0 = 2; 
+
+  const size_t _FFR_width_constraint = 1;
+  const size_t _FFR_depth_constraint = 1;
 
   
   
@@ -217,7 +223,6 @@ private:
                             bool &merged_FFR_full, size_t width_constraint, size_t depth_constraint);
 
 
-  size_t _second_part_start_merged_FFRs_level;
   // size_t _last_merged_FFRs_levels [6] = {6, 6, 7, 8, 5, 6,};
   const size_t _num_level_merged_FFRs_second_rd = 6;
 
@@ -238,7 +243,7 @@ private:
   // Simulation
   size_t *_gate_inputs_list;
   size_t *_gate_inputs_list_start;
-  size_t sum_inputs_gates;
+  size_t _sum_inputs_gates;
   size_t *_found_fault_to_pattern;
 
 
