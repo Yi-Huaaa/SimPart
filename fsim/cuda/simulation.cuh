@@ -68,12 +68,21 @@ __global__ void _run_gate_graph_partition(size_t *_gate_inputs_list_gpu, size_t 
                                           size_t *_params_gpu,
                                           size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx);
 
+__global__ void _run_gate_graph_partition_2(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
+                                          size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
+                                          size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
+                                          size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
+                                          size_t *_params_gpu,
+                                          size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx,
+                                          size_t *_FFR_levelization_gpu);
+
 __global__ void print_merged_FFRs_gpu (size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx, size_t sum_pi_gates_pos, size_t aa);
 
 // for FSIM_DEBUG_GPU_INPUTS
 __global__ void print_pi_gate_po_gate_type_gpu(size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_num_inputs_gpu, size_t num);
 __global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs);
-__global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, size_t _num_faults);
+__global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, size_t _num_faults, 
+                                        size_t * _FFR_levelization_gpu, size_t s, size_t n);
 
 
 // print for check
@@ -207,11 +216,6 @@ private:
   const size_t _FFR_width_constraint = 1;
   const size_t _FFR_depth_constraint = 1;
 
-  
-  
-  // size_t depth_constraint_2 = 8; // 大測資：5, 6, 7, 8, 5, 6
-  // size_t width_constraint_2 = ;
-
 
   size_t _largest_FFR_level;
   
@@ -292,6 +296,13 @@ private:
   size_t *merged_FFRs_gpu; // GPU
   size_t *merged_FFRs_gpu_idx; // GPU
   void _gpu_ask_copy_mem_partition();
+
+  // Optimization: bottom FFR merge
+  size_t _start_merged_FFR_levels;
+  size_t *_FFR_levelization_gpu;
+  // whether pull up this optimization 
+  bool _pull_up_merged_FFR_level_optimization; 
+  
 // ---- FFR parition
 
 // TESTING
@@ -338,6 +349,7 @@ private:
   
   // parallel-cuda-graph-partition
   void _run_parallel_cuda_graph_partition();
+  size_t _merged_FFRs_in_last_levels();
   void _construct_cuda_graph_partition(cudaStream_t stream1, cudaGraph_t graph, 
                                       cudaGraphNode_t *kernelNode_PI, 
                                       cudaKernelNodeParams *kernelNode_PI_Params,
