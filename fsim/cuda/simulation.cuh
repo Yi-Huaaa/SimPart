@@ -99,8 +99,8 @@ __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_f
 
 // #define FSIM_LEVELIZAED_PARTITION
 
-// #define FSIM_CHECK_FFR
 #define FSIM_PARTITION_FFR // partition_FFR
+// #define FSIM_CHECK_FFR
 // #define FSIM_PARTITION_CORRECTNESS
 // #define FSIM_PREPARED_SECOND_RD_MERGED_FFRS
 
@@ -214,7 +214,7 @@ private:
   const size_t depth_constraint_0 = 2; 
 
   const size_t _FFR_width_constraint = 1;
-  const size_t _FFR_depth_constraint = 1;
+  const size_t _FFR_depth_constraint = 2;
 
 
   size_t _largest_FFR_level;
@@ -301,7 +301,7 @@ private:
   size_t _start_merged_FFR_levels;
   size_t *_FFR_levelization_gpu;
   // whether pull up this optimization 
-  bool _pull_up_merged_FFR_level_optimization; 
+  bool _pull_up_merged_FFR_level_optimization = false; 
   
 // ---- FFR parition
 

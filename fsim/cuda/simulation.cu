@@ -2639,11 +2639,13 @@ void CUDASimulator::_gpu_ask_copy_mem() {
   }
   cudaCheckErrors("AA_ failure");
 
+#ifdef FSIM_PARTITION_FFR
   // _FFR_levelization_gpu
   size_t *_FFR_levelization_cpu = (size_t *)malloc((_FFR_levelization.size()-_start_merged_FFR_levels)*sizeof(size_t));
   for (size_t i = _start_merged_FFR_levels; i < _FFR_levelization.size(); i++) {
     _FFR_levelization_cpu[i-_start_merged_FFR_levels] = _FFR_levelization[i].size();
   }
+#endif
 
   cudaMemcpy(_pi_gate_po_gate_type_gpu, pi_gate_po_gate_type, sum_pi_gates_pos*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("AA0 failure");
@@ -2655,9 +2657,11 @@ void CUDASimulator::_gpu_ask_copy_mem() {
   cudaCheckErrors("AA3 failure");
   cudaMemcpy(_fault_SA_fault_val_gpu, fault_SA_fault_val_cpu, _num_faults*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("AA4 failure");
+#ifdef FSIM_PARTITION_FFR
   cudaMemcpy(_FFR_levelization_gpu, _FFR_levelization_cpu, 
             (_FFR_levelization.size()-_start_merged_FFR_levels)*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("AA5 failure");
+#endif
   
   
   free(pi_gate_po_gate_type);
@@ -2665,7 +2669,9 @@ void CUDASimulator::_gpu_ask_copy_mem() {
   free(_patterns_cpu);
   free(fault_gate_idx_cpu);
   free(fault_SA_fault_val_cpu);
+#ifdef FSIM_PARTITION_FFR
   free(_FFR_levelization_cpu);
+#endif
   
 #ifdef FSIM_DEBUG_GPU_INPUTS
   // check 
