@@ -626,7 +626,7 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
     for (auto it = adj[i].begin(); it != adj[i].end(); ++it) {
       std::cout << *it << " ( " << gateTypeToString(_gates[*it]._type) << " ), ";
     } printf("\n");
-  }
+  } printf("====\n");
 #endif
 
   // Kahn's algorithm, topological sort
@@ -679,6 +679,7 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
   }
 #endif  
 
+
   _FFR_levelization.clear();
   _FFR_levelization.resize(_largest_FFR_level);
   for (size_t i = 0; i < level_of_FFRs.size(); i++) {
@@ -693,26 +694,98 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
                       (true) : (false);
   // _pull_up_merged_FFR_level_optimization = false;                    
 
-  // printf("bi _start_merged_FFR_levels = %ld\n", _start_merged_FFR_levels);
-  
+  // for (size_t i = 0; i < _FFR_levelization.size(); i++) {
+  //   printf("level_%ld, sz: %ld (32x)\n", i, (_FFR_levelization[i].size() + 32 -1)/32);
+  // } printf("\n");
   
 #ifdef FSIM_CHECK_FFR  
-  printf("level_of_FFRs: \n");
-  for (size_t i = 0; i < level_of_FFRs.size(); i++) {
-    printf("FFR_%ld, level: %ld\n", i, level_of_FFRs[i]);
-  } printf("\n");
+  // printf("level_of_FFRs: \n");
+  // for (size_t i = 0; i < level_of_FFRs.size(); i++) {
+  //   printf("FFR_%ld, level: %ld\n", i, level_of_FFRs[i]);
+  // } printf("\n");
 
   printf("_num_FFRs = %ld\n", _num_FFRs);  
   printf("_largest_FFR_level = %ld\n", _largest_FFR_level);
   
   for (size_t i = 0; i < _FFR_levelization.size(); i++) {
-    printf("level_%ld (sz: %ld): \n", i, _FFR_levelization[i].size());
+    printf("level_%ld (sz: %ld)\n", i, _FFR_levelization[i].size());
     for (size_t ffr = 0; ffr < _FFR_levelization[i].size(); ffr++) {
       printf("%zu, ", _FFR_levelization[i][ffr]);
     } printf("\n");
   } printf("\n");
 #endif 
   
+  // std::vector<std::vector<size_t>> inverse_adj; inverse_adj.resize(_num_FFRs);
+  // for (size_t i = 0; i < adj.size(); i++) {
+  //   for (auto it = adj[i].begin(); it != adj[i].end(); ++it) {
+  //     inverse_adj[*it].push_back(i);
+  //   } 
+  // }
+
+  // // printf("adj:\n");
+  // // for (size_t i = 0; i < adj.size(); i++) {
+  // //   if (adj[i].size() > 0) {
+  // //     printf("adj[%ld] = ", i);
+  // //     for (auto it = adj[i].begin(); it != adj[i].end(); ++it) {
+  // //       printf("%ld, ", *it);
+  // //     } printf("\n");
+  // //   }
+  // // } printf("====\n");
+
+  // // printf("inverse_adj:\n");
+  // // for (size_t i = 0; i < inverse_adj.size(); i++) {
+  // //   if (inverse_adj[i].size() > 0) {
+  // //     printf("inverse_adj[%ld] = ", i);
+  // //     for (auto it = inverse_adj[i].begin(); it != inverse_adj[i].end(); ++it) {
+  // //       printf("%ld, ", *it);
+  // //     } printf("\n");
+  // //   }
+  // // } printf("====\n");  
+
+
+
+  // // TODO: 將相同 level 且相同 parent 的 FFRs 做 merge (under constraints)
+  // // 只要有相同的 parents 我們就把他們放在一起
+  // std::vector<std::vector<size_t>> FFR_imple_order_in_same_level;
+  // std::vector<bool> FFR_visited; FFR_visited.resize(_num_FFRs, false);
+  // FFR_imple_order_in_same_level.resize(_largest_FFR_level);
+  
+  // // printf("%ld, %ld\n", _FFR_levelization.size(), _largest_FFR_level);
+  // for (size_t ffr = 0; ffr < _FFR_levelization[_FFR_levelization.size()-1].size(); ffr++) {
+  //   FFR_imple_order_in_same_level[_FFR_levelization.size()-1].push_back(_FFR_levelization[_FFR_levelization.size()-1][ffr]);
+  //   FFR_visited[_FFR_levelization[_FFR_levelization.size()-1][ffr]] = true;
+  // }
+  
+  // // according to the adj vector
+  // // traverse 第 (i+1) 層，但實際上是在存第 (i) 層的東西
+  // for (size_t lvl = (_FFR_levelization.size()-1); lvl > 0; lvl--) { 
+  //   // check FFR's inverse_adj, if two FFRs have the same adj, then we put them together 
+  //   for (size_t ffr = 0; ffr < _FFR_levelization[lvl].size(); ffr++) {
+  //     size_t sink_ffr = _FFR_levelization[lvl][ffr];
+  //     for (auto it = inverse_adj[sink_ffr].begin(); it != inverse_adj[sink_ffr].end(); ++it) {
+  //       size_t input_ffr = *it;
+  //       if (level_of_FFRs[input_ffr] == (lvl-1) && !FFR_visited[input_ffr]) {
+  //         FFR_imple_order_in_same_level[lvl-1].push_back(input_ffr);
+  //         FFR_visited[input_ffr] = true;
+  //       }
+  //     } 
+  //   } 
+  //   // push in the remaining FFRs
+  //   for (size_t ffr = 0; ffr < _FFR_levelization[lvl-1].size(); ffr++) {
+  //     size_t input_ffr = _FFR_levelization[lvl-1][ffr];
+  //     if (level_of_FFRs[input_ffr] == (lvl-1) && !FFR_visited[input_ffr]) {
+  //       FFR_imple_order_in_same_level[lvl-1].push_back(input_ffr);
+  //       FFR_visited[input_ffr] = true;
+  //     }
+  //   }
+  // }
+
+  // // need to update: 
+  // // _num_FFRs
+  // // _bucket_lists_for_all_FFRs -> 需要 update，要把被  merge 的 gates 從原本的地方拔掉，
+  // // update
+  // _FFR_levelization.clear();
+  // _FFR_levelization = FFR_imple_order_in_same_level;
 }
 
 void CUDASimulator::_merged_FFRs_func(std::vector<std::vector<std::queue<size_t>>> &FFR_levelization_with_depth, 
@@ -1666,6 +1739,36 @@ void CUDASimulator::_run_bad_case_cuda_graph(const size_t bits, cudaStream_t str
 }
 
 size_t CUDASimulator::_merged_FFRs_in_last_levels() {
+  // new version 
+  // different levels of FFRs that have the same #blocks and #threads, 
+  // we can merge them into a kernelnode
+  std::vector<std::vector<size_t>> _FFRs_level_in_same_KN; 
+  _FFRs_level_in_same_KN.push_back(std::vector<size_t>());
+  size_t tmp_num_block = (_FFR_levelization[0].size() + 32 - 1)/32; 
+  size_t lvl = 0;
+  for (size_t i = 0; i < _FFR_levelization.size(); i++) {
+    size_t rd_to_32 = (_FFR_levelization[i].size() + 32 - 1)/32;
+    // printf("rd_to_32 = %ld\n", rd_to_32);
+    if (tmp_num_block == rd_to_32) {
+      _FFRs_level_in_same_KN[lvl].push_back(i);
+      // printf("0: rd_to_32 = %ld\n", rd_to_32);
+    } else {
+      lvl++;
+      _FFRs_level_in_same_KN.push_back(std::vector<size_t>());
+      _FFRs_level_in_same_KN[lvl].push_back(i);
+      tmp_num_block = rd_to_32;
+      // printf("1: rd_to_32 = %ld\n", rd_to_32);
+    }
+  }
+  // printf("_FFRs_level_in_same_KN:\n");
+  // for (size_t i = 0; i < _FFRs_level_in_same_KN.size(); i++) {
+  //   printf("level_%ld:\n", i);
+  //   for (size_t j = 0; j < _FFRs_level_in_same_KN[i].size(); j++) {
+  //     printf("%ld, ", _FFRs_level_in_same_KN[i][j]);
+  //   } printf("\n");
+  // } printf("\n");
+
+
   size_t ret = 0;
   for (int i = (_FFR_levelization.size()-1); i > -1; i--) {
     if (_FFR_levelization[i].size() <= 32) {
@@ -1675,7 +1778,7 @@ size_t CUDASimulator::_merged_FFRs_in_last_levels() {
       break;
     }
   }
-  return ret;
+  return ret;  
 }
 
 
