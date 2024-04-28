@@ -106,7 +106,6 @@ __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_f
 
 
 
-
 class CUDASimulator {
 
 // constexpr size_t SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
@@ -350,6 +349,18 @@ private:
   // parallel-cuda-graph-partition
   void _run_parallel_cuda_graph_partition();
   size_t _merged_FFRs_in_last_levels();
+  void _421_split(std::vector<size_t> &level_of_FFRs, std::vector<std::set<size_t>> &adj);
+  
+  // record the break points of FFR for each FFR_level, it might have more than 1 break points
+  std::vector<std::vector<size_t>> _break_points; 
+  // store the partition index of each FFR
+  std::vector<size_t> partition_results; 
+  const size_t _KNs_per_level = 2; // number of KNs per level after splitting 
+  const size_t split_FFRs = 1024; // TODO exchane
+  void _FFRs_level_partition_init (const size_t start_lvl);
+  void _FFRs_in_same_level_partition(const size_t lvl, 
+                                    std::vector<size_t> &level_of_FFRs,
+                                    std::vector<std::set<size_t>> &adj);
   void _construct_cuda_graph_partition(cudaStream_t stream1, cudaGraph_t graph, 
                                       cudaGraphNode_t *kernelNode_PI, 
                                       cudaKernelNodeParams *kernelNode_PI_Params,

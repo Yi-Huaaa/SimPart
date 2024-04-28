@@ -17,10 +17,13 @@
 	- .flst: fault list file
 	- .ptn: pattern list file
 
-## Nsight profile
+## Nsight profile (NCU)
 ```
-sudo /usr/local/cuda-12.3/bin/ncu  --import-source yes --section SchedulerStats --section WarpStateStats --section SourceCounters  --set full --section MemoryWorkloadAnalysis_Tables -o rep -f ./main/simple_cuda ../benchmark/c_circuits/c7552.ckt ../benchmark/c_circuits/c7552.flst ../benchmark/c_circuits/c7552.ptn visualization_graph.txt 
+sudo /usr/local/cuda-12.3/bin/ncu --set full -o temp.ncu-rep --force-overwrite --kill on --target-processes application-only --replay-mode kernel --kernel-name-base function --kernel-name _run_gate_graph_partition --launch-skip 0 --launch-count 2 --warp-sampling-interval auto --warp-sampling-max-passes 1 --warp-sampling-buffer-size 33554432 --profile-from-start 1 --cache-control all --clock-control base --check-exit-code yes --import-source yes --section ComputeWorkloadAnalysis --section InstructionStats --section LaunchStats --section MemoryWorkloadAnalysis --section MemoryWorkloadAnalysis_Chart --section MemoryWorkloadAnalysis_Tables --section Occupancy --section SchedulerStats --section SourceCounters --section SpeedOfLight --section SpeedOfLight_RooflineChart --section WarpStateStats \./main/simple_cuda "../benchmark/large_circuits/mgc_edit_dist_iccad_dfs.ckt" "../benchmark/large_circuits/mgc_edit_dist_iccad.flst" "../benchmark/large_circuits/mgc_edit_dist_iccad.ptn" "visualization_graph.txt"
+
 ```
+
+## 
 
 
 
