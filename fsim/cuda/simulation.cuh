@@ -82,11 +82,12 @@ __global__ void print_merged_FFRs_gpu (size_t *merged_FFRs_gpu, size_t *merged_F
 __global__ void print_pi_gate_po_gate_type_gpu(size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_num_inputs_gpu, size_t num);
 __global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs);
 __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, size_t _num_faults, 
-                                        size_t * _FFR_levelization_gpu, size_t s, size_t n);
-
+                                        size_t * _FFR_levelization_gpu, size_t s, size_t n, 
+                                        size_t *_gate_inputs_list_gpu, const size_t _sum_inputs_gates);
+__global__ void print_gate_inputs_list_gpu(size_t *_gate_inputs_list_gpu, const size_t _sum_inputs_gates);
 
 // print for check
-#define FSIM_DEBUG_PRINT_SIMULATION // print the TOTAL ANSWER
+// #define FSIM_DEBUG_PRINT_SIMULATION // print the TOTAL ANSWER
 // #define FSIM_DEBUG_PRINT_SIMULATION_GPU
 // #define FSIM_DEBUG_PRINT_GRAPH
 // #define FSIM_DEBUG_PRINT_FAULTS
@@ -101,7 +102,7 @@ __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_f
 
 #define FSIM_PARTITION_FFR // partition_FFR
 #define FSIM_TAIL_ENDED_OPT // "FSIM_PARTITION_FFR" must cooperate with "FSIM_TAIL_ENDED_OPT"
-// #define FSIM_421_OPT
+#define FSIM_421_OPT
 // #define FSIM_CHECK_FFR
 // #define FSIM_PARTITION_CORRECTNESS
 // #define FSIM_PREPARED_SECOND_RD_MERGED_FFRS
