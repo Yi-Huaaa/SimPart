@@ -86,7 +86,7 @@ __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_f
 
 
 // print for check
-// #define FSIM_DEBUG_PRINT_SIMULATION
+#define FSIM_DEBUG_PRINT_SIMULATION // print the TOTAL ANSWER
 // #define FSIM_DEBUG_PRINT_SIMULATION_GPU
 // #define FSIM_DEBUG_PRINT_GRAPH
 // #define FSIM_DEBUG_PRINT_FAULTS
@@ -100,6 +100,8 @@ __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_f
 // #define FSIM_LEVELIZAED_PARTITION
 
 #define FSIM_PARTITION_FFR // partition_FFR
+#define FSIM_TAIL_ENDED_OPT // "FSIM_PARTITION_FFR" must cooperate with "FSIM_TAIL_ENDED_OPT"
+// #define FSIM_421_OPT
 // #define FSIM_CHECK_FFR
 // #define FSIM_PARTITION_CORRECTNESS
 // #define FSIM_PREPARED_SECOND_RD_MERGED_FFRS
@@ -353,10 +355,11 @@ private:
   
   // record the break points of FFR for each FFR_level, it might have more than 1 break points
   std::vector<std::vector<size_t>> _break_points; 
+  std::vector<size_t> _421_levels; // record the first level having the 421 opt
   // store the partition index of each FFR
   std::vector<size_t> partition_results; 
-  const size_t _KNs_per_level = 2; // number of KNs per level after splitting 
-  const size_t split_FFRs = 1024; // TODO exchane
+  const size_t _num_partition_KNs = 2; // number of KNs per level after splitting 
+  const size_t split_FFRs = 1024; // TODO exchange
   void _FFRs_level_partition_init (const size_t start_lvl);
   void _FFRs_in_same_level_partition(const size_t lvl, 
                                     std::vector<size_t> &level_of_FFRs,

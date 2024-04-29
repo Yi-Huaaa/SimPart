@@ -5,12 +5,12 @@
 
 // #define run_cuda
 // #define run_cuda_graph
-// #define run_cuda_graph_partition
+#define run_cuda_graph_partition
 // #define visualization
 // #define print_output
 // #define test_makefile
 #define TIMES 1
-// #define FSIM_SHOWALL
+#define FSIM_SHOWALL
 // #define FSIM_SHOW_ONLY_RUNTIME_OF_RUN
 
 
