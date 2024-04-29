@@ -726,7 +726,8 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
   for (size_t level_421 = 0; level_421 < _FFR_levelization.size() 
                           && level_421 < _start_merged_FFR_levels;) {
 
-    if (_FFR_levelization[level_421].size() >= 2048 && (level_421+2) < _start_merged_FFR_levels) {
+    if (_FFR_levelization[level_421].size() >= _421_OPT_threshold 
+        && (level_421+2) < _start_merged_FFR_levels) {
       // printf("0: level_421 = %ld, %ld %ld %ld \n", level_421, _FFR_levelization[level_421].size(), 
       //       _FFR_levelization[level_421+1].size(), _FFR_levelization[level_421+2].size());
       _421_split(level_of_FFRs, adj, level_421);

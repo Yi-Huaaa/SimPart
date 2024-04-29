@@ -217,6 +217,7 @@ private:
 
   const size_t _FFR_width_constraint = 1;
   const size_t _FFR_depth_constraint = 2;
+  const size_t _421_OPT_threshold = 4096;
 
 
   size_t _largest_FFR_level;
@@ -361,7 +362,6 @@ private:
   // store the partition index of each FFR
   std::vector<size_t> partition_results; 
   const size_t _num_partition_KNs = 2; // number of KNs per level after splitting 
-  const size_t split_FFRs = 1024; // TODO exchange
   void _FFRs_level_partition_init (const size_t start_lvl);
   void _FFRs_in_same_level_partition(const size_t lvl, 
                                     std::vector<size_t> &level_of_FFRs,
