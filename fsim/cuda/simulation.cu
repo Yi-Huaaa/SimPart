@@ -718,9 +718,23 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
   } printf("\n");
 #endif 
   
+  // init
   _break_points.resize(_FFR_levelization.size());
+  partition_results.resize(_num_FFRs, 0);
+
 #ifdef FSIM_421_OPT
-  _421_split(level_of_FFRs, adj);
+  for (size_t level_421 = 0; level_421 < _FFR_levelization.size() 
+                          && level_421 < _start_merged_FFR_levels;) {
+
+    if (_FFR_levelization[level_421].size() >= 2048 && (level_421+2) < _start_merged_FFR_levels) {
+      // printf("0: level_421 = %ld, %ld %ld %ld \n", level_421, _FFR_levelization[level_421].size(), 
+      //       _FFR_levelization[level_421+1].size(), _FFR_levelization[level_421+2].size());
+      _421_split(level_of_FFRs, adj, level_421);
+      level_421 += 3;
+    } else {
+      level_421 ++;
+    }
+  }
 #endif
   // with, without _421_split -> need to init
   // init break_points
@@ -975,29 +989,18 @@ size_t CUDASimulator::_merged_FFRs_in_last_levels() {
 }
 
 void CUDASimulator::_421_split(std::vector<size_t> &level_of_FFRs, 
-                              std::vector<std::set<size_t>> &adj) {
+                              std::vector<std::set<size_t>> &adj,
+                              const size_t level_421) {
   size_t start_level = _start_merged_FFR_levels-1;
-  
-  // for (size_t i = 0 ; i < 3; i++) {
-  //   printf("_FFR_levelization[%ld].size() = %ld\n", i, _FFR_levelization[i].size());
-  // } 
-  // printf("\n\n");
 
-  
   // forward traverse, find out 3 levels as a set
-  // 0428: 先拆 0, 1, 2 這三層
-  size_t start_split_level = 2;  
-  _421_levels.push_back(0); // 有做 _421_levels 的第 0 層 level  
-
-  /* FFRs in same level partition */
-  partition_results.resize(_num_FFRs, 0);
-
+  _421_levels.push_back(level_421);
   // 1: a merge KN
-  // (skip)
+  // (remain the same KN)
   // 2: directly split in half  
-  _FFRs_level_partition_init(start_split_level-1);
+  _FFRs_level_partition_init(level_421+1);
   // 4
-  _FFRs_in_same_level_partition(start_split_level-2, level_of_FFRs, adj);
+  _FFRs_in_same_level_partition(level_421, level_of_FFRs, adj);
 } 
 
 void CUDASimulator::_FFRs_level_partition_init (const size_t split_level) {
@@ -1590,8 +1593,10 @@ void CUDASimulator::_update_cuda_graph_params(cudaStream_t &stream1, cudaGraphEx
   size_t limit_sz = (_pull_up_merged_FFR_level_optimization) ? 
                     (_num_paras*(_start_merged_FFR_levels+3)+1) : (_num_paras*(_max_level+1));
 #ifdef FSIM_421_OPT  
-  num_blocks += 4;
-  limit_sz += _num_paras*4;
+  // num_blocks += 4;
+  // limit_sz += _num_paras*4;
+  num_blocks += _421_levels.size()*4;
+  limit_sz += _num_paras*4*_421_levels.size();
 #endif
 
   _update_params_gpu <<< num_blocks, 1, 0, stream1 >>> (_params_gpu, _num_paras, limit_sz, 
@@ -1875,7 +1880,6 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
   start_position_in_mgc_gpu_idx += _num_PIs;
   assert(start_position_in_mgc_gpu_idx == (_num_PIs));
 
-
   // Adding PI node, as head node of graph
   kernelNode_PI_Params->func = (void *)_run_gate_graph_partition;
   kernelNode_PI_Params->gridDim = dim3(num_blocks, 1, 1);
@@ -1913,7 +1917,6 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
       kernelArgs_gate[FFR_KN*num_func_inputs+9] = (void *)&merged_FFRs_gpu;
       kernelArgs_gate[FFR_KN*num_func_inputs+10] = (void *)&merged_FFRs_gpu_idx;
       
-
       // construct gate node
       size_t sp_accum = _break_points[FFR_level][KN_rd];
       // Note: since `_break_points` records implemented until the FFR_idx in that level
@@ -2101,10 +2104,8 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
   size_t num_KNs = _start_merged_FFR_levels + 1;// (_FFR_levelization.size());
 
 #ifdef FSIM_421_OPT
-  num_KNs += 4; 
+  num_KNs += (_421_levels.size() << 2); 
 #endif
-
-  // printf("num_KNs = %ld\n", num_KNs);
 
   // construct_graph
   cudaGraphNode_t kernelNode_PI;
@@ -2140,7 +2141,7 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
   size_t end_level = (_pull_up_merged_FFR_level_optimization) ? 
                       (_start_merged_FFR_levels) : (_FFR_levelization.size());   
   #ifdef FSIM_421_OPT
-    end_level += 4;
+    end_level += 4*_421_levels.size();
   #endif
 
   for (size_t rd = 0; rd < _num_rounds; rd++) {
@@ -2791,10 +2792,11 @@ void CUDASimulator::_gpu_ask_copy_mem() {
   cudaMalloc((void**)&_params_gpu, _num_paras*(_max_level+1)*sizeof(size_t));
 #endif
 #ifdef FSIM_PARTITION_FFR
-  // DONEDONEDONEDONEDONE
-  size_t num_KNs = _FFR_levelization.size()+2;
+  // FIT size: num_KNs
+  size_t num_KNs = (_pull_up_merged_FFR_level_optimization) ? 
+                  (_start_merged_FFR_levels + 1 + 2) : (_FFR_levelization.size()+2);
 #ifdef FSIM_421_OPT
-  num_KNs += 4;
+  num_KNs += (_421_levels.size() << 2); // one 421, add 4 KNs
 #endif   
   cudaMalloc((void**)&_params_gpu, _num_paras*(num_KNs)*sizeof(size_t));
   cudaMalloc((void**)&_FFR_levelization_gpu, 

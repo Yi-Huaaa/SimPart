@@ -352,7 +352,8 @@ private:
   // parallel-cuda-graph-partition
   void _run_parallel_cuda_graph_partition();
   size_t _merged_FFRs_in_last_levels();
-  void _421_split(std::vector<size_t> &level_of_FFRs, std::vector<std::set<size_t>> &adj);
+  void _421_split(std::vector<size_t> &level_of_FFRs, std::vector<std::set<size_t>> &adj, 
+                  const size_t level_421);
   
   // record the break points of FFR for each FFR_level, it might have more than 1 break points
   std::vector<std::vector<size_t>> _break_points; 
