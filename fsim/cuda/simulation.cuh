@@ -102,7 +102,7 @@ __global__ void print_gate_inputs_list_gpu(size_t *_gate_inputs_list_gpu, const 
 
 #define FSIM_PARTITION_FFR // partition_FFR
 #define FSIM_TAIL_ENDED_OPT // "FSIM_PARTITION_FFR" must cooperate with "FSIM_TAIL_ENDED_OPT"
-#define FSIM_421_OPT
+// #define FSIM_421_OPT
 // #define FSIM_CHECK_FFR
 // #define FSIM_PARTITION_CORRECTNESS
 // #define FSIM_PREPARED_SECOND_RD_MERGED_FFRS
@@ -216,7 +216,7 @@ private:
   const size_t depth_constraint_0 = 2; 
 
   const size_t _FFR_width_constraint = 1;
-  const size_t _FFR_depth_constraint = 2;
+  const size_t _FFR_depth_constraint = 1;
   const size_t _421_OPT_threshold = 4096;
 
 
@@ -360,7 +360,7 @@ private:
   std::vector<std::vector<size_t>> _break_points; 
   std::vector<size_t> _421_levels; // record the first level having the 421 opt
   // store the partition index of each FFR
-  std::vector<size_t> partition_results; 
+  std::vector<size_t> _partition_results; 
   const size_t _num_partition_KNs = 2; // number of KNs per level after splitting 
   void _FFRs_level_partition_init (const size_t start_lvl);
   void _FFRs_in_same_level_partition(const size_t lvl, 

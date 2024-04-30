@@ -720,7 +720,7 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
   
   // init
   _break_points.resize(_FFR_levelization.size());
-  partition_results.resize(_num_FFRs, 0);
+  _partition_results.resize(_num_FFRs, 0);
 
 #ifdef FSIM_421_OPT
   for (size_t level_421 = 0; level_421 < _FFR_levelization.size() 
@@ -1017,7 +1017,7 @@ void CUDASimulator::_FFRs_level_partition_init (const size_t split_level) {
     size_t ep = (par != (_num_partition_KNs-1)) ? (_break_points[split_level][par]) : (num_FFRs);
     for (size_t j = sp; j < ep; j++) {
       size_t ffr_idx = _FFR_levelization[split_level][j];
-      partition_results[ffr_idx] = par;
+      _partition_results[ffr_idx] = par;
     }
   }
 }
@@ -1041,7 +1041,7 @@ void CUDASimulator::_FFRs_in_same_level_partition (const size_t lvl,
       assert(to_ffr_idx < _num_FFRs && "to_ffr_idx out of boundary");
       
       if (level_of_FFRs[to_ffr_idx] == (lvl+1)) {
-        size_t to_par = partition_results[to_ffr_idx];
+        size_t to_par = _partition_results[to_ffr_idx];
         cut_table[i][0]++;
         cut_table[i][(to_par+1)]++;
         assert((to_par == 0) || (to_par == 1) && "to_par ERROR\n");
@@ -1069,7 +1069,7 @@ void CUDASimulator::_FFRs_in_same_level_partition (const size_t lvl,
     if (cut_table[i][0] == 0) { // No any connection to the next level 
       partition = _num_partition_KNs + 1;
     } 
-    partition_results[from_ffr_idx] = partition;
+    _partition_results[from_ffr_idx] = partition;
     update_FFR_levelization[partition].push_back(from_ffr_idx);
   } 
 
@@ -1974,6 +1974,7 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
     kernelArgs_gate[FFR_KN*num_func_inputs+9] = (void *)&merged_FFRs_gpu;
     kernelArgs_gate[FFR_KN*num_func_inputs+10] = (void *)&merged_FFRs_gpu_idx;
     kernelArgs_gate[FFR_KN*num_func_inputs+11] = (void *)&_FFR_levelization_gpu;
+    // printf("FFR_KN*num_func_inputs+11 = %ld\n", FFR_KN*num_func_inputs+11);
 
     // construct gate node
     num_blocks = 1; // must be 1
@@ -2119,12 +2120,12 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
 
   const size_t num_func_inputs = 11;
   void **kernelArgs_PI = (void **)malloc(num_func_inputs*sizeof(void *));
-  void **kernelArgs_gate = (void **)malloc(num_func_inputs*(num_KNs)*sizeof(void *));
+  // kernelArgs_gate, size: +1: for tailed OPT, need one more space
+  void **kernelArgs_gate = (void **)malloc((num_func_inputs*(num_KNs)+1)*sizeof(void *)); 
   void **kernelArgs_PO = (void **)malloc(num_func_inputs*sizeof(void *));
   size_t **params_gpu_idx = (size_t **)malloc((num_KNs+2)*sizeof(void *)); // PI num_KNs PO
   memset(params_gpu_idx, 0, (num_KNs+2)*sizeof(void *)); // PI num_KNs PO
-
-
+  
   _construct_cuda_graph_partition(stream1, graph, 
                         &kernelNode_PI, &kernelNode_PI_Params,
                         kernelNode_gate, kernelNode_gate_Params,
@@ -2136,7 +2137,6 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
   cudaGraphExec_t instance;
   cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
   cudaCheckErrors("Graph instantiation failed");
-  // printf("_start_merged_FFR_levels = %ld %ld\n", _start_merged_FFR_levels, _FFR_levelization.size()-_start_merged_FFR_levels);
   
   size_t fault_num, bad_case;
   size_t end_level = (_pull_up_merged_FFR_level_optimization) ? 
@@ -2160,7 +2160,6 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
     fault_num = 0;
     bad_case = 0; 
     // update KernelNodes params (good case)
-    // printf("rd = %ld\n", rd);
     _update_cuda_graph_params(stream1, instance, rd, fault_num, bad_case,
                               &kernelNode_PI, &kernelNode_PI_Params,
                               kernelNode_gate, kernelNode_gate_Params,
@@ -2799,6 +2798,7 @@ void CUDASimulator::_gpu_ask_copy_mem() {
 #ifdef FSIM_421_OPT
   num_KNs += (_421_levels.size() << 2); // one 421, add 4 KNs
 #endif   
+  // printf("bo _num_paras*(num_KNs) = %ld %ld %ld\n", _num_paras*(num_KNs), _num_paras, num_KNs);
   cudaMalloc((void**)&_params_gpu, _num_paras*(num_KNs)*sizeof(size_t));
   cudaMalloc((void**)&_FFR_levelization_gpu, 
               (_FFR_levelization.size() - _start_merged_FFR_levels + 1)*sizeof(size_t));
