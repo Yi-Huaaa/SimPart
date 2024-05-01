@@ -342,9 +342,7 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   // construct _gate_inputs_list_start
   for (size_t i = 0; i < _num_inner_gates; i++) {
     for (size_t j = 0; j < _gates[i]._num_inputs; j++) {
-      // _gate_inputs_list_start[i+gate_idx_accum]: location start index
-      // _gates[i]._num_inputs: number of inputs of that gate
-      _gate_inputs_list_start[i+1+gate_idx_accum] = _gate_inputs_list_start[i+gate_idx_accum] + _gates[i]._num_inputs;
+      _gate_inputs_list_start[i+1+gate_idx_accum] = _gates[i]._num_inputs + _gate_inputs_list_start[i+gate_idx_accum];
     }
   }
   for (size_t i = 0; i < (_num_POs-1); i++) { // since the last one no need to add
@@ -368,23 +366,16 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
       idx_accum++;
     }
   }
-  // printf("2: Hello %ld\n", idx_accum);
-
   for (size_t i = 0; i < _num_POs; i++) {
     for (size_t j = 0; j < _POs[i]._num_inputs; j++) {
       _gate_inputs_list[idx_accum] = (_POs[i]._inputs[j])->_idx;
-      // if (idx_accum == 164254)
-      //   printf("1: Hello %ld\n", _gate_inputs_list[idx_accum]);
       idx_accum++;
     }
   }
-  // printf("idx_accum = %ld\n", idx_accum);
-  // printf("fin = %d\n", _gate_inputs_list[164254]);
 
 #ifdef FSIM_DEBUG_PRINT_GRAPH
   printf("_gate_inputs_list:\n");
-  for (size_t i = 171720; i < _sum_inputs_gates; i++) {
-    // printf("_gate_inputs_list[%ld] = %ld\n", i, _gate_inputs_list[i]);
+  for (size_t i = 0; i < _sum_inputs_gates; i++) {
     printf("%ld, ", _gate_inputs_list[i]);
   } printf("\n");
 #endif  
@@ -698,15 +689,21 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
   // printf("_largest_FFR_level = %ld\n", _largest_FFR_level);
 
   // tailed-end optimization: check how many layers can be merged
-#ifdef FSIM_TAIL_ENDED_OPT
   _start_merged_FFR_levels = _merged_FFRs_in_last_levels();
   _pull_up_merged_FFR_level_optimization = (((_FFR_levelization.size() - _start_merged_FFR_levels) > 1)) ? 
                       (true) : (false);
-#else
-  _pull_up_merged_FFR_level_optimization = false;
-#endif  
+  // _pull_up_merged_FFR_level_optimization = false;                    
 
+  // for (size_t i = 0; i < _FFR_levelization.size(); i++) {
+  //   printf("level_%ld, sz: %ld (32x)\n", i, (_FFR_levelization[i].size() + 32 -1)/32);
+  // } printf("\n");
+  
 #ifdef FSIM_CHECK_FFR  
+  // printf("level_of_FFRs: \n");
+  // for (size_t i = 0; i < level_of_FFRs.size(); i++) {
+  //   printf("FFR_%ld, level: %ld\n", i, level_of_FFRs[i]);
+  // } printf("\n");
+
   printf("_num_FFRs = %ld\n", _num_FFRs);  
   printf("_largest_FFR_level = %ld\n", _largest_FFR_level);
   
@@ -717,44 +714,6 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
     } printf("\n");
   } printf("\n");
 #endif 
-  
-  // init
-  _break_points.resize(_FFR_levelization.size());
-  _partition_results.resize(_num_FFRs, 0);
-
-#ifdef FSIM_421_OPT
-  for (size_t level_421 = 0; level_421 < _FFR_levelization.size() 
-                          && level_421 < _start_merged_FFR_levels;) {
-
-    if (_FFR_levelization[level_421].size() >= _421_OPT_threshold 
-        && (level_421+2) < _start_merged_FFR_levels) {
-      // printf("0: level_421 = %ld, %ld %ld %ld \n", level_421, _FFR_levelization[level_421].size(), 
-      //       _FFR_levelization[level_421+1].size(), _FFR_levelization[level_421+2].size());
-      _421_split(level_of_FFRs, adj, level_421);
-      level_421 += 3;
-    } else {
-      level_421 ++;
-    }
-  }
-#endif
-  // with, without _421_split -> need to init
-  // init break_points
-  for (size_t i = 0; i < _FFR_levelization.size(); i++) {
-    if (_break_points[i].size() == 0) {
-      _break_points[i].push_back(_FFR_levelization[i].size());
-    }
-  }
-  
-  // // Check _break_points
-  // size_t check_num_FFRs = 0;
-  // for (size_t i = 0 ; i < _break_points.size(); i++) {
-  //   printf("_break_points[%ld] (%ld, %ld) = ", i, _break_points[i].size(), _FFR_levelization[i].size());
-  //   for (size_t j = 0 ; j < _break_points[i].size(); j++) {
-  //     printf("%ld, ", _break_points[i][j]);
-  //   } printf("\n");
-  //   check_num_FFRs += _break_points[i][_break_points[i].size()-1];
-  // } printf("\n");
-  // printf("_num_FFRs = %ld, check_num_FFRs = %ld\n", _num_FFRs, check_num_FFRs);
 }
 
 void CUDASimulator::_merged_FFRs_func(std::vector<std::vector<std::queue<size_t>>> &FFR_levelization_with_depth, 
@@ -988,112 +947,6 @@ size_t CUDASimulator::_merged_FFRs_in_last_levels() {
   }
   return ret;  
 }
-
-void CUDASimulator::_421_split(std::vector<size_t> &level_of_FFRs, 
-                              std::vector<std::set<size_t>> &adj,
-                              const size_t level_421) {
-  size_t start_level = _start_merged_FFR_levels-1;
-
-  // forward traverse, find out 3 levels as a set
-  _421_levels.push_back(level_421);
-  // 1: a merge KN
-  // (remain the same KN)
-  // 2: directly split in half  
-  _FFRs_level_partition_init(level_421+1);
-  // 4
-  _FFRs_in_same_level_partition(level_421, level_of_FFRs, adj);
-} 
-
-void CUDASimulator::_FFRs_level_partition_init (const size_t split_level) {
-  size_t num_FFRs = _FFR_levelization[split_level].size();
-  size_t bp = (num_FFRs + 1)/_num_partition_KNs; // round to even number
-  for (size_t i = 0; i < _num_partition_KNs; i++){
-    _break_points[split_level].push_back((i+1)*bp);
-  }
-  
-  // assign partition
-  for (size_t par = 0; par < _num_partition_KNs; par++) {
-    size_t sp = (par == 0) ? (0) : (_break_points[split_level][par-1]);
-    size_t ep = (par != (_num_partition_KNs-1)) ? (_break_points[split_level][par]) : (num_FFRs);
-    for (size_t j = sp; j < ep; j++) {
-      size_t ffr_idx = _FFR_levelization[split_level][j];
-      _partition_results[ffr_idx] = par;
-    }
-  }
-}
-
-void CUDASimulator::_FFRs_in_same_level_partition (const size_t lvl,
-                                                  std::vector<size_t> &level_of_FFRs,
-                                                  std::vector<std::set<size_t>> &adj) {
-  // split FFRs in this level directly splitting 
-  size_t num_FFRs = _FFR_levelization[lvl].size();
-  size_t bp = num_FFRs/_num_partition_KNs;   
-
-  std::vector<std::vector<size_t>> cut_table;
-  cut_table.resize(_FFR_levelization[lvl].size());
-  for (size_t i = 0; i < _FFR_levelization[lvl].size(); i++) {
-    cut_table[i].resize((_num_partition_KNs+3), 0); // accum, 0, 1, MIX, ZERO
-    size_t from_ffr_idx = _FFR_levelization[lvl][i];
-      
-    // traverse the adj
-    for (auto& to_ffr_idx : adj[from_ffr_idx]) {
-      assert(from_ffr_idx < _num_FFRs && "from_ffr_idx out of boundary");
-      assert(to_ffr_idx < _num_FFRs && "to_ffr_idx out of boundary");
-      
-      if (level_of_FFRs[to_ffr_idx] == (lvl+1)) {
-        size_t to_par = _partition_results[to_ffr_idx];
-        cut_table[i][0]++;
-        cut_table[i][(to_par+1)]++;
-        assert((to_par == 0) || (to_par == 1) && "to_par ERROR\n");
-      }
-    }
-  }
-
-  // partition
-  std::vector<std::vector<size_t>> update_FFR_levelization; // 0, 1, MIX, ZERO
-  update_FFR_levelization.resize(_num_partition_KNs+2);
-  for (size_t i = 0; i < cut_table.size(); i++) {
-    size_t partition = 0; // init: partition_0
-    size_t from_ffr_idx = _FFR_levelization[lvl][i];
-    bool mix = true; // mix partition 
-    for (size_t j = 1; j < cut_table[i].size(); j++) {
-      if (cut_table[i][0] == cut_table[i][j]) {
-        mix = false;
-        partition = j-1;
-        break;
-      } 
-    }
-    if (mix) { // belongs to partiiton_0 and partition_1
-      partition = _num_partition_KNs;
-    }
-    if (cut_table[i][0] == 0) { // No any connection to the next level 
-      partition = _num_partition_KNs + 1;
-    } 
-    _partition_results[from_ffr_idx] = partition;
-    update_FFR_levelization[partition].push_back(from_ffr_idx);
-  } 
-
-  // // Show the partition results 
-  // printf("update_FFR_levelization (%ld):\n", update_FFR_levelization.size());
-  // for (size_t i = 0; i < update_FFR_levelization.size(); i++) {
-  //   printf("update_FFR_levelization[%ld] = %ld\n", i, update_FFR_levelization[i].size());
-  // }
-
-  // update _FFR_levelization
-  _FFR_levelization[lvl].clear();
-  _break_points[lvl].clear();
-  size_t acc = 0;
-  for (size_t k = 0; k < (_num_partition_KNs+2); k++) {
-    for (size_t j = 0; j < update_FFR_levelization[k].size(); j++) {
-      _FFR_levelization[lvl].push_back(update_FFR_levelization[k][j]);
-      acc++;
-    }
-    _break_points[lvl].push_back(acc); 
-  }
-}
-
-
-
 
 
 void CUDASimulator::_read_fault(std::istream &flst) {
@@ -1589,17 +1442,12 @@ void CUDASimulator::_update_cuda_graph_params(cudaStream_t &stream1, cudaGraphEx
 
 
   cudaCheckErrors("so sad failed");
+  size_t end_level = (_pull_up_merged_FFR_level_optimization) ? 
+                      (_start_merged_FFR_levels) : (_FFR_levelization.size()); 
   size_t num_blocks = (_pull_up_merged_FFR_level_optimization) ? 
                       (_start_merged_FFR_levels+3) : (_max_level+1);
   size_t limit_sz = (_pull_up_merged_FFR_level_optimization) ? 
                     (_num_paras*(_start_merged_FFR_levels+3)+1) : (_num_paras*(_max_level+1));
-#ifdef FSIM_421_OPT  
-  // num_blocks += 4;
-  // limit_sz += _num_paras*4;
-  num_blocks += _421_levels.size()*4;
-  limit_sz += _num_paras*4*_421_levels.size();
-#endif
-
   _update_params_gpu <<< num_blocks, 1, 0, stream1 >>> (_params_gpu, _num_paras, limit_sz, 
                                                           rd, fault_num, bad_case);  
 
@@ -1607,19 +1455,19 @@ void CUDASimulator::_update_cuda_graph_params(cudaStream_t &stream1, cudaGraphEx
   cudaDeviceSynchronize();
   cudaCheckErrors("update cudaDeviceSynchronize failed");
 
-  // __host__ cudaGraphExecKernelNodeSetParams ( cudaGraphExec_t hGraphExec, cudaGraphNode_t node, const cudaKernelNodeParams* pNodeParams )
-  // update PI node
-  cudaGraphExecKernelNodeSetParams(instance, *kernelNode_PI, kernelNode_PI_Params);  
-  cudaCheckErrors("0; cudaGraphExecKernelNodeSetParams failed");
+  // // __host__ cudaGraphExecKernelNodeSetParams ( cudaGraphExec_t hGraphExec, cudaGraphNode_t node, const cudaKernelNodeParams* pNodeParams )
+  // // update PI node
+  // cudaGraphExecKernelNodeSetParams(instance, *kernelNode_PI, kernelNode_PI_Params);  
+  // cudaCheckErrors("0; cudaGraphExecKernelNodeSetParams failed");
 
-  for (size_t i = start_idx; i < end_idx; i++) {
-    cudaGraphExecKernelNodeSetParams(instance, kernelNode_gate[i], &kernelNode_gate_Params[i]);  
-    cudaCheckErrors("1: cudaGraphExecKernelNodeSetParams failed");
-  }
+  // for (size_t i = start_idx; i < end_idx; i++) {
+  //   cudaGraphExecKernelNodeSetParams(instance, kernelNode_gate[i], &kernelNode_gate_Params[i]);  
+  //   cudaCheckErrors("1: cudaGraphExecKernelNodeSetParams failed");
+  // }
 
-  // update PO node
-  cudaGraphExecKernelNodeSetParams(instance, *kernelNode_PO, kernelNode_PO_Params);  
-  cudaCheckErrors("2; cudaGraphExecKernelNodeSetParams failed");
+  // // update PO node
+  // cudaGraphExecKernelNodeSetParams(instance, *kernelNode_PO, kernelNode_PO_Params);  
+  // cudaCheckErrors("2; cudaGraphExecKernelNodeSetParams failed");
 }
 
 
@@ -1767,9 +1615,11 @@ void CUDASimulator::_run_good_case_cuda_graph(const size_t bits, cudaStream_t st
   
   cudaGraphLaunch(instance, stream1);
   cudaCheckErrors("Graph launch failed (_run_good_case_cuda_graph)");  
-
+  // printf("\n");
   cudaStreamSynchronize(stream1);
   cudaCheckErrors("cudaStreamSynchronize (_run_good_case_cuda_graph) failed");
+  // cudaDeviceSynchronize();
+  // cudaCheckErrors("cudaDeviceSynchronize (_run_good_case_cuda_graph) failed");
 
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   cudaCheckErrors("Graph launch failed (_run_good_case_cuda_graph)");  
@@ -1849,8 +1699,6 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
 
   // construct PI node
   params_gpu_idx[0] = _params_gpu+params_gpu_idx_accum;
-  // printf("params_gpu_idx_accum = %ld\n", params_gpu_idx_accum);
-
   kernelArgs_PI[0] = (void *)&_gate_inputs_list_gpu;
   kernelArgs_PI[1] = (void *)&_gate_inputs_list_start_gpu;
   kernelArgs_PI[2] = (void *)&_pi_gate_po_gate_type_gpu;
@@ -1874,12 +1722,12 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
   size_t fin_num_gates = 0;
   size_t kernelNode_idx = 0;
   
-  _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[0], rd, fault_num, bad_case, 
-                                        start_position_in_mgc_gpu_idx, _num_PIs, _num_PIs);
+  _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[0], rd, fault_num, bad_case, start_position_in_mgc_gpu_idx, _num_PIs, _num_PIs);
   cudaDeviceSynchronize();
   cudaCheckErrors("PI _set_params cudaDeviceSynchronize failed");
   start_position_in_mgc_gpu_idx += _num_PIs;
   assert(start_position_in_mgc_gpu_idx == (_num_PIs));
+
 
   // Adding PI node, as head node of graph
   kernelNode_PI_Params->func = (void *)_run_gate_graph_partition;
@@ -1896,85 +1744,71 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
   // construct FFR nodes
   size_t end_level = (_pull_up_merged_FFR_level_optimization) ? 
                       (_start_merged_FFR_levels) : (_FFR_levelization.size()); 
-  size_t FFR_KN = 0;
-  size_t FFR_level = 0;
-  
-  for (FFR_level = 0; FFR_level < end_level; FFR_level++) { 
-    // only set KNs in 1 FFR's level in this for loop
-    for (size_t KN_rd = 0; KN_rd < _break_points[FFR_level].size(); KN_rd++) {
-      kernelNode_idx++;
+  size_t m_ffr = 0;
 
-      params_gpu_idx_accum += _num_paras;
-      params_gpu_idx[kernelNode_idx] = _params_gpu+params_gpu_idx_accum;
-      kernelArgs_gate[FFR_KN*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
-      kernelArgs_gate[FFR_KN*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
-      kernelArgs_gate[FFR_KN*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
-      kernelArgs_gate[FFR_KN*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
-      kernelArgs_gate[FFR_KN*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
-      kernelArgs_gate[FFR_KN*num_func_inputs+5] = (void *)&_patterns_gpu;
-      kernelArgs_gate[FFR_KN*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
-      kernelArgs_gate[FFR_KN*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
-      kernelArgs_gate[FFR_KN*num_func_inputs+8] = (void *)&params_gpu_idx[kernelNode_idx];
-      kernelArgs_gate[FFR_KN*num_func_inputs+9] = (void *)&merged_FFRs_gpu;
-      kernelArgs_gate[FFR_KN*num_func_inputs+10] = (void *)&merged_FFRs_gpu_idx;
-      
-      // construct gate node
-      size_t sp_accum = _break_points[FFR_level][KN_rd];
-      // Note: since `_break_points` records implemented until the FFR_idx in that level
-      // But: sp_accum means how #FFRs needed to be implmented in this KN, therefore, need to minus
-      // Or: will access illegal memory 
-      if (KN_rd != 0) {
-        sp_accum -= _break_points[FFR_level][KN_rd-1];
-      }
-      
-      num_blocks = (sp_accum > 64) ? ((sp_accum + 64 - 1) >> 6) : (1);
-      num_threads = (sp_accum > 64) ? (64) : (sp_accum);
-      
-      _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[kernelNode_idx], rd, fault_num, bad_case, 
-                                            start_position_in_mgc_gpu_idx, sp_accum, _num_PIs);
-      cudaDeviceSynchronize();
-      cudaCheckErrors("FFR _set_params cudaDeviceSynchronize failed");
+  for (m_ffr = 0; m_ffr < end_level; m_ffr++) {
+    kernelNode_idx++;
 
-      start_position_in_mgc_gpu_idx += sp_accum; 
-      
-      // Adding nodes
-      kernelNode_gate_Params[FFR_KN].func = (void *)_run_gate_graph_partition;
-      kernelNode_gate_Params[FFR_KN].gridDim = dim3(num_blocks, 1, 1);
-      kernelNode_gate_Params[FFR_KN].blockDim = dim3(num_threads, 1, 1);
-      kernelNode_gate_Params[FFR_KN].sharedMemBytes = 0;
-      kernelNode_gate_Params[FFR_KN].kernelParams = (void **)&(kernelArgs_gate[(FFR_KN)*num_func_inputs]);
-      kernelNode_gate_Params[FFR_KN].extra = NULL;  
+    params_gpu_idx_accum += _num_paras;
+    params_gpu_idx[kernelNode_idx] = _params_gpu+params_gpu_idx_accum;
+    kernelArgs_gate[m_ffr*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+5] = (void *)&_patterns_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+8] = (void *)&params_gpu_idx[kernelNode_idx];
+    kernelArgs_gate[m_ffr*num_func_inputs+9] = (void *)&merged_FFRs_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+10] = (void *)&merged_FFRs_gpu_idx;
+    
 
-      // push node: gate
-      cudaGraphAddKernelNode(&kernelNode_gate[FFR_KN], graph, NULL, 0, &kernelNode_gate_Params[FFR_KN]);
-      cudaCheckErrors("Adding kernelNode_FFR failed");
-      FFR_KN++;
-    }
+    // construct gate node
+    num_blocks = (_FFR_levelization[m_ffr].size() > 64) ? ((_FFR_levelization[m_ffr].size() + 64 - 1) >> 6) : (1);
+    num_threads = (_FFR_levelization[m_ffr].size() > 64) ? (64) : (_FFR_levelization[m_ffr].size());
+    
+    _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[kernelNode_idx], rd, fault_num, bad_case, 
+                                          start_position_in_mgc_gpu_idx, _FFR_levelization[m_ffr].size(), _num_PIs);
+    cudaDeviceSynchronize();
+    cudaCheckErrors("FFR _set_params cudaDeviceSynchronize failed");
+
+    start_position_in_mgc_gpu_idx += _FFR_levelization[m_ffr].size();
+    
+    // Adding nodes
+    kernelNode_gate_Params[m_ffr].func = (void *)_run_gate_graph_partition;
+    kernelNode_gate_Params[m_ffr].gridDim = dim3(num_blocks, 1, 1);
+    kernelNode_gate_Params[m_ffr].blockDim = dim3(num_threads, 1, 1);
+    kernelNode_gate_Params[m_ffr].sharedMemBytes = 0;
+    kernelNode_gate_Params[m_ffr].kernelParams = (void **)&(kernelArgs_gate[(m_ffr)*num_func_inputs]);
+    kernelNode_gate_Params[m_ffr].extra = NULL;  
+
+    // push node: gate
+    cudaGraphAddKernelNode(&kernelNode_gate[m_ffr], graph, NULL, 0, &kernelNode_gate_Params[m_ffr]);
+    cudaCheckErrors("Adding kernelNode_FFR failed");
   }
-  // Used for check 
   if (!_pull_up_merged_FFR_level_optimization) {
     assert(start_position_in_mgc_gpu_idx == (_num_PIs + _num_FFRs));
   }
+  
   
   if (_pull_up_merged_FFR_level_optimization) {
     kernelNode_idx++;
 
     params_gpu_idx_accum += _num_paras;
-
     params_gpu_idx[kernelNode_idx] = _params_gpu+params_gpu_idx_accum;
-    kernelArgs_gate[FFR_KN*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
-    kernelArgs_gate[FFR_KN*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
-    kernelArgs_gate[FFR_KN*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
-    kernelArgs_gate[FFR_KN*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
-    kernelArgs_gate[FFR_KN*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
-    kernelArgs_gate[FFR_KN*num_func_inputs+5] = (void *)&_patterns_gpu;
-    kernelArgs_gate[FFR_KN*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
-    kernelArgs_gate[FFR_KN*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
-    kernelArgs_gate[FFR_KN*num_func_inputs+8] = (void *)&params_gpu_idx[kernelNode_idx];
-    kernelArgs_gate[FFR_KN*num_func_inputs+9] = (void *)&merged_FFRs_gpu;
-    kernelArgs_gate[FFR_KN*num_func_inputs+10] = (void *)&merged_FFRs_gpu_idx;
-    kernelArgs_gate[FFR_KN*num_func_inputs+11] = (void *)&_FFR_levelization_gpu;
-    // printf("FFR_KN*num_func_inputs+11 = %ld\n", FFR_KN*num_func_inputs+11);
+    kernelArgs_gate[m_ffr*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+5] = (void *)&_patterns_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+8] = (void *)&params_gpu_idx[kernelNode_idx];
+    kernelArgs_gate[m_ffr*num_func_inputs+9] = (void *)&merged_FFRs_gpu;
+    kernelArgs_gate[m_ffr*num_func_inputs+10] = (void *)&merged_FFRs_gpu_idx;
+    kernelArgs_gate[m_ffr*num_func_inputs+11] = (void *)&_FFR_levelization_gpu;
 
     // construct gate node
     num_blocks = 1; // must be 1
@@ -1987,23 +1821,23 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
 
     
     // Adding nodes
-    kernelNode_gate_Params[FFR_KN].func = (void *)_run_gate_graph_partition_2;
-    kernelNode_gate_Params[FFR_KN].gridDim = dim3(num_blocks, 1, 1);
-    kernelNode_gate_Params[FFR_KN].blockDim = dim3(num_threads, 1, 1);
-    kernelNode_gate_Params[FFR_KN].sharedMemBytes = 0;
-    kernelNode_gate_Params[FFR_KN].kernelParams = (void **)&(kernelArgs_gate[(FFR_KN)*num_func_inputs]);
-    kernelNode_gate_Params[FFR_KN].extra = NULL;  
+    kernelNode_gate_Params[m_ffr].func = (void *)_run_gate_graph_partition_2;
+    kernelNode_gate_Params[m_ffr].gridDim = dim3(num_blocks, 1, 1);
+    kernelNode_gate_Params[m_ffr].blockDim = dim3(num_threads, 1, 1);
+    kernelNode_gate_Params[m_ffr].sharedMemBytes = 0;
+    kernelNode_gate_Params[m_ffr].kernelParams = (void **)&(kernelArgs_gate[(m_ffr)*num_func_inputs]);
+    kernelNode_gate_Params[m_ffr].extra = NULL;  
 
     // push node: gate
-    cudaGraphAddKernelNode(&kernelNode_gate[FFR_KN], graph, NULL, 0, &kernelNode_gate_Params[FFR_KN]);
+    cudaGraphAddKernelNode(&kernelNode_gate[m_ffr], graph, NULL, 0, &kernelNode_gate_Params[m_ffr]);
     cudaCheckErrors("Adding kernelNode_FFR failed");
-    FFR_KN++;
   }
-
   // construct PO node
   kernelNode_idx++;
+  // assert(kernelNode_idx == (_FFR_levelization.size()+1));
 
   params_gpu_idx_accum += _num_paras;
+  params_gpu_idx_accum = (_pull_up_merged_FFR_level_optimization) ? (params_gpu_idx_accum + 1) : (params_gpu_idx_accum);
 
   params_gpu_idx[kernelNode_idx] = _params_gpu+params_gpu_idx_accum;
   kernelArgs_PO[0] = (void *)&_gate_inputs_list_gpu;
@@ -2042,37 +1876,14 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
   cudaCheckErrors("Adding kernelNode_PO failed");
 
   // Construct dependency
-#ifdef FSIM_421_OPT
-  for (size_t i = 0; i < _break_points[0].size(); i++) {
-    cudaGraphAddDependencies(graph, kernelNode_PI, &kernelNode_gate[i], 1);
-  }
-#else 
-  cudaGraphAddDependencies(graph, kernelNode_PI, &kernelNode_gate[0], 1); 
-#endif
-
+  cudaGraphAddDependencies(graph, kernelNode_PI, &kernelNode_gate[0], 1);
   end_level = (_pull_up_merged_FFR_level_optimization) ? 
                       (_start_merged_FFR_levels) : (_FFR_levelization.size()-1);   
-  
-  FFR_KN = 0;
-  for (size_t lvl = 0; lvl < end_level; lvl++) {
-    if (_break_points[lvl].size() == 4) {
-      cudaGraphAddDependencies(graph, &kernelNode_gate[FFR_KN+0], &kernelNode_gate[FFR_KN+4], 1);
-      cudaGraphAddDependencies(graph, &kernelNode_gate[FFR_KN+1], &kernelNode_gate[FFR_KN+5], 1);
-      cudaGraphAddDependencies(graph, &kernelNode_gate[FFR_KN+2], &kernelNode_gate[FFR_KN+4], 1);
-      cudaGraphAddDependencies(graph, &kernelNode_gate[FFR_KN+2], &kernelNode_gate[FFR_KN+5], 1);
-      cudaGraphAddDependencies(graph, &kernelNode_gate[FFR_KN+3], &kernelNode_gate[FFR_KN+6], 1);
-      FFR_KN += 4;
-    } else if (_break_points[lvl].size() == 2) {
-      cudaGraphAddDependencies(graph, &kernelNode_gate[FFR_KN+0], &kernelNode_gate[FFR_KN+2], 1);
-      cudaGraphAddDependencies(graph, &kernelNode_gate[FFR_KN+1], &kernelNode_gate[FFR_KN+2], 1);
-      FFR_KN += 2;
-    } else { // _break_points[lvl].size() == 1
-      cudaGraphAddDependencies(graph, &kernelNode_gate[FFR_KN], &kernelNode_gate[FFR_KN+1], 1);
-      FFR_KN ++;
-    }
+  for (size_t i = 0; i < end_level; i++) {
+    cudaGraphAddDependencies(graph, &kernelNode_gate[i], &kernelNode_gate[i+1], 1);
   } 
+  cudaGraphAddDependencies(graph, &kernelNode_gate[end_level], kernelNode_PO, 1);
 
-  cudaGraphAddDependencies(graph, &kernelNode_gate[FFR_KN], kernelNode_PO, 1);
 
 #ifdef CUDA_GRAPH_CHECK
   cudaDeviceSynchronize();
@@ -2103,47 +1914,38 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
   cudaGraphCreate(&graph, 0); // create the graph
   cudaCheckErrors("cudaGraphCreate failure");
 
-  size_t num_KNs = _start_merged_FFR_levels + 1;// (_FFR_levelization.size());
-
-#ifdef FSIM_421_OPT
-  num_KNs += (_421_levels.size() << 2); 
-#endif
-
   // construct_graph
   cudaGraphNode_t kernelNode_PI;
   cudaKernelNodeParams kernelNode_PI_Params {0};
-  cudaGraphNode_t *kernelNode_gate = (cudaGraphNode_t *)malloc((num_KNs)*sizeof(cudaGraphNode_t));
-  cudaKernelNodeParams *kernelNode_gate_Params = (cudaKernelNodeParams *)malloc((num_KNs)*sizeof(cudaKernelNodeParams));
+  cudaGraphNode_t *kernelNode_gate = (cudaGraphNode_t *)malloc((_FFR_levelization.size())*sizeof(cudaGraphNode_t));
+  cudaKernelNodeParams *kernelNode_gate_Params = (cudaKernelNodeParams *)malloc((_FFR_levelization.size())*sizeof(cudaKernelNodeParams));
   cudaGraphNode_t kernelNode_PO;
   cudaKernelNodeParams kernelNode_PO_Params {0};
   
 
-  const size_t num_func_inputs = 11;
+  size_t num_func_inputs = 11;
   void **kernelArgs_PI = (void **)malloc(num_func_inputs*sizeof(void *));
-  // kernelArgs_gate, size: +1: for tailed OPT, need one more space
-  void **kernelArgs_gate = (void **)malloc((num_func_inputs*(num_KNs)+1)*sizeof(void *)); 
+  void **kernelArgs_gate = (void **)malloc(num_func_inputs*(_FFR_levelization.size())*sizeof(void *));
   void **kernelArgs_PO = (void **)malloc(num_func_inputs*sizeof(void *));
-  size_t **params_gpu_idx = (size_t **)malloc((num_KNs+2)*sizeof(void *)); // PI num_KNs PO
-  memset(params_gpu_idx, 0, (num_KNs+2)*sizeof(void *)); // PI num_KNs PO
-  
+  size_t **params_gpu_idx = (size_t **)malloc((_FFR_levelization.size()+2)*sizeof(void *));
+  memset(params_gpu_idx, 0, (_FFR_levelization.size()+2)*sizeof(void *));
+
+
   _construct_cuda_graph_partition(stream1, graph, 
                         &kernelNode_PI, &kernelNode_PI_Params,
                         kernelNode_gate, kernelNode_gate_Params,
                         &kernelNode_PO, &kernelNode_PO_Params, 
                         kernelArgs_PI, kernelArgs_gate, kernelArgs_PO, params_gpu_idx, num_func_inputs);
   
-  cudaCheckErrors("_construct_cuda_graph_partition failure");
   
   cudaGraphExec_t instance;
   cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
   cudaCheckErrors("Graph instantiation failed");
+  // printf("_start_merged_FFR_levels = %ld %ld\n", _start_merged_FFR_levels, _FFR_levelization.size()-_start_merged_FFR_levels);
   
   size_t fault_num, bad_case;
   size_t end_level = (_pull_up_merged_FFR_level_optimization) ? 
                       (_start_merged_FFR_levels) : (_FFR_levelization.size());   
-  #ifdef FSIM_421_OPT
-    end_level += 4*_421_levels.size();
-  #endif
 
   for (size_t rd = 0; rd < _num_rounds; rd++) {
     size_t num_testcases_this_round =
@@ -2159,7 +1961,8 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
     // update to good case parameters
     fault_num = 0;
     bad_case = 0; 
-    // update KernelNodes params (good case)
+    // printf("RD = %ld (_num_rounds = %ld)\n", rd, _num_rounds) ;
+    // // update KernelNodes params (good case)
     _update_cuda_graph_params(stream1, instance, rd, fault_num, bad_case,
                               &kernelNode_PI, &kernelNode_PI_Params,
                               kernelNode_gate, kernelNode_gate_Params,
@@ -2167,12 +1970,15 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
 
     _run_good_case_cuda_graph(num_testcases_this_round, stream1, instance);
 
-
+    
     // bad simulation (fault simulation)
     for (size_t j = 0; j < _num_faults; j++) {
       // update to bad case parameters
+      // wrong_gate = _faults[j]._gate_with_fault;
+      // fault_val = _faults[j]._gate_SA_fault_val;
       fault_num = j;
       bad_case = 1;
+      // printf("RD = %ld, j = %ld\n", rd, j);
       // // update KernelNodes params (bad case)
       _update_cuda_graph_params(stream1, instance, rd, fault_num, bad_case,
                                 &kernelNode_PI, &kernelNode_PI_Params,
@@ -2383,7 +2189,6 @@ __global__ void _run_gate_graph_partition(size_t *_gate_inputs_list_gpu, size_t 
                                           size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx) {
     
   size_t tb_idx = blockIdx.x*blockDim.x + threadIdx.x; // 第幾個 thread 就處理第幾個 FFR at this level 
-  
   // parameters
   const size_t rd = _params_gpu[0];
   const size_t fault_num = _params_gpu[1];
@@ -2391,6 +2196,7 @@ __global__ void _run_gate_graph_partition(size_t *_gate_inputs_list_gpu, size_t 
   size_t start_position_idx = _params_gpu[3] + tb_idx; // merged_FFRs_gpu_idx 的起始位置
   const size_t num_FFRs_in_this_level = _params_gpu[4]; // 有幾個 FFR
   const size_t _num_PIs = _params_gpu[5];
+
 
   if(tb_idx >= num_FFRs_in_this_level)
     return;
@@ -2441,13 +2247,6 @@ __global__ void _run_gate_graph_partition(size_t *_gate_inputs_list_gpu, size_t 
           _apply_PI(real_g_idx, _pi_gate_po_output_res_gpu, _patterns_gpu[_num_PIs*rd+real_g_idx]);
         break;
         case 10:
-          // printf("tb_idx = %ld, k = %ld, num_FFRs_in_this_level = %ld\n", tb_idx, k, num_FFRs_in_this_level);        
-          // printf("k = %ld, %ld, (%ld - %ld)\n", k, num_gates_in_this_FFR, 
-          //             merged_FFRs_gpu_idx[start_position_idx+1], merged_FFRs_gpu_idx[start_position_idx], 
-          //             merged_FFRs_gpu_idx[start_position_idx+1] - merged_FFRs_gpu_idx[start_position_idx]);
-          // size_t start_location = _gate_inputs_list_start_gpu[real_g_idx];
-          // _pi_gate_po_output_res_gpu[real_g_idx] = _pi_gate_po_output_res_gpu[_gate_inputs_list_gpu[start_location]];
-          // printf("real_g_idx = %ld, %ld, %ld, %ld\n", real_g_idx, start_location, _gate_inputs_list_gpu[start_location], _pi_gate_po_output_res_gpu[_gate_inputs_list_gpu[start_location]]);
           _apply_PO(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
         case 11:
@@ -2474,10 +2273,9 @@ __global__ void _run_gate_graph_partition_2(size_t *_gate_inputs_list_gpu, size_
   size_t start_position_idx = _params_gpu[3] + tb_idx; // merged_FFRs_gpu_idx 的起始位置
   const size_t num_level = _params_gpu[4]; // 有幾層
   const size_t _num_PIs = _params_gpu[5];
-  
+
   for (size_t lvl = 0; lvl < num_level; lvl++) { // _FFR_levelization_gpu
     size_t num_FFRs_in_this_level = _FFR_levelization_gpu[lvl];
-
     
     if (num_FFRs_in_this_level > tb_idx) {
       size_t start_gate_idx = merged_FFRs_gpu_idx[start_position_idx];
@@ -2636,7 +2434,6 @@ __device__ __forceinline__ void _apply_PI(size_t gate_idx, size_t *_pi_gate_po_o
 __device__ __forceinline__ void _apply_PO(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu) {
   size_t start_location = _gate_inputs_list_start_gpu[gate_idx];
   _pi_gate_po_output_res_gpu[gate_idx] = _pi_gate_po_output_res_gpu[_gate_inputs_list_gpu[start_location]];
-  // printf("PO: %ld, %ld, %ld, %ld\n", gate_idx, start_location, _gate_inputs_list_gpu[start_location], _pi_gate_po_output_res_gpu[_gate_inputs_list_gpu[start_location]]);
 }
 
 __global__ void _compare_g_b_results(const size_t j, const size_t _num_POs, const size_t rd, 
@@ -2792,24 +2589,18 @@ void CUDASimulator::_gpu_ask_copy_mem() {
   cudaMalloc((void**)&_params_gpu, _num_paras*(_max_level+1)*sizeof(size_t));
 #endif
 #ifdef FSIM_PARTITION_FFR
-  // FIT size: num_KNs
-  size_t num_KNs = (_pull_up_merged_FFR_level_optimization) ? 
-                  (_start_merged_FFR_levels + 1 + 2) : (_FFR_levelization.size()+2);
-#ifdef FSIM_421_OPT
-  num_KNs += (_421_levels.size() << 2); // one 421, add 4 KNs
-#endif   
-  // printf("bo _num_paras*(num_KNs) = %ld %ld %ld\n", _num_paras*(num_KNs), _num_paras, num_KNs);
-  cudaMalloc((void**)&_params_gpu, _num_paras*(num_KNs)*sizeof(size_t));
-  cudaMalloc((void**)&_FFR_levelization_gpu, 
-              (_FFR_levelization.size() - _start_merged_FFR_levels + 1)*sizeof(size_t));
+  cudaMalloc((void**)&_params_gpu, _num_paras*(_FFR_levelization.size()+2)*sizeof(size_t));
+  cudaMalloc((void**)&_FFR_levelization_gpu, (_FFR_levelization.size() - 
+                                              _start_merged_FFR_levels + 1)*sizeof(size_t));
 #endif 
 
   // copy memory 
-  cudaMemcpy(_gate_inputs_list_gpu, _gate_inputs_list, _sum_inputs_gates*sizeof(size_t), cudaMemcpyHostToDevice);  
+  cudaMemcpy(_gate_inputs_list_gpu, _gate_inputs_list, _sum_inputs_gates*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaMemcpy(_gate_inputs_list_start_gpu, _gate_inputs_list_start, sum_pi_gates_pos*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("_gate_inputs_list_start_gpu failure");
 
   // prepare data for CSR format,
+  // TODO: move this part to the _read -> replace the origin C++ code
   // pi_gate_po_output_res_gpu // memset: 0 -> can skip
   
   // pi_gate_po_gate_type_gpu
@@ -2852,8 +2643,7 @@ void CUDASimulator::_gpu_ask_copy_mem() {
 
 #ifdef FSIM_PARTITION_FFR
   // _FFR_levelization_gpu
-  size_t *_FFR_levelization_cpu = (size_t *)malloc((_FFR_levelization.size()
-                                   - _start_merged_FFR_levels + 1)*sizeof(size_t));
+  size_t *_FFR_levelization_cpu = (size_t *)malloc((_FFR_levelization.size()-_start_merged_FFR_levels)*sizeof(size_t));
   for (size_t i = _start_merged_FFR_levels; i < _FFR_levelization.size(); i++) {
     _FFR_levelization_cpu[i-_start_merged_FFR_levels] = _FFR_levelization[i].size();
   }
@@ -2871,7 +2661,7 @@ void CUDASimulator::_gpu_ask_copy_mem() {
   cudaCheckErrors("AA4 failure");
 #ifdef FSIM_PARTITION_FFR
   cudaMemcpy(_FFR_levelization_gpu, _FFR_levelization_cpu, 
-            (_FFR_levelization.size() - _start_merged_FFR_levels + 1)*sizeof(size_t), cudaMemcpyHostToDevice);
+            (_FFR_levelization.size()-_start_merged_FFR_levels)*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("AA5 failure");
 #endif
   
@@ -2884,7 +2674,7 @@ void CUDASimulator::_gpu_ask_copy_mem() {
 #ifdef FSIM_PARTITION_FFR
   free(_FFR_levelization_cpu);
 #endif
-
+  
 #ifdef FSIM_DEBUG_GPU_INPUTS
   // check 
   // _pi_gate_po_gate_type_gpu
@@ -2895,8 +2685,8 @@ void CUDASimulator::_gpu_ask_copy_mem() {
 
   // _fault_gate_idx_gpu && _FFR_levelization_gpu
   print_fault_gate_idx_gpu <<< 1, 1 >>> (_fault_gate_idx_gpu, _fault_SA_fault_val_gpu, _num_faults, 
-                                        _FFR_levelization_gpu, 0, _FFR_levelization.size()-_start_merged_FFR_levels, 
-                                        _gate_inputs_list_gpu, _sum_inputs_gates);
+                                        _FFR_levelization_gpu, 0, _FFR_levelization.size()-_start_merged_FFR_levels);
+  
 
 #endif
 
@@ -2966,31 +2756,16 @@ __global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, si
   } printf("]\n");
 }
 __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, size_t _num_faults, 
-                                          size_t * _FFR_levelization_gpu, size_t s, size_t n, 
-                                          size_t *_gate_inputs_list_gpu, const size_t _sum_inputs_gates) {
-  // printf("print_fault_gate_idx_gpu (_num_faults = %ld): [\n", _num_faults);
-  // for (size_t i = 0; i < _num_faults; i++) {
-  //   printf("gate_w_f = %ld, SA_val = %ld\n", _fault_gate_idx_gpu[i], _fault_SA_fault_val_gpu[i]);
-  // } printf("]\n");
+                                          size_t * _FFR_levelization_gpu, size_t s, size_t n) {
+  printf("print_fault_gate_idx_gpu (_num_faults = %ld): [\n", _num_faults);
+  for (size_t i = 0; i < _num_faults; i++) {
+    printf("gate_w_f = %ld, SA_val = %ld\n", _fault_gate_idx_gpu[i], _fault_SA_fault_val_gpu[i]);
+  } printf("]\n");
 
-  // printf("_FFR_levelization_gpu =\n");
-  // for (size_t i = s; i < n; i++) {
-  //   printf("!_FFR_levelization_gpu[%ld] = %ld\n", i, _FFR_levelization_gpu[i]);
-  // } printf("]\n");
-
-  printf("print _gate_inputs_list_gpu\n");
-  for (size_t i = 171720; i < _sum_inputs_gates; i++) {
-    printf("_gate_inputs_list_gpu[%ld] = %ld\n", i, _gate_inputs_list_gpu[i]);
-    // printf("%ld, ", _gate_inputs_list_gpu[i]);
-  } printf("\n");
-}
-
-__global__ void print_gate_inputs_list_gpu(size_t *_gate_inputs_list_gpu, const size_t _sum_inputs_gates) {
-  printf("print _gate_inputs_list_gpu\n");
-  for (size_t i = 171720; i < _sum_inputs_gates; i++) {
-    printf("_gate_inputs_list_gpu[%ld] = %ld\n", i, _gate_inputs_list_gpu[i]);
-    // printf("%ld, ", _gate_inputs_list_gpu[i]);
-  } printf("\n");
+  printf("_FFR_levelization_gpu =\n");
+  for (size_t i = s; i < n; i++) {
+    printf("!_FFR_levelization_gpu[%ld] = %ld\n", i, _FFR_levelization_gpu[i]);
+  } printf("]\n");
 }
 
 
@@ -3044,14 +2819,12 @@ void CUDASimulator::_gpu_ask_copy_mem_partition() {
   printf("merged_FFRs_c : \n");
   for (size_t i = 0; i < accum_idx; i++) {
       printf("%ld, ", merged_FFRs_c[i]);
-      assert(merged_FFRs_c[i] < sum_pi_gates_pos && "merged_FFRs_c[i] ERROR");
   } printf("\n");
   assert(sum_pi_gates_pos == accum_idx);
 #endif
 
   // // merged_FFRs_idx_c
   size_t num_threads = _num_FFRs+_num_PIs+_num_POs;
-  // printf("num_threads = %ld\n", num_threads);
   merged_FFRs_idx_c = (size_t*)malloc((num_threads+1)*sizeof(size_t));
   memset(merged_FFRs_idx_c, 0, (num_threads+1)*sizeof(size_t));
 
@@ -3113,27 +2886,26 @@ printf("tmp: ");
   cudaMemcpy(merged_FFRs_gpu_idx, merged_FFRs_idx_c, (num_threads+1)*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("cudaMemcpy failed");
   
-// #ifdef FSIM_CHECK_FFR
+#ifdef FSIM_CHECK_FFR
   print_merged_FFRs_gpu <<< 1, 1 >>> (merged_FFRs_gpu, merged_FFRs_gpu_idx, sum_pi_gates_pos, (num_threads+1));
   cudaCheckErrors("print_merged_FFRs_gpu failed");
   cudaDeviceSynchronize();
-// #endif
+#endif
   
   free(merged_FFRs_c);
   free(merged_FFRs_idx_c);
 }
 
 __global__ void print_merged_FFRs_gpu (size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx, size_t sum_pi_gates_pos, size_t aa) {
-  // printf("GPU: merged_FFRs_c (%ld): \n", sum_pi_gates_pos);
-  // for (size_t i = 0; i < (sum_pi_gates_pos); i++) {
-  //   printf("%ld, ", merged_FFRs_gpu[i]);
-  // } printf("\n");
+  printf("GPU: merged_FFRs_c : \n");
+  for (size_t i = 0; i < (sum_pi_gates_pos); i++) {
+    printf("%ld, ", merged_FFRs_gpu[i]);
+  } printf("\n");
   
-  // printf("aa = %ld\n", aa);
-  // printf("GPU: merged_FFRs_idx_c (aa): \n");
-  // for (size_t i = 0; i < aa; i++) {
-  //   printf("%ld, ", merged_FFRs_gpu_idx[i]);
-  // } printf("\n");
+  printf("GPU: merged_FFRs_idx_c : \n");
+  for (size_t i = 0; i < aa; i++) {
+    printf("%ld, ", merged_FFRs_gpu_idx[i]);
+  } printf("\n");
 }
 
 void CUDASimulator::_free_all() {  
@@ -3165,6 +2937,98 @@ void CUDASimulator::_free_all() {
   cudaFree(_FFR_levelization_gpu);
 #endif 
 }
+
+
+
+
+#ifdef TEST_cuGraphExecNodeSetParams
+  __global__ void _set_params_test(size_t *_params_gpu_tmptmp, size_t num, size_t rd){
+    for (size_t i = 0; i < num; i++) {
+      _params_gpu_tmptmp[i] = rd;
+    }
+  }
+
+  __global__ void test_cuGraphExecNodeSetParams_gpu (size_t *_params_gpu_tmptmp, size_t num, size_t rd) {
+    printf("GPU: ");
+    for (size_t i = 0; i < num; i++) {
+      printf("%ld, ", _params_gpu_tmptmp[i]);
+    } printf("\n");
+  }
+
+  void CUDASimulator::test_cuGraphExecNodeSetParams_cpu () {
+    // construct graph
+    cudaStream_t stream1;
+    cudaStreamCreateWithFlags(&stream1, cudaStreamNonBlocking);
+    cudaGraph_t graph; // main graph
+    cudaGraphCreate(&graph, 0); // create the graph
+    cudaCheckErrors("cudaGraphCreate failure");
+    
+    size_t num = 10;
+    size_t rd = 100;
+    
+    // asking for memory 
+    cudaMalloc((void**)&_params_gpu_tmptmp, num*sizeof(size_t));
+
+    void *kernelArgs[3];
+    kernelArgs[0] = (void *)&_params_gpu_tmptmp;
+    kernelArgs[1] = (void *)&num;
+    kernelArgs[2] = (void *)&rd;
+
+    
+    cudaGraphNode_t kernelNode_test;
+    cudaKernelNodeParams kernelNode_test_Params {0};
+    size_t num_blocks = 1;
+    size_t num_threads = 1;
+    _set_params_test <<< 1, 1, 0, stream1 >>> (_params_gpu_tmptmp, num, rd);
+    // cudaStreamSynchronize(stream1);    
+    cudaDeviceSynchronize();
+
+    // Adding node
+    kernelNode_test_Params.func = (void *)test_cuGraphExecNodeSetParams_gpu;
+    kernelNode_test_Params.gridDim = dim3(num_blocks, 1, 1);
+    kernelNode_test_Params.blockDim = dim3(num_threads, 1, 1);
+    kernelNode_test_Params.sharedMemBytes = 0;
+    kernelNode_test_Params.kernelParams = (void **)(kernelArgs);
+    kernelNode_test_Params.extra = NULL;  
+
+    // push node
+    cudaGraphAddKernelNode(&kernelNode_test, graph, NULL, 0, &kernelNode_test_Params);
+    // __host__ ​cudaError_t cudaGraphAddKernelNode ( cudaGraphNode_t* pGraphNode, cudaGraph_t graph, const cudaGraphNode_t* pDependencies, size_t numDependencies, const cudaKernelNodeParams* pNodeParams )
+
+    cudaCheckErrors("Adding kernelNode_test failed");
+
+    // Instantiate cudaGraph
+    cudaGraphExec_t instance;
+    cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
+    cudaCheckErrors("Graph instantiation failed");
+
+    // changed rd
+    for (size_t rd_cpu = 0; rd_cpu < 5; rd_cpu++) {
+      printf("CPU: rd = %ld\n", rd_cpu);
+      rd = rd_cpu;
+      
+      // change var
+      _set_params_test <<< 1, 1, 0, stream1 >>> (_params_gpu_tmptmp, num, rd);
+      cudaStreamSynchronize(stream1);    
+      // __host__ ​cudaError_t cudaGraphExecKernelNodeSetParams ( cudaGraphExec_t hGraphExec, cudaGraphNode_t node, const cudaKernelNodeParams* pNodeParams )
+      cudaGraphExecKernelNodeSetParams(instance, kernelNode_test, &kernelNode_test_Params);
+
+      cudaGraphLaunch(instance, stream1);
+      cudaStreamSynchronize(stream1);    
+      cudaCheckErrors("Graph launch failed");
+      printf("======\n\n");
+      cudaDeviceSynchronize();  
+    }
+
+  }
+#endif  
+
+
+
+
+
+
+
 
 
 

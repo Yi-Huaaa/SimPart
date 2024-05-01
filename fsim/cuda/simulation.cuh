@@ -82,12 +82,11 @@ __global__ void print_merged_FFRs_gpu (size_t *merged_FFRs_gpu, size_t *merged_F
 __global__ void print_pi_gate_po_gate_type_gpu(size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_num_inputs_gpu, size_t num);
 __global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs);
 __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, size_t _num_faults, 
-                                        size_t * _FFR_levelization_gpu, size_t s, size_t n, 
-                                        size_t *_gate_inputs_list_gpu, const size_t _sum_inputs_gates);
-__global__ void print_gate_inputs_list_gpu(size_t *_gate_inputs_list_gpu, const size_t _sum_inputs_gates);
+                                        size_t * _FFR_levelization_gpu, size_t s, size_t n);
+
 
 // print for check
-// #define FSIM_DEBUG_PRINT_SIMULATION // print the TOTAL ANSWER
+// #define FSIM_DEBUG_PRINT_SIMULATION // print all of gate values after the fault simulation
 // #define FSIM_DEBUG_PRINT_SIMULATION_GPU
 // #define FSIM_DEBUG_PRINT_GRAPH
 // #define FSIM_DEBUG_PRINT_FAULTS
@@ -101,8 +100,6 @@ __global__ void print_gate_inputs_list_gpu(size_t *_gate_inputs_list_gpu, const 
 // #define FSIM_LEVELIZAED_PARTITION
 
 #define FSIM_PARTITION_FFR // partition_FFR
-#define FSIM_TAIL_ENDED_OPT // "FSIM_PARTITION_FFR" must cooperate with "FSIM_TAIL_ENDED_OPT"
-#define FSIM_421_OPT
 // #define FSIM_CHECK_FFR
 // #define FSIM_PARTITION_CORRECTNESS
 // #define FSIM_PREPARED_SECOND_RD_MERGED_FFRS
@@ -211,14 +208,12 @@ private:
                           std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs,
                         size_t width_constraint, size_t depth_constraint);
 
-  void _merge_FFRs();
-
+  void _merge_FFRs();  
   const size_t width_constraint_0 = 1024;
   const size_t depth_constraint_0 = 2; 
 
-  const size_t _FFR_width_constraint = 2;
-  const size_t _FFR_depth_constraint = 3;
-  const size_t _421_OPT_threshold = 4096;
+  const size_t _FFR_width_constraint = 1;
+  const size_t _FFR_depth_constraint = 2;
 
 
   size_t _largest_FFR_level;
@@ -229,10 +224,6 @@ private:
                             size_t FFR_level,
                             std::vector<std::vector<size_t>> &merged_FFR, 
                             bool &merged_FFR_full, size_t width_constraint, size_t depth_constraint);
-
-
-  // size_t _last_merged_FFRs_levels [6] = {6, 6, 7, 8, 5, 6,};
-  const size_t _num_level_merged_FFRs_second_rd = 6;
 
 
   // after merge
@@ -353,20 +344,7 @@ private:
   
   // parallel-cuda-graph-partition
   void _run_parallel_cuda_graph_partition();
-  size_t _merged_FFRs_in_last_levels();
-  void _421_split(std::vector<size_t> &level_of_FFRs, std::vector<std::set<size_t>> &adj, 
-                  const size_t level_421);
-  
-  // record the break points of FFR for each FFR_level, it might have more than 1 break points
-  std::vector<std::vector<size_t>> _break_points; 
-  std::vector<size_t> _421_levels; // record the first level having the 421 opt
-  // store the partition index of each FFR
-  std::vector<size_t> _partition_results; 
-  const size_t _num_partition_KNs = 2; // number of KNs per level after splitting 
-  void _FFRs_level_partition_init (const size_t start_lvl);
-  void _FFRs_in_same_level_partition(const size_t lvl, 
-                                    std::vector<size_t> &level_of_FFRs,
-                                    std::vector<std::set<size_t>> &adj);
+  size_t _merged_FFRs_in_last_levels();  
   void _construct_cuda_graph_partition(cudaStream_t stream1, cudaGraph_t graph, 
                                       cudaGraphNode_t *kernelNode_PI, 
                                       cudaKernelNodeParams *kernelNode_PI_Params,

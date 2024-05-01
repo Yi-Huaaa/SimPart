@@ -36,6 +36,7 @@ target_compile_options(fsim PRIVATE
   -Wextra
   -Wfatal-errors
   -Wshadow
+  -O3
 )
 
 target_compile_options(fsim_cuda PRIVATE
@@ -44,6 +45,7 @@ target_compile_options(fsim_cuda PRIVATE
   -Wfatal-errors
   -Wshadow
   -lineinfo
+  -O3
 )
 
 target_compile_options(fsim_cuda_graph PRIVATE
