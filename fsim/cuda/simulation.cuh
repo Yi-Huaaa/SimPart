@@ -213,7 +213,8 @@ private:
   const size_t depth_constraint_0 = 2; 
 
   const size_t _FFR_width_constraint = 1;
-  const size_t _FFR_depth_constraint = 2;
+  const size_t _FFR_depth_constraint = 1;
+  const size_t _tail_ended_OPT_threshold = 1024;
 
 
   size_t _largest_FFR_level;

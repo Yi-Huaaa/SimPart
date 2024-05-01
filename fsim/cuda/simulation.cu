@@ -938,7 +938,7 @@ void CUDASimulator::_find_CUDA_GRAPH_dependency() {
 size_t CUDASimulator::_merged_FFRs_in_last_levels() {
   size_t ret = 0;
   for (int i = (_FFR_levelization.size()-1); i > -1; i--) {
-    if (_FFR_levelization[i].size() <= 32) {
+    if (_FFR_levelization[i].size() <= _tail_ended_OPT_threshold) {
       // printf("_FFR_levelization[%d].size() = %ld\n", i, _FFR_levelization[i].size());
       ret = i;
     } else {
@@ -2333,7 +2333,8 @@ __global__ void _run_gate_graph_partition_2(size_t *_gate_inputs_list_gpu, size_
       }
     } 
     start_position_idx += num_FFRs_in_this_level; // update for next round
-    __syncwarp();
+    // __syncwarp();
+    __syncthreads();
   }
 }
 
