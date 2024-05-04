@@ -83,6 +83,7 @@ __global__ void print_pi_gate_po_gate_type_gpu(size_t *_pi_gate_po_gate_type_gpu
 __global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs);
 __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, size_t _num_faults, 
                                         size_t * _FFR_levelization_gpu, size_t s, size_t n);
+__global__ void _show_computational_results (size_t *a, size_t start, size_t end);
 
 
 // print for check

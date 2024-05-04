@@ -1990,6 +1990,15 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
     } 
   }
 
+  // cudaStreamSynchronize(stream1);
+  // cudaDeviceSynchronize();    
+  // printf("_num_PIs = %ld, _num_inner_gates = %ld, _num_POs = %ld\n", _num_PIs, _num_inner_gates, _num_POs);
+  // _show_computational_results <<< 1, 1, 0, stream1>>> (_pi_gate_po_output_res_gpu, 0, _num_PIs+_num_inner_gates + _num_POs);
+  // cudaStreamSynchronize(stream1);
+  // cudaDeviceSynchronize();
+
+
+
   // free mem
   _free_all();
   
@@ -2435,6 +2444,15 @@ __device__ __forceinline__ void _apply_PI(size_t gate_idx, size_t *_pi_gate_po_o
 __device__ __forceinline__ void _apply_PO(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu) {
   size_t start_location = _gate_inputs_list_start_gpu[gate_idx];
   _pi_gate_po_output_res_gpu[gate_idx] = _pi_gate_po_output_res_gpu[_gate_inputs_list_gpu[start_location]];
+}
+
+__global__ void _show_computational_results (size_t *a, size_t start, size_t end) {
+  printf("_show_computational_results\n");
+
+  for (size_t i = start; i < end; i++) {
+    printf("arr[%lu] = %llu\n", i, a[i]);
+  }
+  printf("\n");
 }
 
 __global__ void _compare_g_b_results(const size_t j, const size_t _num_POs, const size_t rd, 

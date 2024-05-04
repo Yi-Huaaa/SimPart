@@ -4,9 +4,9 @@
 #include <fsim/fsim.hpp>
 
 #define num_thread 8 // define by user
-// #define run_seq
+#define run_seq
 // #define run_tf
-#define run_omp
+// #define run_omp
 // #define visualization
 // #define print_output
 
