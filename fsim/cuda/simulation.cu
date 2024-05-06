@@ -716,11 +716,11 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
     } printf("\n");
   } printf("\n");
 #endif 
-
-  // 0505 Partition FFRs according to the data dependnecy (inputs) 
-  _partition(adj, level_of_FFRs);
   // 0505 TEST EXP: 嘗試打亂 data access pattern，看是否會差很多時間
   // _test_rand_memory_access_pattern_for_GPU();
+
+  // Partition FFRs according to the data dependnecy (inputs) 
+  _partition(adj, level_of_FFRs);
 }
 
 size_t CUDASimulator::_merged_FFRs_in_last_levels() {
@@ -768,18 +768,36 @@ void CUDASimulator::_partition(std::vector<std::set<size_t>> &adj, std::vector<s
     }
   }
 
-  // printf("_start_merged_FFR_levels = %lu %lu\n", _start_merged_FFR_levels, acc);
-  for (size_t lvl = 0; lvl < acc; lvl++) {
-    printf("_partition_results[%lu].size() = %lu (%lu)\n", lvl, _partition_results[lvl].size(), _FFR_levelization[lvl].size());
-  }
+  // // printf("_start_merged_FFR_levels = %lu %lu\n", _start_merged_FFR_levels, acc);
+  // for (size_t lvl = 0; lvl < acc; lvl++) {
+  //   printf("_partition_results[%lu].size() = %lu (%lu)\n", lvl, _partition_results[lvl].size(), _FFR_levelization[lvl].size());
+  // }
+  // for (size_t KN = 0; KN < _partition_results[0].size(); KN++) {
+  //   if (_partition_results[0][KN].size() >= 1 && _partition_results[1][KN].size() >= 1 
+  //       && _partition_results[2][KN].size() >= 1 && _partition_results[3][KN].size() >= 1) {
+  //     printf("KN_%lu: ", KN);
+  //     for (size_t lvl = 0; lvl < acc; lvl++) {
+  //       printf("%lu, ", _partition_results[lvl][KN].size());
+  //     }
+  //     printf("\n");
+  //   }
+  // }
 
   // merge
-  _merge();
+  // TODO: try_merge_acc is only used for Check, it can be deleted
+  std::vector<std::vector<size_t>> try_merge_acc; // record how many FFR in this merged_KN
+  std::vector<std::vector<size_t>> try_merge_nKN; // record it should merge until which KN 
+  _merge(acc, _partition_results, try_merge_acc, try_merge_nKN);
 
-}
+  // update the implemnetation index after _merge
+  // note: this part will be deleted after writing the re-index part
+  _update_FFR_levelization(acc, _partition_results, try_merge_nKN);
 
-void CUDASimulator::_merge() {
-
+  // TODO: re-index the FFR to make the memory access pattern in a more continuous format 
+  // to satisfy the better memory access constraint fo the GPU memory access pattern
+  // -> (1) coalesced and (2) properly aligned
+  // std::vector<size_t> _gate_re_idx; _gate_re_idx.resize(_num_inner_gates);
+  // _ffr_re_idx();
 }
 
 void CUDASimulator::_find_connected_ffrs(const size_t acc, 
@@ -821,6 +839,142 @@ void CUDASimulator::_find_connected_ffrs(const size_t acc,
     // std::cout << _partition_results[level_of_FFRs[cur_idx]][n_KN].size() << std::endl;
   }
 }
+
+void CUDASimulator::_merge(const size_t acc, std::vector<std::vector<std::vector<size_t>>> &_partition_results,
+                          std::vector<std::vector<size_t>> &try_merge_acc, 
+                          std::vector<std::vector<size_t>> &try_merge_nKN) {
+  // printf("Before _merge();\n");
+
+  // printf("Check my assumption\n");
+  // for (size_t lvl = 0; lvl < acc; lvl++) { // lvl
+  //   for (size_t n_KN = 0; n_KN < _partition_results[lvl].size(); n_KN++) { // KN
+  //     bool correct_assumption = true; 
+  //     size_t lvl_pre;
+  //     for (lvl_pre = 0; lvl_pre < lvl; lvl_pre++) { // lvl_pre
+  //       if (_partition_results[lvl_pre][n_KN].size() == 0) {
+  //         correct_assumption = false;
+  //       }
+  //     }
+  //     if (!correct_assumption && _partition_results[lvl][n_KN].size() != 0) {
+  //       for (lvl_pre = 0; lvl_pre < (lvl+1); lvl_pre++) { // lvl_pre
+  //         printf("_partition_results[%lu][%lu].size() = %lu\n", lvl, n_KN, _partition_results[lvl][n_KN].size());
+  //       }
+  //       exit(1);
+  //     }  
+  //   }
+  // }
+
+  // printf("Show the my thought (partition results)\n");
+  // for (size_t n_KN = 0; n_KN < _partition_results[0].size(); n_KN++) { // KN
+  //   printf("_partition_results_%lu: ", n_KN);
+  //   for (size_t lvl = 0; lvl < acc; lvl++) { // lvl
+  //     printf("[%lu][%lu].sz = %lu, ", lvl, n_KN, _partition_results[lvl][n_KN].size());
+  //   } printf("\n");
+  // } printf("\n");
+
+
+
+  // lvl, merge to which KN 
+  // std::vector<std::vector<size_t>> try_merge_acc; 
+  // std::vector<std::vector<size_t>> try_merge_nKN; 
+  try_merge_acc.resize(acc, std::vector<size_t>());
+  try_merge_nKN.resize(acc, std::vector<size_t>());   
+  const size_t _merge_thd_ub = 2048; // merge threshold upper bound
+  size_t accum = 0; 
+  size_t n_KN = 0;
+
+  for (size_t lvl = 0; lvl < acc; lvl++) {
+    // printf("merge level %lu\n", lvl);
+    while (n_KN < _partition_results[lvl].size()) {
+      // If we meet a extremely large partition set, directly push out as a new merged_KN
+      if (_partition_results[lvl][n_KN].size() >= _merge_thd_ub) { 
+        accum = _partition_results[lvl][n_KN].size();
+        n_KN++;
+      } else {
+        while((accum+_partition_results[lvl][n_KN].size()) <= _merge_thd_ub 
+              && n_KN < _partition_results[lvl].size()) {
+          accum += _partition_results[lvl][n_KN].size();
+          n_KN++;
+        }
+      }
+
+      try_merge_acc[lvl].push_back(accum);
+      try_merge_nKN[lvl].push_back(n_KN);
+      // printf("b accum = %lu, n_KN = %lu, %lu\n", accum, n_KN, try_merge_acc[lvl].size()-1);  
+      accum = 0; 
+    }
+    n_KN = 0;
+  }
+
+  // printf("Results _merge\n");
+  // for (size_t lvl = 0; lvl < acc; lvl++) {
+  //   printf("Results merge level %lu\n", lvl);
+  //   for (size_t i = 0; i < try_merge_nKN[lvl].size(); i++) {
+  //     // printf("try_merge_acc[%lu][%lu] = %lu, ", lvl, i, try_merge_acc[lvl][i]);
+  //     printf("try_merge_nKN[%lu][%lu] = %lu\n", lvl, i, try_merge_nKN[lvl][i]);
+  //   }
+  // }
+}
+
+void CUDASimulator::_update_FFR_levelization(const size_t acc, 
+                                            std::vector<std::vector<std::vector<size_t>>> &_partition_results, 
+                                            std::vector<std::vector<size_t>> &try_merge_nKN) {
+
+  // printf("Update the _FFR_levelization\n");
+  
+  // clear the origin index
+  for (size_t lvl = 0; lvl < acc; lvl++) { 
+    _FFR_levelization[lvl].clear();
+  }
+  
+  // update FFR levelization and set _break_points
+  // std::vector<std::vector<size_t>> _break_points; // lvl, break points of each megred_KN
+  _break_points.resize(_FFR_levelization.size());
+
+  for (size_t lvl = 0; lvl < acc; lvl++) { 
+    // update FFR index order
+    for (size_t merged_KN = 0; merged_KN < try_merge_nKN[lvl].size(); merged_KN++) { // how many _merged_KN in this level
+      size_t s = (merged_KN == 0) ? (0) : (try_merge_nKN[lvl][merged_KN-1]); // from which partitioned set idx
+      size_t e = try_merge_nKN[lvl][merged_KN]; // until this partitioned set idx
+      for (size_t KN = s; KN < e; KN++) {
+        for (size_t ffr = 0; ffr < _partition_results[lvl][KN].size(); ffr++) {
+          size_t ffr_idx = _partition_results[lvl][KN][ffr];
+          _FFR_levelization[lvl].push_back(ffr_idx);
+        }
+      }
+      _break_points[lvl].push_back(_FFR_levelization[lvl].size());
+    }
+  }
+  for (size_t lvl = acc; lvl < _FFR_levelization.size(); lvl++) { 
+    _break_points[lvl].push_back(_FFR_levelization[lvl].size());
+  }
+
+// // // CEHCK CEHCK CEHCK CEHCK CEHCK CEHCK
+//   std::vector<size_t> check_FFRs; check_FFRs.resize(_num_FFRs, false);
+//   for (size_t lvl = 0; lvl < _FFR_levelization.size(); lvl++) { 
+//     for (size_t ffr = 0; ffr < _FFR_levelization[lvl].size(); ffr++) {
+//       size_t ffr_idx = _FFR_levelization[lvl][ffr];
+//       check_FFRs[ffr_idx] = true;
+//     }
+//   }
+//   for (size_t i = 0; i < _num_FFRs; i++) {
+//     if (!check_FFRs[i]) {
+//       printf("ERROR After lost: check_FFRs[%lu]\n", i);
+//       exit(1);
+//     }
+//   }
+// // // CEHCK CEHCK CEHCK CEHCK CEHCK CEHCK
+
+  // printf("Update _FFR_levelization\n");
+  // for (size_t lvl = 0; lvl < _FFR_levelization.size(); lvl++) { 
+  //   printf("lvl = %lu (total_ffr = %lu): ", lvl, _FFR_levelization[lvl].size());
+  //   for (size_t KN = 0; KN < _break_points[lvl].size(); KN++) {
+  //     printf("%lu, ", _break_points[lvl][KN]);
+  //   } printf("\n");
+  // } printf("\n"); 
+}
+
+void CUDASimulator::_ffr_re_idx () {}
 
 void CUDASimulator::_test_rand_memory_access_pattern_for_GPU() {
   // This function: used to test 
@@ -1831,7 +1985,7 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
   cudaKernelNodeParams kernelNode_PO_Params {0};
   
 
-  // const size_t num_func_inputs = 11;
+  const size_t num_func_inputs = 11;
   void **kernelArgs_PI = (void **)malloc(num_func_inputs*sizeof(void *));
   void **kernelArgs_gate = (void **)malloc(num_func_inputs*(_FFR_levelization.size())*sizeof(void *));
   void **kernelArgs_PO = (void **)malloc(num_func_inputs*sizeof(void *));

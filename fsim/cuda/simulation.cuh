@@ -216,7 +216,6 @@ private:
   const size_t _FFR_width_constraint = 1;
   const size_t _FFR_depth_constraint = 1;
   const size_t _tail_ended_OPT_threshold = 1024;
-  const size_t num_func_inputs = 11;
 
 
 
@@ -338,12 +337,19 @@ private:
   void _run_parallel_cuda_graph_partition();
   size_t _merged_FFRs_in_last_levels();  
   void _partition(std::vector<std::set<size_t>> &adj, std::vector<size_t> &level_of_FFRs);
-  void _merge();
   void _find_connected_ffrs(const size_t acc, const size_t ffr_idx, std::set<size_t> &visited,
                             std::vector<std::set<size_t>> &adj, 
                             std::vector<std::set<size_t>> &inv_adj,
                             std::vector<size_t> &level_of_FFRs,
                             std::vector<std::vector<std::vector<size_t>>> &_partition_results);
+  void _merge(const size_t acc, std::vector<std::vector<std::vector<size_t>>> &_partition_results,
+            std::vector<std::vector<size_t>> &try_merge_acc, std::vector<std::vector<size_t>> &try_merge_nKN);
+            
+  std::vector<std::vector<size_t>> _break_points;          
+  void _update_FFR_levelization(const size_t acc, 
+                                std::vector<std::vector<std::vector<size_t>>> &_partition_results, 
+                                std::vector<std::vector<size_t>> &try_merge_nKN);
+  void _ffr_re_idx();
   void _test_rand_memory_access_pattern_for_GPU();
   void _better_memory_access_pattern_for_GPU();
   void _construct_cuda_graph_partition(cudaStream_t stream1, cudaGraph_t graph, 
