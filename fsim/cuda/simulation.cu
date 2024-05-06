@@ -949,21 +949,21 @@ void CUDASimulator::_update_FFR_levelization(const size_t acc,
     _break_points[lvl].push_back(_FFR_levelization[lvl].size());
   }
 
-// // // CEHCK CEHCK CEHCK CEHCK CEHCK CEHCK
-//   std::vector<size_t> check_FFRs; check_FFRs.resize(_num_FFRs, false);
-//   for (size_t lvl = 0; lvl < _FFR_levelization.size(); lvl++) { 
-//     for (size_t ffr = 0; ffr < _FFR_levelization[lvl].size(); ffr++) {
-//       size_t ffr_idx = _FFR_levelization[lvl][ffr];
-//       check_FFRs[ffr_idx] = true;
-//     }
-//   }
-//   for (size_t i = 0; i < _num_FFRs; i++) {
-//     if (!check_FFRs[i]) {
-//       printf("ERROR After lost: check_FFRs[%lu]\n", i);
-//       exit(1);
-//     }
-//   }
-// // // CEHCK CEHCK CEHCK CEHCK CEHCK CEHCK
+  // // // CEHCK CEHCK CEHCK CEHCK CEHCK CEHCK
+  //   std::vector<size_t> check_FFRs; check_FFRs.resize(_num_FFRs, false);
+  //   for (size_t lvl = 0; lvl < _FFR_levelization.size(); lvl++) { 
+  //     for (size_t ffr = 0; ffr < _FFR_levelization[lvl].size(); ffr++) {
+  //       size_t ffr_idx = _FFR_levelization[lvl][ffr];
+  //       check_FFRs[ffr_idx] = true;
+  //     }
+  //   }
+  //   for (size_t i = 0; i < _num_FFRs; i++) {
+  //     if (!check_FFRs[i]) {
+  //       printf("ERROR After lost: check_FFRs[%lu]\n", i);
+  //       exit(1);
+  //     }
+  //   }
+  // // // CEHCK CEHCK CEHCK CEHCK CEHCK CEHCK
 
   // printf("Update _FFR_levelization\n");
   // for (size_t lvl = 0; lvl < _FFR_levelization.size(); lvl++) { 
