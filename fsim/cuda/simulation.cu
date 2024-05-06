@@ -610,8 +610,10 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
             assert(from_FFR < _num_FFRs && "from_FFR out of range");
             if (from_FFR != to_FFR) {
               // printf("%ld (%ld) -> %ld (%ld)\n", from_gate, from_FFR, to_gate, to_FFR);
-              adj[from_FFR].insert(to_FFR);
-              indegree[to_FFR]++;
+              if (adj[from_FFR].find(to_FFR) == adj[from_FFR].end()) {
+                adj[from_FFR].insert(to_FFR);
+                indegree[to_FFR]++;
+              }
             }
           }
         }
@@ -658,6 +660,7 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
                           (ret_lvl) : (level_of_FFRs[i]);
       _largest_FFR_level = (ret_lvl > _largest_FFR_level) ? 
                         (ret_lvl) : (_largest_FFR_level);
+
       if (indegree[i] == 0) {
         source.push(i);
       } 
@@ -678,7 +681,6 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
     printf("FFR_%ld, level = %ld\n", i, level_of_FFRs[i]);
   }
 #endif  
-
 
   _FFR_levelization.clear();
   _FFR_levelization.resize(_largest_FFR_level);
@@ -714,225 +716,11 @@ void CUDASimulator::_find_split_merge_FFRs(std::vector<bool> &visited,
     } printf("\n");
   } printf("\n");
 #endif 
-}
 
-void CUDASimulator::_merged_FFRs_func(std::vector<std::vector<std::queue<size_t>>> &FFR_levelization_with_depth, 
-                                      std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs, 
-                                      size_t width_constraint, size_t depth_constraint) {
-  
-  // merge the FFR according to the level, merging the FFRs on the same level
-
-  // vector: level, 
-  _merged_FFRs.clear(); // 基本上第二輪就是重新來一次
-  _merged_FFRs.resize(_largest_FFR_level);
-
-  for (size_t level = 0; level < _largest_FFR_level; level++) { // all levels
-    // printf("level = %zu\n", level);
-    size_t num_merged_FFRs = 0;
-    std::vector<std::vector<size_t>> merged_FFR; merged_FFR.resize(depth_constraint);
-    while (num_FFRs_in_this_level[level] > num_merged_FFRs) {
-      // printf("num_FFRs_in_this_level[%ld] = %ld (w/ num_merged_FFRs = %ld)\n", level, num_FFRs_in_this_level[level], num_merged_FFRs);
-      bool merged_FFR_full = false; 
-      size_t debug_check_FFR = 0;
-      // update, pick a new candidate FFR to merge
-      // for (int sl = 0; sl < depth_constraint ; sl++) { // pick from the smallest FFR
-      for (int sl = (depth_constraint-1); sl > -1 ; sl--) { // pick from the largest FFR
-        // printf("level = %zu, sl = %zu\n", level, sl);
-        size_t num_FFRs_in_this_sub_level = FFR_levelization_with_depth[level][sl].size();
-        while (num_FFRs_in_this_sub_level--) {
-          // printf("sl = %ld, num_FFRs_in_this_sub_level = %ld\n", sl, num_FFRs_in_this_sub_level);
-          // pick candidate FFR to merge
-          size_t candidate_FFR_idx = FFR_levelization_with_depth[level][sl].front();
-          FFR_levelization_with_depth[level][sl].pop();
-          // // if valid then merge -> in the same function 
-          if (_valid_and_merged_FFR(bucket_lists_for_all_FFRs[candidate_FFR_idx], sl+1, 
-                                    merged_FFR, merged_FFR_full, width_constraint, depth_constraint)) {
-            num_merged_FFRs++;        
-          } else {
-            // push_back 
-            FFR_levelization_with_depth[level][sl].push(candidate_FFR_idx);
-          }
-          // test whether the merged box is full 
-          if (merged_FFR_full || (num_merged_FFRs == num_FFRs_in_this_level[level])) { // merged_FFR_full or all FFRs have been merged
-            // printf("inside merged_FFR_full || (num_merged_FFRs == num_FFRs_in_this_level[level]\n");
-            _merged_FFRs[level].push_back(merged_FFR);
-            debug_check_FFR++;
-            merged_FFR.clear(); merged_FFR.resize(depth_constraint);
-            merged_FFRs_level.push_back(level+1); // since level 0 is PI
-            merged_FFR_full = false;
-          }
-        }
-      }
-      bool need_to_push_in = false;
-      // 至少有一層大於 0 就要 push 出去了
-      for (size_t ii = 0; ii < depth_constraint; ii++) {
-        need_to_push_in |= (merged_FFR[ii].size() > 0);
-      }
-
-      if (need_to_push_in) {
-        // printf("Inside here, _merged_FFRs[%ld].size() = %ld, merged_FFR.size() = %ld\n", level, _merged_FFRs[level].size(), merged_FFR.size());
-        _merged_FFRs[level].push_back(merged_FFR);
-        merged_FFR.clear(); merged_FFR.resize(depth_constraint);
-        merged_FFRs_level.push_back(level+1); // since level 0 is PI
-        merged_FFR_full = false;
-      }
-    }
-  }    
-
-
-  _num_FFRs = 0; 
-  for (size_t i = 0; i < _largest_FFR_level; i++) {
-    // printf("i = %zu, _num_FFRs = %zu\n", i, _num_FFRs);
-    _num_FFRs += _merged_FFRs[i].size();
-  }
-  // printf("!_largest_FFR_level = %ld\n", _largest_FFR_level);
-}
-
-bool CUDASimulator::_valid_and_merged_FFR(std::vector<std::list<size_t>> &bucket_lists_for_FFRs,
-                                          size_t FFR_level,
-                                          std::vector<std::vector<size_t>> &merged_FFR, 
-                                          bool &merged_FFR_full, size_t width_constraint, size_t depth_constraint) {
-  
-  
-  // check the validation
-  // check all possible solutions
-  // size_t valid_start = 0, valid_zone_range = 1;
-  // printf("Into _valid_and_merged_FFR, FFR_level = %ld\n", FFR_level);
-  bool ret = false;
-  std::vector<size_t> insert_level;
-  int previous_merge_level = -1;
-  for (int sl = 0; sl < int(FFR_level); sl++) { // 將 FFR 的 level 塞進去
-    ret = false;
-    for (int i = previous_merge_level+1; i < (int(depth_constraint) - (int(FFR_level) - sl) + 1); i++) {
-      // printf("merged_FFR[%ld].size() = %ld, bucket_lists_for_FFRs[sl].size() = %ld\n", i, merged_FFR[i].size(), bucket_lists_for_FFRs[sl].size());
-      if ((merged_FFR[i].size() + bucket_lists_for_FFRs[sl].size()) 
-                  <= width_constraint) { // merged successfully 
-        // record which layer
-        insert_level.push_back(i);
-        previous_merge_level = i;
-        ret = true;
-        break;
-      }
-    }
-    // if one layer cannot be merged into any level of this merged_FFR
-    if (ret == false) {
-      return ret;
-    }
-  }
-
-  // printf("Come to merge\n");
-  // merge
-  for (size_t i = 0; i < insert_level.size(); i++) {
-    while(!bucket_lists_for_FFRs[i].empty()) {
-      size_t element = bucket_lists_for_FFRs[i].front();
-      bucket_lists_for_FFRs[i].pop_front();
-      // printf("element = %ld\n", element);
-      merged_FFR[insert_level[i]].push_back(element);
-    }
-  }
-
-  // check: merged_FFR_full
-  merged_FFR_full = true;
-  for (size_t i = 0; i < depth_constraint; i++) {
-    merged_FFR_full = merged_FFR_full && (merged_FFR[i].size() == width_constraint);
-  }
-  // if (merged_FFR_full == true)
-  //   printf("in_v merged_FFR_full = %B\n", merged_FFR_full);
-  
-  return ret;
-}
-
-void CUDASimulator::_find_CUDA_GRAPH_dependency() {
-  // Add up dependency - utilized during the CUDA Graph   
-  // we have re-levelization the _merged_FFRs by using merged_FFRs_level
-  
-  // map gate to its merged_FFR
-  std::vector<size_t> gate_to_merged_FFR; gate_to_merged_FFR.resize((_num_PIs+_num_inner_gates+_num_POs), 0);
-  // PIs belong to FFR_0
-  // gates
-  // printf("_num_PIs+_num_inner_gates+_num_POs = %ld\n", _num_PIs+_num_inner_gates+_num_POs);
-  for (size_t lvl = 0; lvl < _merged_FFRs.size(); lvl++) { // level
-    for (size_t ffr = 0; ffr < _merged_FFRs[lvl].size(); ffr++) {
-      for (size_t sub_lvl = 0; sub_lvl < _merged_FFRs[lvl][ffr].size(); sub_lvl++) {
-        for (size_t g = 0; g < _merged_FFRs[lvl][ffr][sub_lvl].size(); g++) {
-          size_t gate_idx = (_merged_FFRs[lvl][ffr][sub_lvl][g])+_num_PIs;
-          // printf("gate_idx = %ld, gate_idx+_num_PIs = %ld, lvl+1= %ld\n", gate_idx, gate_idx+_num_PIs, lvl+1);
-          gate_to_merged_FFR[gate_idx] = lvl+1; // since the first level node only PIs node
-        }
-      }
-    }
-  }
-  // POs: belong to FFR_{_num_FFRs+1}
-  for (size_t i = 0; i < _num_POs; i++) {
-    gate_to_merged_FFR[i+_num_PIs+_num_inner_gates] = _num_FFRs+1; // the last FFR
-  }
-
-  _merged_FFRs_dependency.resize(_num_FFRs+2);  
-  // PIs, X dependency, skip
-  // gates 會有 input 需要加上 dependency
-  for (size_t i = (_num_PIs); i < (_num_PIs+_num_inner_gates); i++) {
-    size_t gate_belong_FFR = gate_to_merged_FFR[i];
-    for (size_t inp = 0; inp < _gates[i-_num_PIs]._num_inputs; inp++) {
-      size_t pre_gate_idx = ((_gates[i-_num_PIs]._inputs[inp])->_idx);
-      size_t pre_gate_belong_FFR = gate_to_merged_FFR[pre_gate_idx];
-      if (gate_belong_FFR != pre_gate_belong_FFR) {
-        _merged_FFRs_dependency[gate_belong_FFR].insert(pre_gate_belong_FFR);
-        // printf("pre_gate_idx = %ld (FFR_Node_%ld), gate_idx = %ld (FFR_Node_%ld)\n", pre_gate_idx, pre_gate_belong_FFR, i, gate_belong_FFR);
-      }
-    }
-  }
-  
-  // printf("===\n");
-  
-  // POs 會有 input 需要加上 dependency
-  for (size_t i = (_num_PIs+_num_inner_gates); i < (_num_PIs+_num_inner_gates+_num_POs); i++) {
-    size_t gate_belong_FFR = gate_to_merged_FFR[i];
-    size_t pre_gate_idx = ((_POs[i-_num_PIs-_num_inner_gates]._inputs[0])->_idx);
-    size_t pre_gate_belong_FFR = gate_to_merged_FFR[pre_gate_idx];
-    if (gate_belong_FFR != pre_gate_belong_FFR) {
-      _merged_FFRs_dependency[gate_belong_FFR].insert(pre_gate_belong_FFR);
-      // printf("pre_gate_idx = %ld (FFR_Node_%ld), gate_idx = %ld (FFR_Node_%ld)\n", pre_gate_idx, pre_gate_belong_FFR, i, gate_belong_FFR);
-    }
-  }
-
-  // Compute the #threads and blocks in each block
-  max_number_of_gates_of_FFR.resize(_num_FFRs+2);
-  size_t accum = 0;
-
-  // PI
-  max_number_of_gates_of_FFR[accum] = size_t(int((_num_PIs+31) & (-32))); // round to 32x
-  accum++;
-
-  // _merged_FFRs
-  size_t to_set_max_threads = 0; 
-  for (size_t lvl = 0; lvl < _merged_FFRs.size(); lvl++) {
-    for (size_t ffr = 0; ffr < _merged_FFRs[lvl].size(); ffr++) {
-      for (int sl = _merged_FFRs[lvl][ffr].size()-1; sl > -1 ; sl--) { // sub-level 
-          to_set_max_threads = (_merged_FFRs[lvl][ffr][sl].size() > to_set_max_threads) 
-                            ? (_merged_FFRs[lvl][ffr][sl].size()) : (to_set_max_threads);
-      }
-      max_number_of_gates_of_FFR[accum] = size_t(int((to_set_max_threads+31) & (-32))); // round to 32x
-      to_set_max_threads = 0;
-      accum++;
-    }
-  }
-
-  // PO
-  max_number_of_gates_of_FFR[accum] = size_t(int((_num_POs+31) & (-32))); // round to 32x
-  accum++;  
-
-
-#ifdef FSIM_CHECK_FFR  
-  // 確認加上 dependency 的結果
-  printf("_merged_FFRs_dependency:\n");
-  for (size_t i = 0; i < _num_FFRs+2; ++i) {
-    printf("merged_FFR_%zu dependencies: ", i);
-    for (auto it = _merged_FFRs_dependency[i].begin(); it != _merged_FFRs_dependency[i].end(); ++it) {
-      printf("%zu ", *it);
-    }
-    printf("\n");
-  }  
-#endif 
+  // 0505 Partition FFRs according to the data dependnecy (inputs) 
+  _partition(adj, level_of_FFRs);
+  // 0505 TEST EXP: 嘗試打亂 data access pattern，看是否會差很多時間
+  // _test_rand_memory_access_pattern_for_GPU();
 }
 
 size_t CUDASimulator::_merged_FFRs_in_last_levels() {
@@ -946,6 +734,142 @@ size_t CUDASimulator::_merged_FFRs_in_last_levels() {
     }
   }
   return ret;  
+}
+
+void CUDASimulator::_partition(std::vector<std::set<size_t>> &adj, std::vector<size_t> &level_of_FFRs) {
+  std::vector<std::set<size_t>> inv_adj; inv_adj.resize(adj.size());
+  for (size_t i = 0; i < adj.size(); i++) {    
+    for (auto& j : adj[i]) {
+      inv_adj[j].insert(i);
+    }
+  }
+
+  const size_t partition_threshold = 8192;
+  size_t acc = 0;
+  for (size_t lvl = 0; lvl < _start_merged_FFR_levels; lvl++) {
+    if (_FFR_levelization[lvl].size() >= partition_threshold) {
+      // printf("lvl = %lu, size = %lu\n", lvl, _FFR_levelization[lvl].size());
+      acc++;
+    } else {
+      break;
+    }
+  }
+
+  std::vector<std::vector<std::vector<size_t>>> _partition_results;
+  _partition_results.resize(acc);
+  std::set<size_t> visited; 
+
+  for (size_t lvl = 0; lvl < acc; lvl++) {
+    for (size_t ffr = 0; ffr < _FFR_levelization[lvl].size(); ffr++) {
+      size_t ffr_idx = _FFR_levelization[lvl][ffr];
+      if (visited.find(ffr_idx) == visited.end()) {
+        _find_connected_ffrs(acc, ffr_idx, visited, adj, inv_adj, level_of_FFRs, _partition_results);
+      }
+    }
+  }
+
+  // printf("_start_merged_FFR_levels = %lu %lu\n", _start_merged_FFR_levels, acc);
+  for (size_t lvl = 0; lvl < acc; lvl++) {
+    printf("_partition_results[%lu].size() = %lu (%lu)\n", lvl, _partition_results[lvl].size(), _FFR_levelization[lvl].size());
+  }
+
+  // merge
+  _merge();
+
+}
+
+void CUDASimulator::_merge() {
+
+}
+
+void CUDASimulator::_find_connected_ffrs(const size_t acc, 
+                                        const size_t ffr_idx, std::set<size_t> &visited,
+                                        std::vector<std::set<size_t>> &adj, 
+                                        std::vector<std::set<size_t>> &inv_adj,
+                                        std::vector<size_t> &level_of_FFRs,
+                                        std::vector<std::vector<std::vector<size_t>>> &_partition_results) {
+
+  size_t n_KN = _partition_results[0].size();
+  for (size_t i = 0; i < _partition_results.size(); i++) {
+    _partition_results[i].push_back(std::vector<size_t>());
+  }
+
+  std::queue<size_t> ffrs_same_chain;
+  ffrs_same_chain.push(ffr_idx);
+
+  while (!ffrs_same_chain.empty()) {
+    size_t cur_idx = ffrs_same_chain.front();
+    ffrs_same_chain.pop();
+
+    if (visited.find(cur_idx) != visited.end()) {
+      continue;
+    }
+    visited.insert(cur_idx);
+
+    for (auto idx : adj[cur_idx]) {
+      if (level_of_FFRs[idx] < acc) {
+        ffrs_same_chain.push(idx);
+      }
+    }
+    
+    for (auto idx : inv_adj[cur_idx]) {
+      ffrs_same_chain.push(idx);
+    }
+
+    _partition_results[level_of_FFRs[cur_idx]][n_KN].push_back(cur_idx);
+    // std::cout << level_of_FFRs[cur_idx] << " & " << acc << std::endl;
+    // std::cout << _partition_results[level_of_FFRs[cur_idx]][n_KN].size() << std::endl;
+  }
+}
+
+void CUDASimulator::_test_rand_memory_access_pattern_for_GPU() {
+  // This function: used to test 
+  // whether the data access parttern will highly impact the FSIM implementation time
+  // Benchmark: mgc_edit_dist_iccad
+  // originally: 5810
+  // srand(0): 5900
+  // srand(100): 5870
+  // srand(1100): 5840
+  // Conclusion: will have a sightly impact: roughly 100 ms
+
+  // Benchmark: netcard_iccad
+  // originally: 11404.6
+  // srand(0): 16991.7, 17029.3, 16815.8
+  // srand(1100): 16830.9, 16770, 16779.9
+  // srand(97): 16810.2
+
+  srand(1100); // srand(time(0));
+  // only before: _start_merged_FFR_levels
+  for (size_t lvl = 0; lvl < _start_merged_FFR_levels; lvl++) {
+  // for (size_t lvl = 0; lvl < 1; lvl++) {
+    std::vector<size_t> tmp; tmp.resize(_FFR_levelization[lvl].size());
+    std::vector<bool> tmp_b; tmp_b.resize(_FFR_levelization[lvl].size(), false);
+    tmp = _FFR_levelization[lvl];
+    _FFR_levelization[lvl].clear();
+    _FFR_levelization[lvl].resize(tmp.size());
+    size_t accum = 0;
+    while(accum < tmp.size()) {
+      size_t idx = rand()%(tmp.size());
+      if (tmp_b[idx] == false) {
+        _FFR_levelization[lvl][accum] = tmp[idx];
+        accum++;
+        tmp_b[idx] = true;
+      }
+    }
+  }
+}
+
+void CUDASimulator::_better_memory_access_pattern_for_GPU() {
+
+
+#ifdef FSIM_CHECK_FFR_LEVELIZATION  
+  for (size_t i = 0; i < _FFR_levelization.size(); i++) {
+    printf("level_%ld (sz: %ld)\n", i, _FFR_levelization[i].size());
+    for (size_t ffr = 0; ffr < _FFR_levelization[i].size(); ffr++) {
+      printf("%zu, ", _FFR_levelization[i][ffr]);
+    } printf("\n");
+  } printf("\n");
+#endif  
 }
 
 
@@ -1414,7 +1338,7 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
 #endif
 }
 
-__global__ void _update_params_gpu (size_t *_params_gpu_idx_address, size_t _num_paras, size_t limit_sz, 
+__global__ void _update_params_gpu (size_t *_params_gpu_idx_address, const size_t _num_paras, size_t limit_sz, 
                                     size_t new_rd, size_t new_fault_num, size_t new_bad_case) {
   // _params_gpu_idx_address
   size_t t_idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -1454,20 +1378,6 @@ void CUDASimulator::_update_cuda_graph_params(cudaStream_t &stream1, cudaGraphEx
   cudaCheckErrors("GPU _update_params_gpu failed");
   cudaDeviceSynchronize();
   cudaCheckErrors("update cudaDeviceSynchronize failed");
-
-  // // __host__ cudaGraphExecKernelNodeSetParams ( cudaGraphExec_t hGraphExec, cudaGraphNode_t node, const cudaKernelNodeParams* pNodeParams )
-  // // update PI node
-  // cudaGraphExecKernelNodeSetParams(instance, *kernelNode_PI, kernelNode_PI_Params);  
-  // cudaCheckErrors("0; cudaGraphExecKernelNodeSetParams failed");
-
-  // for (size_t i = start_idx; i < end_idx; i++) {
-  //   cudaGraphExecKernelNodeSetParams(instance, kernelNode_gate[i], &kernelNode_gate_Params[i]);  
-  //   cudaCheckErrors("1: cudaGraphExecKernelNodeSetParams failed");
-  // }
-
-  // // update PO node
-  // cudaGraphExecKernelNodeSetParams(instance, *kernelNode_PO, kernelNode_PO_Params);  
-  // cudaCheckErrors("2; cudaGraphExecKernelNodeSetParams failed");
 }
 
 
@@ -1678,8 +1588,6 @@ void CUDASimulator::_run_bad_case_cuda_graph(const size_t bits, cudaStream_t str
   cudaDeviceSynchronize();
 #endif
 }
-
-
 
 void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGraph_t graph, 
                                                     cudaGraphNode_t *kernelNode_PI, 
@@ -1923,7 +1831,7 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
   cudaKernelNodeParams kernelNode_PO_Params {0};
   
 
-  size_t num_func_inputs = 11;
+  // const size_t num_func_inputs = 11;
   void **kernelArgs_PI = (void **)malloc(num_func_inputs*sizeof(void *));
   void **kernelArgs_gate = (void **)malloc(num_func_inputs*(_FFR_levelization.size())*sizeof(void *));
   void **kernelArgs_PO = (void **)malloc(num_func_inputs*sizeof(void *));
@@ -1948,6 +1856,8 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
                       (_start_merged_FFR_levels) : (_FFR_levelization.size());   
 
   for (size_t rd = 0; rd < _num_rounds; rd++) {
+  // for (size_t rd = 0; rd < 1; rd++) {
+
     size_t num_testcases_this_round =
         ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
             ? (SIZE_T_BITS)
@@ -1968,17 +1878,24 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
                               kernelNode_gate, kernelNode_gate_Params,
                               &kernelNode_PO, &kernelNode_PO_Params, 0, end_level);
 
+    cudaCheckErrors("_run_good_case_cuda_graph failed");
     _run_good_case_cuda_graph(num_testcases_this_round, stream1, instance);
+    cudaCheckErrors("_run_good_case_cuda_graph failed");
 
-    
+    // // //  Only used for Test
+    // cudaStreamSynchronize(stream1);
+    // cudaDeviceSynchronize();    
+    // printf("_num_PIs = %ld, _num_inner_gates = %ld, _num_POs = %ld\n", _num_PIs, _num_inner_gates, _num_POs);
+    // _show_computational_results <<< 1, 1, 0, stream1>>> (_pi_gate_po_output_res_gpu, 0, _num_PIs+_num_inner_gates + _num_POs);
+    // cudaStreamSynchronize(stream1);
+    // cudaDeviceSynchronize();
+    // //  Only used for Test
+
     // bad simulation (fault simulation)
     for (size_t j = 0; j < _num_faults; j++) {
       // update to bad case parameters
-      // wrong_gate = _faults[j]._gate_with_fault;
-      // fault_val = _faults[j]._gate_SA_fault_val;
       fault_num = j;
       bad_case = 1;
-      // printf("RD = %ld, j = %ld\n", rd, j);
       // // update KernelNodes params (bad case)
       _update_cuda_graph_params(stream1, instance, rd, fault_num, bad_case,
                                 &kernelNode_PI, &kernelNode_PI_Params,
@@ -1989,15 +1906,6 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
       _compare_g_b_results <<< 1, 1, 0, stream1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
     } 
   }
-
-  // cudaStreamSynchronize(stream1);
-  // cudaDeviceSynchronize();    
-  // printf("_num_PIs = %ld, _num_inner_gates = %ld, _num_POs = %ld\n", _num_PIs, _num_inner_gates, _num_POs);
-  // _show_computational_results <<< 1, 1, 0, stream1>>> (_pi_gate_po_output_res_gpu, 0, _num_PIs+_num_inner_gates + _num_POs);
-  // cudaStreamSynchronize(stream1);
-  // cudaDeviceSynchronize();
-
-
 
   // free mem
   _free_all();
@@ -2034,9 +1942,18 @@ void CUDASimulator::_run_parallel_cuda_graph_partition() {
   cudaFree(_patterns);
 }
 
+__global__ void _show_computational_results (size_t *a, size_t start, size_t end) {
+  printf("_show_computational_results\n");
 
+  for (size_t i = start; i < end; i++) {
+    printf("arr[%lu] = %llu\n", i, a[i]);
+  }
+  printf("\n");
+}
 
-__global__ void _shift_to_correct_answer_gpu(size_t *outputs, size_t *_pi_gate_po_output_res_gpu, const size_t bits, const size_t SIZE_T_BITS, const size_t pre_gates_accum, const size_t num) {
+__global__ void _shift_to_correct_answer_gpu(size_t *outputs, size_t *_pi_gate_po_output_res_gpu, 
+                                  const size_t bits, const size_t SIZE_T_BITS, 
+                                  const size_t pre_gates_accum, const size_t num) {
   size_t gate_idx = blockDim.x*blockIdx.x + threadIdx.x;
   if (gate_idx > num) 
     return;
@@ -2351,7 +2268,6 @@ __global__ void _run_gate_graph_partition_2(size_t *_gate_inputs_list_gpu, size_
 __device__ __forceinline__ void _apply_INV(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu) {
   size_t start_location = _gate_inputs_list_start_gpu[gate_idx]; // pass in real index
   size_t pre_gate_idx = _gate_inputs_list_gpu[start_location];
-  
   _pi_gate_po_output_res_gpu[gate_idx] = ~(_pi_gate_po_output_res_gpu[pre_gate_idx]);
 }
 
@@ -2444,15 +2360,6 @@ __device__ __forceinline__ void _apply_PI(size_t gate_idx, size_t *_pi_gate_po_o
 __device__ __forceinline__ void _apply_PO(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu) {
   size_t start_location = _gate_inputs_list_start_gpu[gate_idx];
   _pi_gate_po_output_res_gpu[gate_idx] = _pi_gate_po_output_res_gpu[_gate_inputs_list_gpu[start_location]];
-}
-
-__global__ void _show_computational_results (size_t *a, size_t start, size_t end) {
-  printf("_show_computational_results\n");
-
-  for (size_t i = start; i < end; i++) {
-    printf("arr[%lu] = %llu\n", i, a[i]);
-  }
-  printf("\n");
 }
 
 __global__ void _compare_g_b_results(const size_t j, const size_t _num_POs, const size_t rd, 

@@ -216,26 +216,16 @@ private:
   const size_t _FFR_width_constraint = 1;
   const size_t _FFR_depth_constraint = 1;
   const size_t _tail_ended_OPT_threshold = 1024;
+  const size_t num_func_inputs = 11;
+
 
 
   size_t _largest_FFR_level;
   
   // compute number of FFRs in each level 
   std::vector<size_t> num_FFRs_in_this_level;
-  bool _valid_and_merged_FFR(std::vector<std::list<size_t>> &bucket_lists_for_FFRs,
-                            size_t FFR_level,
-                            std::vector<std::vector<size_t>> &merged_FFR, 
-                            bool &merged_FFR_full, size_t width_constraint, size_t depth_constraint);
-
-
   // after merge
   size_t _num_FFRs;
-  // merged_FFRs: used to store FFR, store the gate_idx merged in this FFR
-  std::vector<std::vector<std::vector<std::vector<size_t>>>> _merged_FFRs; 
-  std::vector<size_t> merged_FFRs_level; // store the level of each FFRs after merged
-  // used to help construct the PARTITION CUDA GRAPHs
-  std::vector<std::set<size_t>> _merged_FFRs_dependency; // recoed the "inputs" of each merged FFRs
-  std::vector<size_t> max_number_of_gates_of_FFR; // used to decide the number of thread in each FFR
 
   
 // ---- FFR parition
@@ -347,6 +337,15 @@ private:
   // parallel-cuda-graph-partition
   void _run_parallel_cuda_graph_partition();
   size_t _merged_FFRs_in_last_levels();  
+  void _partition(std::vector<std::set<size_t>> &adj, std::vector<size_t> &level_of_FFRs);
+  void _merge();
+  void _find_connected_ffrs(const size_t acc, const size_t ffr_idx, std::set<size_t> &visited,
+                            std::vector<std::set<size_t>> &adj, 
+                            std::vector<std::set<size_t>> &inv_adj,
+                            std::vector<size_t> &level_of_FFRs,
+                            std::vector<std::vector<std::vector<size_t>>> &_partition_results);
+  void _test_rand_memory_access_pattern_for_GPU();
+  void _better_memory_access_pattern_for_GPU();
   void _construct_cuda_graph_partition(cudaStream_t stream1, cudaGraph_t graph, 
                                       cudaGraphNode_t *kernelNode_PI, 
                                       cudaKernelNodeParams *kernelNode_PI_Params,
