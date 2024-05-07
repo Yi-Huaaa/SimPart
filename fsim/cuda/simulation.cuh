@@ -349,6 +349,13 @@ private:
   void _update_FFR_levelization(const size_t acc, 
                                 std::vector<std::vector<std::vector<size_t>>> &_partition_results, 
                                 std::vector<std::vector<size_t>> &try_merge_nKN);
+  std::vector<std::set<size_t>> _KN_adj;
+  size_t _num_KNs_gate;
+  const size_t partition_threshold = 16384;
+  const size_t _merge_thd_ub = 8192; // merge threshold upper bound
+
+  void _construct_depend_merged_KNs(std::vector<std::set<size_t>> &adj, std::vector<std::vector<size_t>> &try_merge_nKN);
+  
   void _ffr_re_idx();
   void _test_rand_memory_access_pattern_for_GPU();
   void _better_memory_access_pattern_for_GPU();
