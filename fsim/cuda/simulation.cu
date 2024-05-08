@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <list>
 #include <set>
 #include <cmath>
@@ -1007,6 +1008,8 @@ void CUDASimulator::_construct_depend_merged_KNs(std::vector<std::set<size_t>> &
     } 
   }
 
+  _remove_redundant_edges();
+
   // for (size_t i = 0; i < _KN_adj.size(); i++) {
   //   std::cout << "i = " << i << ", j's = ";
   //   for (auto &j : _KN_adj[i]) {
@@ -1015,6 +1018,31 @@ void CUDASimulator::_construct_depend_merged_KNs(std::vector<std::set<size_t>> &
   //   std::cout << std::endl;
   // }
 }
+
+void CUDASimulator::_remove_redundant_edges() {
+  // Iterate through each node's adjacency list
+  for (size_t from_KN_idx = 0; from_KN_idx < _KN_adj.size(); ++from_KN_idx) {
+      std::set<size_t> updated_adj; // Updated adjacency list for the current node
+
+      // Iterate through each node in the adjacency list of the current node
+      for (size_t to_KN_idx : _KN_adj[from_KN_idx]) {
+          // Check if the current edge is redundant
+          for (size_t intermediate_KN_idx : _KN_adj[to_KN_idx]) {
+              // If an intermediate node exists between from_KN_idx and to_KN_idx, the edge is redundant
+              if (intermediate_KN_idx != from_KN_idx && _KN_adj[from_KN_idx].find(intermediate_KN_idx) != _KN_adj[from_KN_idx].end()) {
+                  // Skip adding this edge
+                  continue;
+              }
+          }
+          // Add the non-redundant edge to the updated adjacency list
+          updated_adj.insert(to_KN_idx);
+      }
+
+      // Update the adjacency list for the current node
+      _KN_adj[from_KN_idx] = std::move(updated_adj);
+  }
+}
+
 
 void CUDASimulator::_ffr_re_idx () {}
 
@@ -1907,47 +1935,7 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
       m_ffr++;
     }
   }
-  // for (m_ffr = 0; m_ffr < end_level; m_ffr++) {
-  //   kernelNode_idx++;
 
-  //   params_gpu_idx_accum += _num_paras;
-  //   params_gpu_idx[kernelNode_idx] = _params_gpu+params_gpu_idx_accum;
-  //   kernelArgs_gate[m_ffr*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
-  //   kernelArgs_gate[m_ffr*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
-  //   kernelArgs_gate[m_ffr*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
-  //   kernelArgs_gate[m_ffr*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
-  //   kernelArgs_gate[m_ffr*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
-  //   kernelArgs_gate[m_ffr*num_func_inputs+5] = (void *)&_patterns_gpu;
-  //   kernelArgs_gate[m_ffr*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
-  //   kernelArgs_gate[m_ffr*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
-  //   kernelArgs_gate[m_ffr*num_func_inputs+8] = (void *)&params_gpu_idx[kernelNode_idx];
-  //   kernelArgs_gate[m_ffr*num_func_inputs+9] = (void *)&merged_FFRs_gpu;
-  //   kernelArgs_gate[m_ffr*num_func_inputs+10] = (void *)&merged_FFRs_gpu_idx;
-    
-
-  //   // construct gate node
-  //   num_blocks = (_FFR_levelization[m_ffr].size() > 64) ? ((_FFR_levelization[m_ffr].size() + 64 - 1) >> 6) : (1);
-  //   num_threads = (_FFR_levelization[m_ffr].size() > 64) ? (64) : (_FFR_levelization[m_ffr].size());
-    
-  //   _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[kernelNode_idx], rd, fault_num, bad_case, 
-  //                                         start_position_in_mgc_gpu_idx, _FFR_levelization[m_ffr].size(), _num_PIs);
-  //   cudaDeviceSynchronize();
-  //   cudaCheckErrors("FFR _set_params cudaDeviceSynchronize failed");
-
-  //   start_position_in_mgc_gpu_idx += _FFR_levelization[m_ffr].size();
-    
-  //   // Adding nodes
-  //   kernelNode_gate_Params[m_ffr].func = (void *)_run_gate_graph_partition;
-  //   kernelNode_gate_Params[m_ffr].gridDim = dim3(num_blocks, 1, 1);
-  //   kernelNode_gate_Params[m_ffr].blockDim = dim3(num_threads, 1, 1);
-  //   kernelNode_gate_Params[m_ffr].sharedMemBytes = 0;
-  //   kernelNode_gate_Params[m_ffr].kernelParams = (void **)&(kernelArgs_gate[(m_ffr)*num_func_inputs]);
-  //   kernelNode_gate_Params[m_ffr].extra = NULL;  
-
-  //   // push node: gate
-  //   cudaGraphAddKernelNode(&kernelNode_gate[m_ffr], graph, NULL, 0, &kernelNode_gate_Params[m_ffr]);
-  //   cudaCheckErrors("Adding kernelNode_FFR failed");
-  // }
   if (!_pull_up_merged_FFR_level_optimization) {
     assert(start_position_in_mgc_gpu_idx == (_num_PIs + _num_FFRs));
   }
@@ -1973,7 +1961,7 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
 
     // construct gate node
     num_blocks = 1; // must be 1
-    num_threads = 32; // must be less than 32
+    num_threads = _tail_ended_OPT_threshold; // must be less than 32
     
     _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[kernelNode_idx], rd, fault_num, bad_case, 
                                           start_position_in_mgc_gpu_idx, (_FFR_levelization.size() - _start_merged_FFR_levels), _num_PIs);
@@ -2051,7 +2039,6 @@ void CUDASimulator::_construct_cuda_graph_partition(cudaStream_t stream1, cudaGr
     cudaGraphAddDependencies(graph, kernelNode_PI, &kernelNode_gate[i], 1);
   }
   size_t num_KNs_before_tail_end = _num_KNs_gate - (_FFR_levelization.size() - _start_merged_FFR_levels);
-  // TODO: _KN_adj has redundency edges
 
   std::unordered_map<size_t, std::set<size_t>> dependency_guard;
   for (size_t from_KN = 0; from_KN < num_KNs_before_tail_end; from_KN++) {
