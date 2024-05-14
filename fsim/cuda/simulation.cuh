@@ -20,11 +20,6 @@
 
 
 // CUDA functions 
-// testing functions 
-__global__ void helloCUDA();
-__global__ void _run_gate_gpu(size_t *inputs);
-// __global__ void _run_gate(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, const size_t rd, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t idx_accum, 
-//   size_t pi_g_po_idx_accum, size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
 __global__ void _run_gate(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
                         size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
                         size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
@@ -59,16 +54,7 @@ __global__ void _set_params(size_t *_params_gpu, size_t rd, size_t fault_val, si
 __global__ void _update_params_gpu (size_t *_params_gpu_idx_address, size_t _num_paras, size_t limit_sz, 
                                     size_t new_rd, size_t new_fault_num, size_t new_bad_case);
 
-
-// partition
-__global__ void _run_gate_graph_partition(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
-                                          size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
-                                          size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
-                                          size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
-                                          size_t *_params_gpu,
-                                          size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx);
-
-__global__ void _run_gate_graph_partition_2(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
+__global__ void _run_gate_graph_tail(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
                                           size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
                                           size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
                                           size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
@@ -76,7 +62,6 @@ __global__ void _run_gate_graph_partition_2(size_t *_gate_inputs_list_gpu, size_
                                           size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx,
                                           size_t *_FFR_levelization_gpu);
 
-__global__ void print_merged_FFRs_gpu (size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx, size_t sum_pi_gates_pos, size_t aa);
 
 // for FSIM_DEBUG_GPU_INPUTS
 __global__ void print_pi_gate_po_gate_type_gpu(size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_num_inputs_gpu, size_t num);
@@ -88,7 +73,6 @@ __global__ void _show_computational_results (size_t *a, size_t start, size_t end
 
 // print for check
 // #define FSIM_DEBUG_PRINT_SIMULATION // print all of gate values after the fault simulation
-// #define FSIM_DEBUG_PRINT_SIMULATION_GPU
 // #define FSIM_DEBUG_PRINT_GRAPH
 // #define FSIM_DEBUG_PRINT_FAULTS
 // #define FSIM_DEBUG_PRINT_PATTERNS
@@ -96,15 +80,7 @@ __global__ void _show_computational_results (size_t *a, size_t start, size_t end
 // #define FSIM_DEBUG_GPU_INPUTS
 
 // #define CUDA_GRAPH_CHECK
-// #define TEST_cuGraphExecNodeSetParams
-
-// #define FSIM_LEVELIZAED_PARTITION
-
-#define FSIM_PARTITION_FFR // partition_FFR
-// #define FSIM_CHECK_FFR
-// #define FSIM_PARTITION_CORRECTNESS
-// #define FSIM_PREPARED_SECOND_RD_MERGED_FFRS
-
+#define FSIM_LEVELIZAED_PARTITION // levelization 
 
 
 class CUDASimulator {
@@ -112,38 +88,9 @@ class CUDASimulator {
 // constexpr size_t SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
 
-// friend functions 
-// friend __global__ void _run_gate(PI *_PIs_gpu, Gate *_gates_gpu, PO *_POs_gpu, Pattern *_patterns_gpu, const size_t rd, const size_t fault_val, size_t idx_accum_sa, size_t wrong_gate, size_t bad_case, const size_t max_gate_num_per_level, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, size_t idx_accum, size_t pi_g_po_idx_accum, size_t _num_inner_gates, size_t _num_POs);
-friend __global__ void _run_gate(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
-                                size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
-                                size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
-                                size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
-                                const size_t rd, const size_t fault_num, const size_t bad_case, 
-                                const size_t max_gate_num_per_level, const size_t idx_accum);
-                                
-friend __global__ void _shift_to_correct_answer_gpu(size_t *outputs, size_t *_pi_gate_po_output_res_gpu, const size_t bits, const size_t SIZE_T_BITS, const size_t pre_gates_accum, const size_t num);
-friend __global__ void _compare_g_b_results(const size_t j, const size_t _num_POs, const size_t rd, size_t *_g_po_results_gpu, size_t *_b_po_results_gpu, size_t *_found_fault_to_pattern_gpu);
-friend __global__ void _run_gate_graph(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
-                                size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
-                                size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
-                                size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
-                                size_t *_params_gpu);
-friend __global__ void _change_params(size_t *_params_gpu, size_t rd, size_t fault_val, size_t idx_accum_sa, 
-                              size_t wrong_gate, size_t bad_case, size_t max_gate_num_per_level, 
-                              size_t idx_accum, size_t pi_g_po_idx_accum, 
-                              size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
-
-friend __global__ void _run_gate_graph_partition(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
-                                                size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
-                                                size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
-                                                size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
-                                                size_t *_params_gpu,
-                                                size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx);
-
-
 public:
   // cuda simulator functions 
-  enum class Mode { CUDA=0, CUDA_GRAPH, CUDA_GRAPH_PARTITION };
+  enum class Mode { CUDA=0, CUDA_GRAPH };
 
   void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
@@ -153,19 +100,7 @@ public:
   std::string gateTypeToString(GateType type);
   void visualization_graph(const std::string &outputFile);
   
-private: 
-  // testig functions 
-  // store data on unified memory 
-  size_t *inputs_gpu;
-  void _init () {
-    size_t num  = 10;
-    cudaMallocManaged(&inputs_gpu, num*sizeof(size_t));
-    for (size_t i = 0; i < num; i++) {
-      inputs_gpu[i] = i;
-    }
-  }
-  
-// =======================================================================
+private:   
   // gpu functions
   size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   size_t *_gate_idx_to_tpg_order_idx;
@@ -190,48 +125,13 @@ private:
   void _read_fault(std::istream &flst);
   void _read_pattern(std::istream &ptn);
 
-  // ---- FFR parition
-  std::vector<std::vector<std::list<size_t>>> _bucket_lists_for_all_FFRs;
-  // store the FFR on each level ->  which FFRs are on this FFR-level 
-  std::vector<std::vector<size_t>> _FFR_levelization;
-  void _find_split_merge_FFRs(std::vector<bool> &visited, 
-                              std::vector<size_t> &gate_to_FFR, 
-                              std::vector<size_t> &level_of_FFRs, 
-                              size_t width_constraint, size_t depth_constraint);
-
-  void _DFS(std::vector<bool> &visited, size_t gate_idx, 
-            std::vector<std::list<size_t>> &bucket_list, size_t depth,
-            std::queue<size_t> &source_queue, 
-            size_t width_constraint, size_t depth_constraint);
-
-  // merged_FFRs
-  void _merged_FFRs_func (std::vector<std::vector<std::queue<size_t>>> &FFR_levelization_with_depth,
-                          std::vector<std::vector<std::list<size_t>>> &bucket_lists_for_all_FFRs,
-                        size_t width_constraint, size_t depth_constraint);
-
-  void _merge_FFRs();  
-  const size_t width_constraint_0 = 1024;
-  const size_t depth_constraint_0 = 2; 
-
-  const size_t _FFR_width_constraint = 1;
-  const size_t _FFR_depth_constraint = 1;
   const size_t _tail_ended_OPT_threshold = 1024;
-
-  const size_t partition_threshold = 16384;
-  const size_t _merge_thd_ub = 8192; // merge threshold upper bound
-
-
   size_t _largest_FFR_level;
   
   // compute number of FFRs in each level 
   std::vector<size_t> num_FFRs_in_this_level;
-  // after merge
-  size_t _num_FFRs;
 
-  
-// ---- FFR parition
-  void _find_CUDA_GRAPH_dependency();
-  
+
   // Simulation
   size_t *_gate_inputs_list;
   size_t *_gate_inputs_list_start;
@@ -241,16 +141,11 @@ private:
 
 // GPU pointers
   // CSR format: 
-  // PI *_PIs_gpu; 
-  // Gate *_gates_gpu; 
-  // PO *_POs_gpu;
-  // 3/20: new
   size_t *_pi_gate_po_gate_type_gpu;
   size_t *_pi_gate_po_output_res_gpu;
   size_t *_pi_gate_po_num_inputs_gpu;
   
   size_t *_gate_inputs_list_gpu;
-  // size_t *_gate_inputs_list_from_gpu; // 0: PI, 1: PO
   size_t *_gate_inputs_list_start_gpu;
 
   // Pattern *_patterns_gpu;
@@ -259,7 +154,6 @@ private:
   // Fault *_faults_gpu;
   size_t *_fault_gate_idx_gpu;
   size_t *_fault_SA_fault_val_gpu;
-  // 3/20: new
 
   // bad results 
   size_t *_g_pi_results_gpu; 
@@ -277,29 +171,8 @@ private:
   size_t _num_paras = 6;
   void _gpu_ask_copy_mem();
   void _free_all();
-
-// ---- FFR parition
-  size_t *merged_FFRs_c; // CPU
-  size_t *merged_FFRs_idx_c; // CPU
-  size_t *merged_FFRs_gpu; // GPU
-  size_t *merged_FFRs_gpu_idx; // GPU
-  void _gpu_ask_copy_mem_partition();
-
-  // Optimization: bottom FFR merge
-  size_t _start_merged_FFR_levels;
-  size_t *_FFR_levelization_gpu;
-  // whether pull up this optimization 
   bool _pull_up_merged_FFR_level_optimization = false; 
-  
-// ---- FFR parition
-
-// TESTING
-#ifdef TEST_cuGraphExecNodeSetParams  
-  size_t *_params_gpu_tmptmp; // used for testing --> DELETE!
-  void test_cuGraphExecNodeSetParams_cpu();
-#endif
-// TESTING
-
+  size_t _start_merged_FFR_levels;
 
   // parallel-cuda
   void _run_parallel_cuda();
@@ -324,59 +197,8 @@ private:
 
   void _run_good_case_cuda_graph(const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
   void _run_bad_case_cuda_graph(const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
-  void _update_cuda_graph_params(cudaStream_t &stream1, cudaGraphExec_t instance, 
-                                size_t rd, size_t fault_num, size_t bad_case,
-                                cudaGraphNode_t *kernelNode_PI, 
-                                cudaKernelNodeParams *kernelNode_PI_Params,
-                                cudaGraphNode_t *kernelNode_gate, 
-                                cudaKernelNodeParams *kernelNode_gate_Params, 
-                                cudaGraphNode_t *kernelNode_PO, 
-                                cudaKernelNodeParams *kernelNode_PO_Params,
-                                size_t start_idx, size_t end_idx);
- 
-  
-  // parallel-cuda-graph-partition
-  void _run_parallel_cuda_graph_partition();
-  size_t _merged_FFRs_in_last_levels();  
-  void _partition(std::vector<std::set<size_t>> &adj, std::vector<size_t> &level_of_FFRs);
-  void _find_connected_ffrs(const size_t acc, const size_t ffr_idx, std::set<size_t> &visited,
-                            std::vector<std::set<size_t>> &adj, 
-                            std::vector<std::set<size_t>> &inv_adj,
-                            std::vector<size_t> &level_of_FFRs,
-                            std::vector<std::vector<std::vector<size_t>>> &_partition_results);
-  void _merge(const size_t acc, std::vector<std::vector<std::vector<size_t>>> &_partition_results,
-            std::vector<std::vector<size_t>> &try_merge_acc, std::vector<std::vector<size_t>> &try_merge_nKN);
-            
-  std::vector<std::vector<size_t>> _break_points;          
-  void _update_FFR_levelization(const size_t acc, 
-                                std::vector<std::vector<std::vector<size_t>>> &_partition_results, 
-                                std::vector<std::vector<size_t>> &try_merge_nKN);
-  std::vector<std::set<size_t>> _KN_adj;
-  size_t _num_KNs_gate;
+  void _update_cuda_graph_params(cudaStream_t &stream1, size_t rd, size_t fault_num, size_t bad_case);
 
-
-  void _construct_depend_merged_KNs(std::vector<std::set<size_t>> &adj, std::vector<std::vector<size_t>> &try_merge_nKN);
-  void _remove_redundant_edges();
-  
-  void _ffr_re_idx();
-  void _test_rand_memory_access_pattern_for_GPU();
-  void _better_memory_access_pattern_for_GPU();
-  void _construct_cuda_graph_partition(cudaStream_t stream1, cudaGraph_t graph, 
-                                      cudaGraphNode_t *kernelNode_PI, 
-                                      cudaKernelNodeParams *kernelNode_PI_Params,
-                                      cudaGraphNode_t *kernelNode_gate, 
-                                      cudaKernelNodeParams *kernelNode_gate_Params, 
-                                      cudaGraphNode_t *kernelNode_PO, 
-                                      cudaKernelNodeParams *kernelNode_PO_Params,
-                                      void **kernelArgs_PI,
-                                      void **kernelArgs_gate,
-                                      void **kernelArgs_PO,
-                                      size_t **params_gpu_idx, size_t num_func_inputs);
-  void _run_good_case_cuda_graph_partition(const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);
-  void _run_bad_case_cuda_graph_partition(const size_t bits, cudaStream_t stream1, cudaGraphExec_t instance);  
-                        
-  
-  
   
 
   // print for debug

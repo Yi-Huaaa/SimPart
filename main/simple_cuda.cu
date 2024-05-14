@@ -4,11 +4,8 @@
 #include <fsim/cuda/fsim_cuda.cuh>
 
 // #define run_cuda
-// #define run_cuda_graph
-#define run_cuda_graph_partition
+#define run_cuda_graph
 // #define visualization
-// #define print_output
-// #define test_makefile
 #define TIMES 1
 #define FSIM_SHOWALL
 // #define FSIM_SHOW_ONLY_RUNTIME_OF_RUN
@@ -23,7 +20,7 @@ int main(int argc, char *argv[]) {
   CUDASimulator simulator;
 
   size_t mode;
-  std::chrono::duration<double> duration_read_data, duration_CUDA, duration_CUDA_GRAPH, duration_CUDA_GRAPH_PARTITION;
+  std::chrono::duration<double> duration_read_data, duration_CUDA, duration_CUDA_GRAPH;
 
   std::string ckt_path(argv[1]);
   std::string flst_path(argv[2]);
@@ -59,16 +56,7 @@ int main(int argc, char *argv[]) {
 
 #endif
   
-#ifdef run_cuda_graph_partition
-  mode = 2;
-  for (size_t t = 0; t < TIMES; t++) {
-    // printf("t = %ld\n", t);
-    start = std::chrono::steady_clock::now();
-      simulator.run(CUDASimulator::Mode(static_cast<size_t>(mode)), 1);
-    end = std::chrono::steady_clock::now();
-    duration_CUDA_GRAPH_PARTITION += (end - start);
-  }
-#endif
+
 
   // write file: visualization_graph
 #ifdef visualization
@@ -78,27 +66,24 @@ int main(int argc, char *argv[]) {
 #ifdef FSIM_SHOWALL
   std::cout << "Execution Time:\n";
   std::cout << "read_data: " << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
-#ifdef run_cuda
-  std::cout << "run_CUDA: " <<  round_to(((duration_CUDA.count()/TIMES))*1000, 0.001) << " ms\n";
-#endif
-#ifdef run_cuda_graph
-  std::cout << "run_CUDA_GRAPH: " <<  round_to(((duration_CUDA_GRAPH.count()/TIMES))*1000, 0.001) << " ms\n";
-#endif
-#ifdef run_cuda_graph_partition
-  std::cout << "run_CUDA_GRAPH_PART: " <<  round_to(((duration_CUDA_GRAPH_PARTITION.count()/TIMES))*1000, 0.001) << " ms\n";
-#endif
+  #ifdef run_cuda
+    std::cout << "run_CUDA: " <<  round_to(((duration_CUDA.count()/TIMES))*1000, 0.001) << " ms\n";
+  #endif
+  #ifdef run_cuda_graph
+    std::cout << "run_CUDA_GRAPH: " <<  round_to(((duration_CUDA_GRAPH.count()/TIMES))*1000, 0.001) << " ms\n";
+  #endif
+  #ifdef run_cuda_graph_partition
+    std::cout << "run_CUDA_GRAPH_PART: " <<  round_to(((duration_CUDA_GRAPH_PARTITION.count()/TIMES))*1000, 0.001) << " ms\n";
+  #endif
 #endif
 
 #ifdef FSIM_SHOW_ONLY_RUNTIME_OF_RUN
-#ifdef run_cuda
-  std::cout << round_to(((duration_CUDA.count()/TIMES))*1000, 0.001) << "\n";
-#endif
-#ifdef run_cuda_graph
-  std::cout << round_to(((duration_CUDA_GRAPH.count()/TIMES))*1000, 0.001) << "\n";
-#endif
-#ifdef run_cuda_graph_partition
-  std::cout << round_to(((duration_CUDA_GRAPH_PARTITION.count()/TIMES))*1000, 0.001) << "\n";
-#endif
+  #ifdef run_cuda
+    std::cout << round_to(((duration_CUDA.count()/TIMES))*1000, 0.001) << "\n";
+  #endif
+  #ifdef run_cuda_graph
+    std::cout << round_to(((duration_CUDA_GRAPH.count()/TIMES))*1000, 0.001) << "\n";
+  #endif
 #endif
 
   return 0;
