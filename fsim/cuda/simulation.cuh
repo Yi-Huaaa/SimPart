@@ -32,7 +32,7 @@ __global__ void _run_gate_graph(size_t *_gate_inputs_list_gpu, size_t *_gate_inp
                                 size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
                                 size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
                                 size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
-                                size_t *_params_gpu);
+                                size_t *_params_gpu, size_t *_order_gpu);
 
 __device__ __forceinline__ void _apply_INV(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu);
 __device__ __forceinline__ void _apply_AND(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu);
@@ -47,20 +47,17 @@ __device__ __forceinline__ void _apply_PI(size_t gate_idx, size_t *_pi_gate_po_o
 __device__ __forceinline__ void _apply_PO(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu);
 __global__ void _shift_to_correct_answer_gpu(size_t *outputs, size_t *_pi_gate_po_output_res_gpu, const size_t bits, const size_t SIZE_T_BITS, const size_t pre_gates_accum, const size_t num);
 
-__global__ void _set_params(size_t *_params_gpu, size_t rd, size_t fault_val, size_t idx_accum_sa, 
-                            size_t wrong_gate, size_t bad_case, size_t max_gate_num_per_level, 
-                            size_t idx_accum, size_t pi_g_po_idx_accum, 
-                            size_t _num_PIs, size_t _num_inner_gates, size_t _num_POs);
+__global__ void _set_params(size_t *_params_gpu_idx_address, 
+                            size_t var_0, size_t var_1, size_t var_2, 
+                            size_t var_3, size_t var_4, size_t var_5, size_t var_6);
 __global__ void _update_params_gpu (size_t *_params_gpu_idx_address, size_t _num_paras, size_t limit_sz, 
                                     size_t new_rd, size_t new_fault_num, size_t new_bad_case);
 
 __global__ void _run_gate_graph_tail(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
-                                          size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
-                                          size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
-                                          size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
-                                          size_t *_params_gpu,
-                                          size_t *merged_FFRs_gpu, size_t *merged_FFRs_gpu_idx,
-                                          size_t *_FFR_levelization_gpu);
+                                    size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
+                                    size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
+                                    size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
+                                    size_t *_params_gpu, size_t *_order_gpu, size_t *_num_gates_per_level_gpu);
 
 
 // for FSIM_DEBUG_GPU_INPUTS
@@ -120,24 +117,24 @@ private:
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
   Pattern *_patterns;
 
+  std::vector<size_t> _order; // implementation order after topological sort
+
   // Construct
   void _read_graph(std::istream &ckt);
   void _read_fault(std::istream &flst);
   void _read_pattern(std::istream &ptn);
 
   const size_t _tail_ended_OPT_threshold = 1024;
-  size_t _largest_FFR_level;
+  size_t _total_num_levels;
   
   // compute number of FFRs in each level 
   std::vector<size_t> num_FFRs_in_this_level;
-
 
   // Simulation
   size_t *_gate_inputs_list;
   size_t *_gate_inputs_list_start;
   size_t _sum_inputs_gates;
   size_t *_found_fault_to_pattern;
-
 
 // GPU pointers
   // CSR format: 
@@ -168,11 +165,13 @@ private:
 
   // memory
   size_t *_params_gpu; // used for constructing cuda_graph parameters
-  size_t _num_paras = 6;
+  size_t _num_const_paras = 7; // ask more memory than we actually need
   void _gpu_ask_copy_mem();
   void _free_all();
   bool _pull_up_merged_FFR_level_optimization = false; 
-  size_t _start_merged_FFR_levels;
+  size_t _start_tail_end_level;
+  size_t *_order_gpu; 
+  size_t *_num_gates_per_level_gpu; 
 
   // parallel-cuda
   void _run_parallel_cuda();
