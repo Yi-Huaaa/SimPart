@@ -34,6 +34,7 @@ __global__ void _run_gate_graph(size_t *_gate_inputs_list_gpu, size_t *_gate_inp
                                 size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
                                 size_t *_params_gpu, size_t *_order_gpu);
 
+
 __device__ __forceinline__ void _apply_INV(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu);
 __device__ __forceinline__ void _apply_AND(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu);
 __device__ __forceinline__ void _apply_OR(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu);
@@ -135,9 +136,11 @@ private:
   size_t *_gate_inputs_list_start;
   size_t _sum_inputs_gates;
   size_t *_found_fault_to_pattern;
+  size_t *_order_cpu;
 
 // GPU pointers
   // CSR format: 
+  size_t *_order_gpu;
   size_t *_pi_gate_po_gate_type_gpu;
   size_t *_pi_gate_po_output_res_gpu;
   size_t *_pi_gate_po_num_inputs_gpu;
@@ -170,7 +173,6 @@ private:
   void _free_all();
   bool _pull_up_merged_FFR_level_optimization = false; 
   size_t _start_tail_end_level;
-  size_t *_order_gpu; 
   size_t *_num_gates_per_level_gpu; 
 
   // parallel-cuda

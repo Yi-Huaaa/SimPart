@@ -392,7 +392,42 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   for (size_t i = 0; i < _num_POs; i++) {
     _num_gates_per_level[_POs[i]._level]++;
   }
+  
+  std::vector<std::vector<size_t>> gates_per_level; 
+  gates_per_level.resize(_total_num_levels);
+  for (size_t i = 0; i < _num_PIs; i++) {
+    size_t lvl = _PIs[i]._level;
+    gates_per_level[lvl].push_back(_PIs[i]._idx);
+    assert(lvl == 0 && "PI lvl ERROR\n");
+  }
+  for (size_t i = 0; i < _num_inner_gates; i++) {
+    size_t lvl = _gates[i]._level;
+    gates_per_level[lvl].push_back(_gates[i]._idx);
+    assert(lvl > 0 && "gate 0 lvl ERROR\n");
+    assert(lvl < (_total_num_levels-1) && "gate -1 lvl ERROR\n");
+  }
+  for (size_t i = 0; i < _num_POs; i++) {
+    size_t lvl = _POs[i]._level;
+    gates_per_level[lvl].push_back(_POs[i]._idx);
+    assert(lvl == (_total_num_levels-1) && "PO lvl ERROR\n");
+  }
 
+  // printf("gates_per_level, %lu %lu %Lu\n", _num_PIs, _num_inner_gates, _num_POs);
+  // for (size_t lvl = 0; lvl < _total_num_levels; lvl++) {
+  //   printf("lvl_%lu, size() = %lu\n", lvl, gates_per_level[lvl].size());;
+  // }
+
+  
+  _order_cpu = (size_t *)malloc((_num_PIs+_num_inner_gates+_num_POs)*sizeof(size_t));
+  memset(_order_cpu, 0, ((_num_PIs+_num_inner_gates+_num_POs))*sizeof(size_t));
+  size_t accum = 0;
+  for (size_t i = 0; i < gates_per_level.size(); i++) {
+    for (size_t j = 0; j < gates_per_level[i].size(); j++) {
+      _order_cpu[accum] = gates_per_level[i][j];
+      accum++;
+    }
+  }
+  assert(accum == (_num_PIs+_num_inner_gates+_num_POs) && "accum ERROR");
 
 #ifdef FSIM_DEBUG_PRINT_GRAPH
   std::cout << "\n_PIs = [\n";
@@ -427,7 +462,7 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   }
   _pull_up_merged_FFR_level_optimization = (((_total_num_levels - _start_tail_end_level) > 1)) 
                                           ? (true) : (false);
-  // _pull_up_merged_FFR_level_optimization = false;
+  _pull_up_merged_FFR_level_optimization = false;
   // printf("_start_tail_end_level = %lu %d\n", _start_tail_end_level, _pull_up_merged_FFR_level_optimization);
 }
 
@@ -732,6 +767,7 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
   kernelArgs_PI[7] = (void *)&_fault_SA_fault_val_gpu;
   kernelArgs_PI[8] = (void *)&params_gpu_idx[params_gpu_idx_idx];
   kernelArgs_PI[9] = (void *)&_order_gpu;
+
   
   num_blocks = (_num_PIs > 1024) ? ((_num_PIs + 1024 - 1) >> 10) : (1); // 1;  
   num_threads = (_num_PIs > 1024) ? (1024) : (_num_PIs); // _num_PIs;
@@ -764,7 +800,6 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
   size_t accum = _num_PIs;
 
   // i == 0: PI, i == (_total_num_levels-1): PO
-  // _pull_up_merged_FFR_level_optimization = false;
   size_t end_level = (_pull_up_merged_FFR_level_optimization) 
                     ? (_start_tail_end_level) : (_total_num_levels - 1);
   for (size_t i = 1; i < end_level; i++) {
@@ -782,6 +817,7 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
     kernelArgs_gate[(i-1)*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
     kernelArgs_gate[(i-1)*num_func_inputs+8] = (void *)&params_gpu_idx[params_gpu_idx_idx];
     kernelArgs_gate[(i-1)*num_func_inputs+9] = (void *)&_order_gpu;
+
 
     // construct gate node
     num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);
@@ -808,49 +844,49 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
     accum += _num_gates_per_level[i];
   }
 
-  // tail-end optimization 
-  if (_pull_up_merged_FFR_level_optimization) {
-    params_gpu_idx_accum += _num_const_paras;
-    params_gpu_idx_idx++;
-    params_gpu_idx[params_gpu_idx_idx] = _params_gpu+params_gpu_idx_accum;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+5] = (void *)&_patterns_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+8] = (void *)&params_gpu_idx[params_gpu_idx_idx];
-    kernelArgs_gate[(end_level-1)*num_func_inputs+9] = (void *)&_order_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+10] = (void *)&_num_gates_per_level_gpu;
+  // // tail-end optimization 
+  // if (_pull_up_merged_FFR_level_optimization) {
+  //   params_gpu_idx_accum += _num_const_paras;
+  //   params_gpu_idx_idx++;
+  //   params_gpu_idx[params_gpu_idx_idx] = _params_gpu+params_gpu_idx_accum;
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+5] = (void *)&_patterns_gpu;
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+8] = (void *)&params_gpu_idx[params_gpu_idx_idx];
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+9] = (void *)&_order_gpu;
+  //   kernelArgs_gate[(end_level-1)*num_func_inputs+10] = (void *)&_num_gates_per_level_gpu;
 
-    // construct gate node
-    num_blocks = 1;
-    num_threads = _tail_ended_OPT_threshold;
+  //   // construct gate node
+  //   num_blocks = 1;
+  //   num_threads = _tail_ended_OPT_threshold;
 
-    _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[params_gpu_idx_idx], rd, fault_num, bad_case, 
-                                          _start_tail_end_level, accum, _total_num_levels-1, _num_PIs);
-    cudaDeviceSynchronize();
-    cudaCheckErrors("tail gate _set_params cudaDeviceSynchronize failed");
+  //   _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[params_gpu_idx_idx], rd, fault_num, bad_case, 
+  //                                         _start_tail_end_level, accum, _total_num_levels-1, _num_PIs);
+  //   cudaDeviceSynchronize();
+  //   cudaCheckErrors("tail gate _set_params cudaDeviceSynchronize failed");
         
-    // Adding nodes
-    kernelNode_gate_Params[(end_level-1)].func = (void *)_run_gate_graph_tail;
-    kernelNode_gate_Params[(end_level-1)].gridDim = dim3(num_blocks, 1, 1);
-    kernelNode_gate_Params[(end_level-1)].blockDim = dim3(num_threads, 1, 1);
-    kernelNode_gate_Params[(end_level-1)].sharedMemBytes = 0;
-    kernelNode_gate_Params[(end_level-1)].kernelParams = (void **)&(kernelArgs_gate[(end_level-1)*num_func_inputs]);
-    kernelNode_gate_Params[(end_level-1)].extra = NULL;  
-    cudaCheckErrors("tail kernelNode_gate_Params failed");
+  //   // Adding nodes
+  //   kernelNode_gate_Params[(end_level-1)].func = (void *)_run_gate_graph_tail;
+  //   kernelNode_gate_Params[(end_level-1)].gridDim = dim3(num_blocks, 1, 1);
+  //   kernelNode_gate_Params[(end_level-1)].blockDim = dim3(num_threads, 1, 1);
+  //   kernelNode_gate_Params[(end_level-1)].sharedMemBytes = 0;
+  //   kernelNode_gate_Params[(end_level-1)].kernelParams = (void **)&(kernelArgs_gate[(end_level-1)*num_func_inputs]);
+  //   kernelNode_gate_Params[(end_level-1)].extra = NULL;  
+  //   cudaCheckErrors("tail kernelNode_gate_Params failed");
 
-    // push node: gate
-    cudaGraphAddKernelNode(&kernelNode_gate[(end_level-1)], graph, NULL, 0, &kernelNode_gate_Params[(end_level-1)]);
-    cudaCheckErrors("tail Adding kernelNode_gate failed");
+  //   // push node: gate
+  //   cudaGraphAddKernelNode(&kernelNode_gate[(end_level-1)], graph, NULL, 0, &kernelNode_gate_Params[(end_level-1)]);
+  //   cudaCheckErrors("tail Adding kernelNode_gate failed");
 
-    for (size_t j = end_level; j < (_total_num_levels-1); j++) {
-      accum += _num_gates_per_level[j];
-    }
-  }
+  //   for (size_t j = end_level; j < (_total_num_levels-1); j++) {
+  //     accum += _num_gates_per_level[j];
+  //   }
+  // }
   assert(accum == (_num_PIs+_num_inner_gates) && "tail-end accum ERROR\n");
 
 
@@ -869,6 +905,7 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
   kernelArgs_PO[7] = (void *)&_fault_SA_fault_val_gpu;
   kernelArgs_PO[8] = (void *)&params_gpu_idx[params_gpu_idx_idx]; 
   kernelArgs_PO[9] = (void *)&_order_gpu;
+
   
   num_blocks = (_num_POs > 1024) ? ((_num_POs + 1024 - 1) >> 10) : (1); // 1;
   num_threads = (_num_POs > 1024) ? (1024) : (_num_POs);
@@ -1006,7 +1043,6 @@ void CUDASimulator::_run_parallel_cuda_graph() {
     cudaCheckErrors("_update_cuda_graph_params failed");
 
     _run_good_case_cuda_graph(num_testcases_this_round, stream1, instance);
-
     
     // bad simulation (fault simulation)
     for (size_t j = 0; j < _num_faults; j++) {
@@ -1022,7 +1058,18 @@ void CUDASimulator::_run_parallel_cuda_graph() {
       _compare_g_b_results <<< 1, 1, 0, stream1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
     }
   }
-  
+
+  // // TEST the correctness of the answer
+  // cudaDeviceSynchronize();
+  // cudaStreamSynchronize(stream1);
+  // cudaDeviceSynchronize();
+  // cudaStreamSynchronize(stream1);
+  // _show_computational_results <<< 1, 1, 0, stream1 >>> (_pi_gate_po_output_res_gpu, 0, _num_PIs+_num_inner_gates+_num_POs);
+  // cudaStreamSynchronize(stream1);
+  // cudaDeviceSynchronize();
+  // // TEST the correctness of the answer
+
+
   // // free mem
   _free_all();  
   free(kernelNode_gate);
@@ -1066,6 +1113,8 @@ void CUDASimulator::_run_good_case_cuda_graph(const size_t bits, cudaStream_t st
   cudaCheckErrors("Graph launch failed (_run_good_case_cuda_graph)");  
   cudaStreamSynchronize(stream1);
   cudaCheckErrors("cudaStreamSynchronize (_run_good_case_cuda_graph) failed");
+  cudaDeviceSynchronize();
+
 
 #ifdef FSIM_DEBUG_PRINT_SIMULATION
   cudaCheckErrors("Graph launch failed (_run_good_case_cuda_graph)");  
@@ -1208,7 +1257,7 @@ __global__ void _run_gate_graph(size_t *_gate_inputs_list_gpu, size_t *_gate_inp
                                 size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
                                 size_t *_params_gpu, size_t *_order_gpu) {  
 
-  // parameters
+ // parameters
   const size_t rd = _params_gpu[0];
   const size_t fault_num = _params_gpu[1];
   const size_t bad_case = _params_gpu[2];
@@ -1220,50 +1269,52 @@ __global__ void _run_gate_graph(size_t *_gate_inputs_list_gpu, size_t *_gate_inp
   size_t t_idx = threadIdx.x;
   size_t b_idx = blockIdx.x;
   size_t tb_idx = blockDim.x * b_idx + t_idx;
-  size_t gate_idx = _order_gpu[tb_idx + fin_num_gates]; // implement gate_idx
+  size_t real_g_idx = _order_gpu[tb_idx + fin_num_gates]; // tmp
+  
 
-  if (max_gate_num_per_level > tb_idx) {
-    size_t SA_fault = (((gate_idx) == _fault_gate_idx_gpu[fault_num]) & bad_case);
+  if ((max_gate_num_per_level) > tb_idx) {
+    size_t SA_fault = (((real_g_idx) == _fault_gate_idx_gpu[fault_num]) & bad_case);
     if (SA_fault) {
-      _pi_gate_po_output_res_gpu[gate_idx] = _fault_SA_fault_val_gpu[fault_num];
+      _pi_gate_po_output_res_gpu[real_g_idx] = _fault_SA_fault_val_gpu[fault_num];
     } else {
-      size_t type = _pi_gate_po_gate_type_gpu[gate_idx];
-      size_t num_inputs = _pi_gate_po_num_inputs_gpu[gate_idx];
+      size_t type = _pi_gate_po_gate_type_gpu[real_g_idx];
+      size_t num_inputs = _pi_gate_po_num_inputs_gpu[real_g_idx];
 
       switch (type) { 
         case 0:
-          _apply_INV(gate_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+          _apply_INV(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
         case 1:
-          _apply_AND(gate_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+          _apply_AND(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
         case 2:
-          _apply_OR(gate_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+          _apply_OR(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
         case 3:
-          _apply_XOR(gate_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+          _apply_XOR(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
         case 4:
-          _apply_NAND(gate_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+          _apply_NAND(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
         case 5:
-          _apply_NOR(gate_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+          _apply_NOR(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
         case 6:
-          _apply_XNOR(gate_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+          _apply_XNOR(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
         case 7:
-          _apply_MUX(gate_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+          _apply_MUX(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
         case 8:
-          _apply_CLKBUF(gate_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+          _apply_CLKBUF(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
         case 9:
-          _apply_PI(gate_idx, _pi_gate_po_output_res_gpu, _patterns_gpu[_num_PIs*rd+gate_idx]);
-        case 10:
-          _apply_PO(gate_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+          _apply_PI(real_g_idx, _pi_gate_po_output_res_gpu, _patterns_gpu[_num_PIs*rd+real_g_idx]);
         break;
-        case 11:
+        case 10:
+          _apply_PO(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
+        break;
+        default:
         break;
       }
     }
@@ -1349,7 +1400,7 @@ __global__ void _run_gate_graph_tail(size_t *_gate_inputs_list_gpu, size_t *_gat
 __device__ __forceinline__ void _apply_INV(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu) {
   size_t start_location = _gate_inputs_list_start_gpu[gate_idx]; // pass in real index
   size_t pre_gate_idx = _gate_inputs_list_gpu[start_location];
-  
+
   _pi_gate_po_output_res_gpu[gate_idx] = ~(_pi_gate_po_output_res_gpu[pre_gate_idx]);
 }
 
@@ -1405,7 +1456,7 @@ __device__ __forceinline__ void _apply_NOR(size_t gate_idx, size_t num_inputs, s
     size_t now_gate_val =_pi_gate_po_output_res_gpu[ _gate_inputs_list_gpu[start_location+i]];
     ret |= now_gate_val; 
   }
-  _pi_gate_po_output_res_gpu[gate_idx] = ~(ret);
+  _pi_gate_po_output_res_gpu[gate_idx] = ~(ret);   
 }
 
 __device__ __forceinline__ void _apply_XNOR(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu) {
@@ -1436,7 +1487,7 @@ __device__ __forceinline__ void _apply_CLKBUF(size_t gate_idx, size_t num_inputs
 }
 
 __device__ __forceinline__ void _apply_PI(size_t gate_idx, size_t *_pi_gate_po_output_res_gpu, size_t pattern_val) {
-  _pi_gate_po_output_res_gpu[gate_idx] = pattern_val;
+  _pi_gate_po_output_res_gpu[gate_idx] = pattern_val; 
 }
 
 __device__ __forceinline__ void _apply_PO(size_t gate_idx, size_t num_inputs, size_t *_pi_gate_po_output_res_gpu, size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu) {
@@ -1448,7 +1499,7 @@ __global__ void _show_computational_results (size_t *a, size_t start, size_t end
   printf("_show_computational_results\n");
 
   for (size_t i = start; i < end; i++) {
-    printf("arr[%lu] = %llu\n", i, a[i]);
+    printf("arr[%lu] = %lu\n", i, a[i]);
   }
   printf("\n");
 }
@@ -1611,6 +1662,7 @@ void CUDASimulator::_gpu_ask_copy_mem() {
 
   // copy memory 
   cudaMemcpy(_gate_inputs_list_gpu, _gate_inputs_list, _sum_inputs_gates*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaCheckErrors("_gate_inputs_list_gpu failure");
   cudaMemcpy(_gate_inputs_list_start_gpu, _gate_inputs_list_start, sum_pi_gates_pos*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("_gate_inputs_list_start_gpu failure");
 
@@ -1664,7 +1716,7 @@ void CUDASimulator::_gpu_ask_copy_mem() {
   cudaCheckErrors("cudaMemcpy 4 failure");
   cudaMemcpy(_num_gates_per_level_gpu, _num_gates_per_level, _total_num_levels*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("cudaMemcpy 5 failure");
-  cudaMemcpy(_order_gpu, _order.data(), _order.size()*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(_order_gpu, _order_cpu, sum_pi_gates_pos*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("cudaMemcpy 6 failure");
   
   
@@ -1673,6 +1725,7 @@ void CUDASimulator::_gpu_ask_copy_mem() {
   free(_patterns_cpu);
   free(fault_gate_idx_cpu);
   free(fault_SA_fault_val_cpu);
+  free(_order_cpu);
   
 #ifdef FSIM_DEBUG_GPU_INPUTS
   // check 
