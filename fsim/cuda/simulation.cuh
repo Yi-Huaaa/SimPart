@@ -79,6 +79,7 @@ __global__ void _show_computational_results (size_t *a, size_t start, size_t end
 
 // #define CUDA_GRAPH_CHECK
 #define FSIM_LEVELIZAED_PARTITION // levelization 
+#define FSIM_CHECK_PARTITION_RESULTS
 
 
 class CUDASimulator {
@@ -122,6 +123,19 @@ private:
 
   // Construct
   void _read_graph(std::istream &ckt);
+  void _partition(std::vector<std::vector<size_t>> &adj_topol,
+                  std::vector<std::vector<size_t>> &inv_adj_topol,
+                  std::vector<std::vector<size_t>> &gates_per_level,
+                  std::vector<size_t> &level_of_gates) ;
+  void _find_sets(const size_t gate_idx, const size_t start_level, const size_t end_level, 
+                  std::set<size_t> &visited,
+                  std::vector<std::vector<size_t>> &adj_topol,
+                  std::vector<std::vector<size_t>> &inv_adj_topol,
+                  std::vector<size_t> &level_of_gates, 
+                  std::vector<std::vector<std::vector<size_t>>> &partition_sets);
+  void _split_large_sets(std::vector<std::vector<std::vector<size_t>>> &partition_sets);
+  void _merge_small_sets();
+
   void _read_fault(std::istream &flst);
   void _read_pattern(std::istream &ptn);
 
@@ -171,7 +185,8 @@ private:
   size_t _num_const_paras = 7; // ask more memory than we actually need
   void _gpu_ask_copy_mem();
   void _free_all();
-  bool _pull_up_merged_FFR_level_optimization = false; 
+  bool _pull_up_tail_end_optimization = false; 
+  size_t _start_head_frt_level; // head-front
   size_t _start_tail_end_level;
   size_t *_num_gates_per_level_gpu; 
 

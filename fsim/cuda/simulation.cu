@@ -267,6 +267,11 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   index_accum.resize(sum_pi_gates_pos, 0);
   size_t to_gate_idx;
 
+  std::vector<std::vector<size_t>> adj_topol;     // adj after topological sort (reindex)
+  std::vector<std::vector<size_t>> inv_adj_topol; // inv_adj after topological sort (reindex)
+  adj_topol.resize(sum_pi_gates_pos);
+  inv_adj_topol.resize(sum_pi_gates_pos);
+
   for (size_t i = _num_PIs; i < gate_input_order_table.size(); i++) {
     for (size_t j = 1; j < (gate_input_order_table[i][0]+1); j++) { // how many inputs for this gate
       size_t from_gate_id = gate_input_order_table[i][j];
@@ -281,6 +286,9 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
         to_gate._inputs[index_accum[to_gate_idx]] = &from_gate;
         index_accum[to_gate_idx]++;
 
+        // add up adj; inv_adj
+        adj_topol[from_gate._idx].push_back(to_gate._idx);
+        inv_adj_topol[to_gate._idx].push_back(from_gate._idx);
       } else if ((to_gate_id >= (_num_PIs)) &&
                  (to_gate_id < (_num_PIs + _num_POs))) { // gate -> PO
         Gate &from_gate =
@@ -290,6 +298,10 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
         to_gate_idx = to_gate._idx;
         to_gate._inputs[index_accum[to_gate_idx]] = &from_gate;
         index_accum[to_gate_idx]++;
+        
+        // add up adj; inv_adj
+        adj_topol[from_gate._idx].push_back(to_gate._idx);
+        inv_adj_topol[to_gate._idx].push_back(from_gate._idx);
       } else { // gate -> gate
         Gate &from_gate =
             _gates[_gate_idx_to_tpg_order_idx[from_gate_id] - gate_idx_accum];
@@ -298,6 +310,10 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
         to_gate_idx = to_gate._idx;
         to_gate._inputs[index_accum[to_gate_idx]] = &from_gate;
         index_accum[to_gate_idx]++;
+
+        // add up adj; inv_adj
+        adj_topol[from_gate._idx].push_back(to_gate._idx);
+        inv_adj_topol[to_gate._idx].push_back(from_gate._idx);
       }
     }
   }
@@ -393,22 +409,28 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
     _num_gates_per_level[_POs[i]._level]++;
   }
   
-  std::vector<std::vector<size_t>> gates_per_level; 
+  std::vector<std::vector<size_t>> gates_per_level; // each level contains which gate_idx
+  std::vector<size_t> level_of_gates; // each gate belongs to which level 
   gates_per_level.resize(_total_num_levels);
+  level_of_gates.resize(_num_PIs + _num_inner_gates + _num_POs);
+
   for (size_t i = 0; i < _num_PIs; i++) {
     size_t lvl = _PIs[i]._level;
     gates_per_level[lvl].push_back(_PIs[i]._idx);
+    level_of_gates[_PIs[i]._idx] = lvl;
     assert(lvl == 0 && "PI lvl ERROR\n");
   }
   for (size_t i = 0; i < _num_inner_gates; i++) {
     size_t lvl = _gates[i]._level;
     gates_per_level[lvl].push_back(_gates[i]._idx);
+    level_of_gates[_gates[i]._idx] = lvl;
     assert(lvl > 0 && "gate 0 lvl ERROR\n");
     assert(lvl < (_total_num_levels-1) && "gate -1 lvl ERROR\n");
   }
   for (size_t i = 0; i < _num_POs; i++) {
     size_t lvl = _POs[i]._level;
     gates_per_level[lvl].push_back(_POs[i]._idx);
+    level_of_gates[_POs[i]._idx] = lvl;
     assert(lvl == (_total_num_levels-1) && "PO lvl ERROR\n");
   }
 
@@ -455,15 +477,202 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   for (size_t i = _total_num_levels-2; i > 0; i--) {
     if (_num_gates_per_level[i] <= _tail_ended_OPT_threshold) {
       _start_tail_end_level = i;
-      // printf("i = %Lu, %lu\n", i, _num_gates_per_level[i]);
+      // printf("i = %lu, %lu\n", i, _num_gates_per_level[i]);
     } else {
       break;
     }
   }
-  _pull_up_merged_FFR_level_optimization = (((_total_num_levels - _start_tail_end_level) > 1)) 
+  _pull_up_tail_end_optimization = (((_total_num_levels - _start_tail_end_level) > 1)) 
                                           ? (true) : (false);
-  // _pull_up_merged_FFR_level_optimization = false;
-  // printf("_start_tail_end_level = %lu %d\n", _start_tail_end_level, _pull_up_merged_FFR_level_optimization);
+  // _pull_up_tail_end_optimization = false;
+  // printf("_start_tail_end_level = %lu %d\n", _start_tail_end_level, _pull_up_tail_end_optimization);
+
+  // head-front optimization 
+  _partition(adj_topol, inv_adj_topol, gates_per_level, level_of_gates);
+}
+
+void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
+                              std::vector<std::vector<size_t>> &inv_adj_topol,
+                              std::vector<std::vector<size_t>> &gates_per_level,
+                              std::vector<size_t> &level_of_gates) {
+  
+  /*
+    // // Check adj_topol; inv_adj_topol
+    // // traverse all gates's inputs
+    // for (size_t g = 0; g < _num_inner_gates; g++) {
+    //   size_t to_gate_idx = _gates[g]._idx;
+    //   for (size_t in = 0; in < _gates[g]._num_inputs; in++) {
+    //     size_t from_gate_idx = (_gates[g]._inputs[in])->_idx;
+    //     bool adj_bool = false;
+    //     bool inv_adj_bool = false;
+    //     // check adj_topol: 
+    //     for (size_t i = 0; i < adj_topol[from_gate_idx].size(); i++) {
+    //       if (adj_topol[from_gate_idx][i] == to_gate_idx) {
+    //         adj_bool = true;
+    //       }
+    //     }
+    //     // check inv_adj_topol: 
+    //     for (size_t i = 0; i < inv_adj_topol[to_gate_idx].size(); i++) {
+    //       if (inv_adj_topol[to_gate_idx][i] == from_gate_idx) {
+    //         inv_adj_bool = true;
+    //       }
+    //     }
+    //     assert(adj_bool == true && "adj_topol ERROR\n");
+    //     assert(inv_adj_bool == true && "inv_adj_topol ERROR\n");
+    //   }
+    // }
+    // // traverse all POs's inputs
+    // for (size_t g = 0; g < _num_POs; g++) {
+    //   size_t to_gate_idx = _POs[g]._idx;
+    //   for (size_t in = 0; in < _POs[g]._num_inputs; in++) {
+    //     size_t from_gate_idx = (_POs[g]._inputs[in])->_idx;
+    //     bool adj_bool = false;
+    //     bool inv_adj_bool = false;
+    //     // check adj_topol: 
+    //     for (size_t i = 0; i < adj_topol[from_gate_idx].size(); i++) {
+    //       if (adj_topol[from_gate_idx][i] == to_gate_idx) {
+    //         adj_bool = true;
+    //       }
+    //     }
+    //     // check inv_adj_topol: 
+    //     for (size_t i = 0; i < inv_adj_topol[to_gate_idx].size(); i++) {
+    //       if (inv_adj_topol[to_gate_idx][i] == from_gate_idx) {
+    //         inv_adj_bool = true;
+    //       }
+    //     }
+    //     assert(adj_bool == true && "adj_topol ERROR\n");
+    //     assert(inv_adj_bool == true && "inv_adj_topol ERROR\n");
+    //   }
+    // }
+  */
+
+  // Decide which levels are going to merged into one kernel node 
+    // TODO: 
+    // size_t acc = 0;
+    // for (size_t lvl = 0; lvl < _start_tail_end_level; lvl++) {
+    //   if (gates_per_level[lvl].size() >= partition_threshold) {
+    //     acc++;
+    //   } else {
+    //     break;
+    //   }
+    // }
+
+  // 目前的做法很簡單，直接從 tail-end 往前，少於 2048 的先 merge -> give it a try
+  // note: level_0: PIs
+  for (size_t lvl = _start_tail_end_level - 1; lvl > 0; lvl--) {
+    if (gates_per_level[lvl].size() <= 2048) {
+      _start_head_frt_level = lvl;
+    } else {
+      break;
+    }
+  }
+  // printf("_start_head_frt_level = %lu\n", _start_head_frt_level);
+
+  // vectors: (0, 1, 2): (which set, which level, contains gates index)
+  std::vector<std::vector<std::vector<size_t>>> partition_sets;
+  size_t num_head_front_opt_levels = _start_tail_end_level - _start_head_frt_level;
+  // printf("num_head_front_opt_levels = %lu\n", num_head_front_opt_levels);
+
+  // _find_sets
+  std::set<size_t> visited; 
+  // Note: start_level == 0: PI level 
+  size_t start_level = 1; // TODO: need to change dynamically
+  size_t end_level = 6; // TODO: need to change dynamically 
+  assert(start_level != 0 && "PI cannot be the start_level\n");
+  assert(end_level <= _start_tail_end_level && "end_level cannot equal to _start_tail_end_level\n");
+  // size_t start_level = _start_head_frt_level;
+  // size_t end_level = _start_tail_end_level;
+  for (size_t lvl = start_level; lvl < end_level; lvl++) {
+    // printf("Hello %lu, lvl = %lu\n", gates_per_level[lvl].size(), lvl);
+    for (size_t g = 0; g < gates_per_level[lvl].size(); g++) {
+      size_t gate_idx = gates_per_level[lvl][g];
+      if (visited.find(gate_idx) == visited.end()) {
+        // printf("Find sets starts, gate_idx = %lu (set_idx = %lu)\n", gate_idx, partition_sets.size());
+        _find_sets(gate_idx, start_level, end_level, visited, adj_topol, inv_adj_topol, level_of_gates, partition_sets);
+      }
+    }
+  }
+
+#ifdef FSIM_CHECK_PARTITION_RESULTS
+  // check the _find_sets
+  printf("partition_sets (%lu) =\n", partition_sets.size());
+  for (size_t set_idx = 0; set_idx < partition_sets.size(); set_idx++) {
+    size_t total_size = 0;
+    for (size_t lvl = 0; lvl < partition_sets[set_idx].size(); lvl++) {
+      total_size += partition_sets[set_idx][lvl].size();
+    } 
+    if (total_size >= 1024) {
+      printf("partition_sets[%lu] (total_size() = %lu): ", set_idx, total_size);
+      for (size_t lvl = 0; lvl < partition_sets[set_idx].size(); lvl++) {
+        printf("%lu, ", partition_sets[set_idx][lvl].size());
+      } printf("\n");
+    }
+
+  } printf("\n");
+#endif
+
+
+  // split large sets
+  _split_large_sets(partition_sets);
+
+  // merge small sets
+  _merge_small_sets();
+
+}
+
+void CUDASimulator::_find_sets(const size_t gate_idx, const size_t start_level, const size_t end_level, 
+                              std::set<size_t> &visited,
+                              std::vector<std::vector<size_t>> &adj_topol,
+                              std::vector<std::vector<size_t>> &inv_adj_topol,
+                              std::vector<size_t> &level_of_gates, 
+                              std::vector<std::vector<std::vector<size_t>>> &partition_sets) {
+
+  size_t set_idx = partition_sets.size();
+  partition_sets.push_back(std::vector<std::vector<size_t>>());
+  for (size_t lvl = 0; lvl < (end_level - start_level); lvl++) {
+    partition_sets[set_idx].push_back(std::vector<size_t>());
+  }
+
+  std::queue<size_t> gate_in_same_set_candidates;
+  gate_in_same_set_candidates.push(gate_idx);
+
+  while (!gate_in_same_set_candidates.empty()) {
+    size_t cur_idx = gate_in_same_set_candidates.front();
+    gate_in_same_set_candidates.pop();
+
+    if (visited.find(cur_idx) != visited.end()) {
+      continue;
+    }
+    visited.insert(cur_idx);
+
+    // add adj: --> 
+    for (auto idx : adj_topol[cur_idx]) {
+      if (level_of_gates[idx] < end_level) {
+        gate_in_same_set_candidates.push(idx);
+      }
+    }
+    
+    // add inv-adj: <-- 
+    for (auto idx : inv_adj_topol[cur_idx]) {
+      if (level_of_gates[idx] >= start_level) {
+        gate_in_same_set_candidates.push(idx);
+      }
+    }
+
+    size_t lvl = level_of_gates[cur_idx] - start_level;
+    assert(lvl < (end_level - start_level) && "lvl out of bound LAR");
+    partition_sets[set_idx][lvl].push_back(cur_idx);
+  }
+}
+
+void CUDASimulator::_split_large_sets(std::vector<std::vector<std::vector<size_t>>> &partition_sets) {
+  // 直接去拆 partition_sets[0]
+  
+
+}
+
+void CUDASimulator::_merge_small_sets() {
+
 }
 
 
@@ -800,7 +1009,7 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
   size_t accum = _num_PIs;
 
   // i == 0: PI, i == (_total_num_levels-1): PO
-  size_t end_level = (_pull_up_merged_FFR_level_optimization) 
+  size_t end_level = (_pull_up_tail_end_optimization) 
                     ? (_start_tail_end_level) : (_total_num_levels - 1);
   for (size_t i = 1; i < end_level; i++) {
     params_gpu_idx_accum += _num_const_paras;
@@ -845,7 +1054,7 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
   }
 
   // tail-end optimization 
-  if (_pull_up_merged_FFR_level_optimization) {
+  if (_pull_up_tail_end_optimization) {
     // printf("Hello bibi\n");
     params_gpu_idx_accum += _num_const_paras;
     params_gpu_idx_idx++;
@@ -930,7 +1139,7 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
 
   // Construct dependency
   cudaGraphAddDependencies(graph, kernelNode_PI, &kernelNode_gate[0], 1);
-  size_t end_dep = (_pull_up_merged_FFR_level_optimization) ? 
+  size_t end_dep = (_pull_up_tail_end_optimization) ? 
           (end_level-2) : (end_level-3);
   for (size_t i = 0; i < end_dep; i++) {
     cudaGraphAddDependencies(graph, &kernelNode_gate[i], &kernelNode_gate[i+1], 1);
@@ -966,9 +1175,9 @@ __global__ void _update_params_gpu (size_t *_params_gpu_idx_address, size_t _num
 }
 
 void CUDASimulator::_update_cuda_graph_params(cudaStream_t &stream1, size_t rd, size_t fault_num, size_t bad_case) {
-  size_t num_blocks = (_pull_up_merged_FFR_level_optimization) ? 
+  size_t num_blocks = (_pull_up_tail_end_optimization) ? 
                       (_start_tail_end_level+3) : (_max_level+1);
-  size_t limit_sz = (_pull_up_merged_FFR_level_optimization) ? 
+  size_t limit_sz = (_pull_up_tail_end_optimization) ? 
                     (_num_const_paras*(_start_tail_end_level+3)+1) : (_num_const_paras*(_max_level+1));
   _update_params_gpu <<< num_blocks, 1, 0, stream1 >>> (_params_gpu, _num_const_paras, limit_sz, 
                                                         rd, fault_num, bad_case);  
