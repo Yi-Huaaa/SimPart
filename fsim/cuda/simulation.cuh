@@ -79,7 +79,7 @@ __global__ void _show_computational_results (size_t *a, size_t start, size_t end
 
 // #define CUDA_GRAPH_CHECK
 #define FSIM_LEVELIZAED_PARTITION // levelization 
-#define FSIM_CHECK_PARTITION_RESULTS
+// #define FSIM_CHECK_PARTITION_RESULTS
 
 
 class CUDASimulator {
@@ -133,13 +133,23 @@ private:
                   std::vector<std::vector<size_t>> &inv_adj_topol,
                   std::vector<size_t> &level_of_gates, 
                   std::vector<std::vector<std::vector<size_t>>> &partition_sets);
-  void _split_large_sets(std::vector<std::vector<std::vector<size_t>>> &partition_sets);
+  void _find_sub_sets(const size_t set_idx, const size_t start_level, const size_t end_level, 
+                    std::vector<std::vector<size_t>> &adj_topol,
+                    std::vector<std::vector<size_t>> &inv_adj_topol,
+                    std::vector<size_t> &level_of_gates,
+                    std::vector<std::vector<std::vector<size_t>>> &partition_sets,
+                    std::vector<std::vector<std::vector<size_t>>> &partition_sets_2);
+  bool _can_merge(std::vector<std::vector<size_t>> &sub_set);
+  void _split_tmp_subsets(std::vector<std::vector<size_t>> &sub_set, 
+                          std::vector<size_t> &added_num_gates);
+                    
   void _merge_small_sets();
 
   void _read_fault(std::istream &flst);
   void _read_pattern(std::istream &ptn);
 
   const size_t _tail_ended_OPT_threshold = 1024;
+  const size_t _head_front_OPT_threshold = 1024;
   size_t _total_num_levels;
   
   // compute number of FFRs in each level 
