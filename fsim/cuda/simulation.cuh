@@ -54,7 +54,7 @@ __global__ void _set_params(size_t *_params_gpu_idx_address,
 __global__ void _update_params_gpu (size_t *_params_gpu_idx_address, size_t _num_paras, size_t limit_sz, 
                                     size_t new_rd, size_t new_fault_num, size_t new_bad_case);
 
-__global__ void _run_gate_graph_tail(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
+__global__ void _run_gate_graph_mul_levels(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
                                     size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
                                     size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
                                     size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
@@ -86,6 +86,7 @@ class CUDASimulator {
 
 // constexpr size_t SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
+const size_t SIZE_T_MAX = std::numeric_limits<size_t>::max();
 
 public:
   // cuda simulator functions 
@@ -143,7 +144,9 @@ private:
   void _split_tmp_subsets(std::vector<std::vector<size_t>> &sub_set, 
                           std::vector<size_t> &added_num_gates);
                     
-  void _merge_small_sets(std::vector<std::vector<std::vector<size_t>>> &partition_sets_2);
+  void _merge_small_sets(const size_t start_level, const size_t end_level, 
+                        std::vector<std::vector<std::vector<size_t>>> &partition_sets_2,
+                        std::vector<std::vector<std::vector<size_t>>> &_partition_results);
 
   void _read_fault(std::istream &flst);
   void _read_pattern(std::istream &ptn);

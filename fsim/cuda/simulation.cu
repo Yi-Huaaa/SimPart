@@ -464,18 +464,6 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   //   printf("lvl_%lu, size() = %lu\n", lvl, gates_per_level[lvl].size());;
   // }
 
-  
-  _order_cpu = (size_t *)malloc((_num_PIs+_num_inner_gates+_num_POs)*sizeof(size_t));
-  memset(_order_cpu, 0, ((_num_PIs+_num_inner_gates+_num_POs))*sizeof(size_t));
-  size_t accum = 0;
-  for (size_t i = 0; i < gates_per_level.size(); i++) {
-    for (size_t j = 0; j < gates_per_level[i].size(); j++) {
-      _order_cpu[accum] = gates_per_level[i][j];
-      accum++;
-    }
-  }
-  assert(accum == (_num_PIs+_num_inner_gates+_num_POs) && "accum ERROR");
-
 #ifdef FSIM_DEBUG_PRINT_GRAPH
   std::cout << "\n_PIs = [\n";
   for (size_t i = 0; i < _num_PIs; i++) {
@@ -585,7 +573,6 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
 
   // vectors: (0, 1, 2): (which set, which level, contains gates index)
   std::vector<std::vector<std::vector<size_t>>> partition_sets;
-  size_t num_head_front_opt_levels = _start_tail_end_level - _start_head_frt_level;
 
   // _find_sets
   std::set<size_t> visited; 
@@ -606,6 +593,7 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
       }
     }
   }
+
 
 #ifdef FSIM_CHECK_PARTITION_RESULTS
   // check the _find_sets
@@ -641,10 +629,10 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
     }
     
     if (need_to_split) {
-      printf("need_to_split: partition_sets[%lu]\n", set_idx);
-      for (size_t lvl = 0; lvl < partition_sets[set_idx].size(); lvl++) {
-        printf("partition_sets[%lu][%lu].size() = %lu\n", set_idx, lvl, partition_sets[set_idx][lvl].size());
-      }
+      // printf("need_to_split: partition_sets[%lu]\n", set_idx);
+      // for (size_t lvl = 0; lvl < partition_sets[set_idx].size(); lvl++) {
+      //   printf("partition_sets[%lu][%lu].size() = %lu\n", set_idx, lvl, partition_sets[set_idx][lvl].size());
+      // }
 
       _find_sub_sets(set_idx, start_level, end_level, adj_topol, inv_adj_topol, 
                     level_of_gates, partition_sets, partition_sets_2);
@@ -706,9 +694,25 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
   // 加油（滾滾）
 #endif
 
+  // merge small sets
+  std::vector<std::vector<std::vector<size_t>>> _partition_results;
+  _merge_small_sets(start_level, end_level, partition_sets_2, _partition_results);
 
-  // // merge small sets
-  // _merge_small_sets(partition_sets_2);
+  // TODO: update 一大堆東西，讓之後建圖的速度不要變慢太多
+  _order_cpu = (size_t *)malloc((_num_PIs+_num_inner_gates+_num_POs)*sizeof(size_t));
+  memset(_order_cpu, 0, ((_num_PIs+_num_inner_gates+_num_POs))*sizeof(size_t));
+  size_t accum = 0;
+  for (size_t i = 0; i < gates_per_level.size(); i++) {
+    for (size_t j = 0; j < gates_per_level[i].size(); j++) {
+      _order_cpu[accum] = gates_per_level[i][j];
+      accum++;
+    }
+  }
+  assert(accum == (_num_PIs+_num_inner_gates+_num_POs) && "accum ERROR");
+
+
+
+
 }
 
 void CUDASimulator::_find_sets(const size_t gate_idx, const size_t start_level, const size_t end_level, 
@@ -958,18 +962,71 @@ void CUDASimulator::_split_tmp_subsets(std::vector<std::vector<size_t>> &sub_set
 }
 
 
-void CUDASimulator::_merge_small_sets(std::vector<std::vector<std::vector<size_t>>> &partition_sets_2) {
+void CUDASimulator::_merge_small_sets(const size_t start_level, const size_t end_level, 
+                                    std::vector<std::vector<std::vector<size_t>>> &partition_sets_2,
+                                    std::vector<std::vector<std::vector<size_t>>> &_partition_results) {
+  
+  // for (size_t set_idx = 0; set_idx < partition_sets_2.size(); set_idx++) {
+  //   printf("set_idx_%lu: ", set_idx);
+  //   for (size_t lvl = 0; lvl < partition_sets_2[set_idx].size(); lvl++) {
+  //     printf("%lu, ", partition_sets_2[set_idx][lvl].size());
+  //   } printf("\n");
+  // }
 
-  // print 一下 partition_sets_2 的結果，看一下怎麼合併會比較好
-  for (size_t set_idx = 0; set_idx < partition_sets_2.size(); set_idx++) {
-    printf("set_idx_%lu: ", set_idx);
-    for (size_t lvl = 0; lvl < partition_sets_2[set_idx].size(); lvl++) {
-      printf("%lu, ", partition_sets_2[set_idx][lvl].size());
-    } printf("\n");
+  size_t merged_sets = 0;
+
+  std::vector<bool> this_set_is_merged;
+  this_set_is_merged.resize(partition_sets_2.size(), false);
+  // printf("this_set_is_merged.size = %lu %lu\n", this_set_is_merged.size(), partition_sets_2.size());
+
+  while (merged_sets < partition_sets_2.size()) {
+    // printf("Find a new merge_set_%lu\n", _partition_results.size());
+    // init 
+    std::vector<std::vector<size_t>> tmp_set; 
+    tmp_set.resize(end_level - start_level);
+    assert(tmp_set.size() ==  partition_sets_2[0].size());
+
+    for (size_t set_idx = 0; set_idx < partition_sets_2.size(); set_idx++) {
+      if (this_set_is_merged[set_idx] == true) {
+        continue;
+      }
+
+      // std::cout << "try to merge set_idx_" << set_idx << " (been merged: " << this_set_is_merged[set_idx] << ")\n";
+      
+      // get a set that haven't been merged
+      bool can_merged = true;
+
+      // check whether this set can be merged or not
+      for (size_t lvl = 0; lvl < partition_sets_2[set_idx].size(); lvl ++) {
+        size_t after_merged_sz = tmp_set[lvl].size() + partition_sets_2[set_idx][lvl].size();
+        if (after_merged_sz > _head_front_OPT_threshold) {
+          can_merged = false;
+          break;
+        }
+      }
+
+      // merge
+      if (can_merged) { // push in 
+        for (size_t lvl = 0; lvl < partition_sets_2[set_idx].size(); lvl++) {
+          tmp_set[lvl].insert(tmp_set[lvl].end(), 
+                              partition_sets_2[set_idx][lvl].begin(), 
+                              partition_sets_2[set_idx][lvl].end());
+        }
+        this_set_is_merged[set_idx] = true;
+        merged_sets++;
+      } 
+    }
+    
+    // push out 
+    // printf("Push something out, merged_sets = %lu\n", merged_sets);
+    _partition_results.push_back(tmp_set);
+
+    // printf("_partition_results[%lu]: ", _partition_results.size()-1);
+    // for (size_t lvl = 0; lvl < _partition_results[_partition_results.size()-1].size(); lvl ++) {
+    //   printf("%lu, ", _partition_results[_partition_results.size()-1][lvl].size());
+    // } printf("\n");
   }
-
-  // size_t merged_sets = ; 
-
+  // printf("FIN: _partition_results.size() = %lu\n", _partition_results.size());
 }
 
 
@@ -1378,7 +1435,7 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
     cudaCheckErrors("tail gate _set_params cudaDeviceSynchronize failed");
         
     // Adding nodes
-    kernelNode_gate_Params[(end_level-1)].func = (void *)_run_gate_graph_tail;
+    kernelNode_gate_Params[(end_level-1)].func = (void *)_run_gate_graph_mul_levels;
     kernelNode_gate_Params[(end_level-1)].gridDim = dim3(num_blocks, 1, 1);
     kernelNode_gate_Params[(end_level-1)].blockDim = dim3(num_threads, 1, 1);
     kernelNode_gate_Params[(end_level-1)].sharedMemBytes = 0;
@@ -1455,8 +1512,8 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
 #endif
 }
 
-__global__ void _update_params_gpu (size_t *_params_gpu_idx_address, size_t _num_paras, size_t limit_sz, 
-                                    size_t new_rd, size_t new_fault_num, size_t new_bad_case) {
+__global__ void _update_params_gpu(size_t *_params_gpu_idx_address, size_t _num_paras, size_t limit_sz, 
+                                  size_t new_rd, size_t new_fault_num, size_t new_bad_case) {
   // _params_gpu_idx_address
   size_t t_idx = blockIdx.x*blockDim.x + threadIdx.x;
   size_t address_start = t_idx*_num_paras;
@@ -1821,14 +1878,14 @@ __global__ void _run_gate_graph(size_t *_gate_inputs_list_gpu, size_t *_gate_inp
         case 10:
           _apply_PO(real_g_idx, num_inputs, _pi_gate_po_output_res_gpu, _gate_inputs_list_gpu, _gate_inputs_list_start_gpu);
         break;
-        default:
+        case 11: // NULL gate
         break;
       }
     }
   }
 }
 
-__global__ void _run_gate_graph_tail(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
+__global__ void _run_gate_graph_mul_levels(size_t *_gate_inputs_list_gpu, size_t *_gate_inputs_list_start_gpu, 
                                     size_t *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
                                     size_t *_pi_gate_po_num_inputs_gpu, size_t *_patterns_gpu, 
                                     size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, 
