@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <unordered_set>
 #include <utility> 
+#include <algorithm>
 
 #include <cuda_runtime_api.h>
 #include <cublas_v2.h>
@@ -165,7 +166,7 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   // // make vector of _order's _order becomes [PIs, gates, POs] 
   // // remove the PO in the _order
   // // since  error: namespace "std" has no member "remove_if, therefore, we implement the 'remove_if' by ourselves 
-  _order.erase(remove_if(_order.begin(), _order.end(),
+  _order.erase(std::remove_if(_order.begin(), _order.end(),
                         [this](const size_t &x) {
                             return ((x >= _num_PIs) && (x < (_num_PIs + _num_POs)));
                         }),
@@ -638,17 +639,13 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
         need_to_split = true;
       }
     }
+    
     if (need_to_split) {
-      // printf("need_to_split: partition_sets[%lu]\n", set_idx);
-      // for (size_t lvl = 0; lvl < partition_sets[set_idx].size(); lvl++) {
-      //   printf("partition_sets[%lu][%lu].size() = %lu\n", set_idx, lvl, partition_sets[set_idx][lvl].size());
-      // }
-      std::set<size_t> bb_check;
+      printf("need_to_split: partition_sets[%lu]\n", set_idx);
       for (size_t lvl = 0; lvl < partition_sets[set_idx].size(); lvl++) {
-        for (size_t ele = 0; ele < partition_sets[set_idx][lvl].size(); ele++) {
-          bb_check.insert(partition_sets[set_idx][lvl][ele]);
-        }
+        printf("partition_sets[%lu][%lu].size() = %lu\n", set_idx, lvl, partition_sets[set_idx][lvl].size());
       }
+
       _find_sub_sets(set_idx, start_level, end_level, adj_topol, inv_adj_topol, 
                     level_of_gates, partition_sets, partition_sets_2);
       // printf("partition_sets_2.size() = %lu\n", partition_sets_2.size());
@@ -663,31 +660,55 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
   }
 
 
-// #ifdef FSIM_CHECK_PARTITION_RESULTS
-//   // check the _find_sets
-//   printf("partition_sets_2 (%lu) =\n", partition_sets_2.size());
-//   for (size_t set_idx = 0; set_idx < partition_sets_2.size(); set_idx++) {
-//     size_t total_size = 0;
-//     bool print = false;
-//     for (size_t lvl = 0; lvl < partition_sets_2[set_idx].size(); lvl++) {
-//       if (partition_sets_2[set_idx][lvl].size() >= 1024) {
-//         print = true;
-//       }  
-//       total_size += partition_sets_2[set_idx][lvl].size();
-//     } 
-//     if (print) {
-//       printf("partition_sets_2[%lu] (total_size() = %lu): ", set_idx, total_size);
-//       for (size_t lvl = 0; lvl < partition_sets_2[set_idx].size(); lvl++) {
-//         printf("%lu, ", partition_sets_2[set_idx][lvl].size());
-//       } printf("\n");
-//     }
+#ifdef FSIM_CHECK_PARTITION_SUBSETS_RESULTS
+  std::vector<size_t> aa_0;
+  std::vector<size_t> aa_1;
 
-//   } printf("\n");
-// #endif
+  for (size_t set_idx = 0; set_idx < partition_sets.size(); set_idx++) {
+    for (size_t lvl = 0; lvl < partition_sets[set_idx].size(); lvl++) {
+      for (size_t ele = 0; ele < partition_sets[set_idx][lvl].size(); ele++) {
+        aa_0.push_back(partition_sets[set_idx][lvl][ele]);
+      }
+    }
+  }
+
+  for (size_t set_idx = 0; set_idx < partition_sets_2.size(); set_idx++) {
+    for (size_t lvl = 0; lvl < partition_sets_2[set_idx].size(); lvl++) {
+      for (size_t ele = 0; ele < partition_sets_2[set_idx][lvl].size(); ele++) {
+        aa_1.push_back(partition_sets_2[set_idx][lvl][ele]);
+      }
+    }
+  }
+
+  size_t replication = aa_1.size() - aa_0.size(); 
+  printf("replication = %lu\n", replication);
+
+
+  sort(aa_0.begin(), aa_0.end());
+  sort(aa_1.begin(), aa_1.end());
+
+  auto it_0 = unique(aa_0.begin(), aa_0.end()); 
+  aa_0.erase(it_0, aa_0.end()); 
+  auto it_1 = unique(aa_1.begin(), aa_1.end()); 
+  aa_1.erase(it_1, aa_1.end()); 
+  printf("aa_0.size() = %lu, aa_1.size() = %lu (Delta: %lu)\n", aa_0.size(), aa_1.size(), aa_0.size() - aa_1.size());
+    
+  for (size_t i = 0; i < aa_0.size(); i++) {
+    if (aa_0[i] != aa_1[i]) {
+      printf("aa_0[%lu] = %lu, aa_1[%lu] = %lu\n", i, aa_0[i], i, aa_1[i]);
+      exit(1);
+    }
+  }
+  // ＴＯＤＯ：
+  // (V) 1. 目前的 bugs: 找出來的 partition_2 有少 gates 
+  // 2. 把小的東東做 merge
+  // 3. 接 CUDA Graph 接圖
+  // 加油（滾滾）
+#endif
 
 
   // // merge small sets
-  // _merge_small_sets();
+  // _merge_small_sets(partition_sets_2);
 }
 
 void CUDASimulator::_find_sets(const size_t gate_idx, const size_t start_level, const size_t end_level, 
@@ -754,7 +775,6 @@ void CUDASimulator::_find_sub_sets(const size_t set_idx, const size_t start_leve
   end_gates.resize(end_level - start_level);
   // search from the last level 
   for (int lvl = partition_sets[set_idx].size()-1; lvl > -1; lvl--) {
-  // for (size_t lvl = 0; lvl < partition_sets[set_idx].size(); lvl++) {
     for (size_t g = 0; g < partition_sets[set_idx][lvl].size(); g++) {
       bool end_p = true;
       size_t gate_idx = partition_sets[set_idx][lvl][g];
@@ -766,6 +786,7 @@ void CUDASimulator::_find_sub_sets(const size_t set_idx, const size_t start_leve
           break;
         }
       } 
+
       if (end_p) {
         end_gates[lvl].insert({gate_idx, false});
       }      
@@ -781,7 +802,6 @@ void CUDASimulator::_find_sub_sets(const size_t set_idx, const size_t start_leve
   size_t find_end_gates = 0;
 
   // printf("ORI: partition_sets_2.size() = %lu\n", partition_sets_2.size());
-  // printf("bb_check.size() = %lu\n", bb_check.size());
 
   while(find_end_gates < total_end_gates) {
     // printf("find_end_gates = %lu, total_end_gates = %lu\n", find_end_gates, total_end_gates);
@@ -938,7 +958,18 @@ void CUDASimulator::_split_tmp_subsets(std::vector<std::vector<size_t>> &sub_set
 }
 
 
-void CUDASimulator::_merge_small_sets() {
+void CUDASimulator::_merge_small_sets(std::vector<std::vector<std::vector<size_t>>> &partition_sets_2) {
+
+  // print 一下 partition_sets_2 的結果，看一下怎麼合併會比較好
+  for (size_t set_idx = 0; set_idx < partition_sets_2.size(); set_idx++) {
+    printf("set_idx_%lu: ", set_idx);
+    for (size_t lvl = 0; lvl < partition_sets_2[set_idx].size(); lvl++) {
+      printf("%lu, ", partition_sets_2[set_idx][lvl].size());
+    } printf("\n");
+  }
+
+  // size_t merged_sets = ; 
+
 }
 
 

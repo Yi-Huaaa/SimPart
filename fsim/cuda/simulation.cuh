@@ -143,7 +143,7 @@ private:
   void _split_tmp_subsets(std::vector<std::vector<size_t>> &sub_set, 
                           std::vector<size_t> &added_num_gates);
                     
-  void _merge_small_sets();
+  void _merge_small_sets(std::vector<std::vector<std::vector<size_t>>> &partition_sets_2);
 
   void _read_fault(std::istream &flst);
   void _read_pattern(std::istream &ptn);
