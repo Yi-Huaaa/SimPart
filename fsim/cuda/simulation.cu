@@ -500,8 +500,22 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   // _pull_up_tail_end_optimization = false;
   // printf("_start_tail_end_level = %lu %d\n", _start_tail_end_level, _pull_up_tail_end_optimization);
 
-  // head-front optimization 
-  _partition(adj_topol, inv_adj_topol, gates_per_level, level_of_gates);
+  if (!_pull_up_head_frt_optimization) {
+    _order_cpu = (size_t *)malloc((_num_PIs+_num_inner_gates+_num_POs)*sizeof(size_t));
+    memset(_order_cpu, 0, ((_num_PIs+_num_inner_gates+_num_POs))*sizeof(size_t));
+    size_t accum = 0;
+    for (size_t i = 0; i < gates_per_level.size(); i++) {
+      for (size_t j = 0; j < gates_per_level[i].size(); j++) {
+        _order_cpu[accum] = gates_per_level[i][j];
+        accum++;
+      }
+    }
+    assert(accum == (_num_PIs+_num_inner_gates+_num_POs) && "accum ERROR");
+  } else {
+    // head-front optimization 
+    _partition(adj_topol, inv_adj_topol, gates_per_level, level_of_gates);
+  }
+
 }
 
 void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
@@ -576,13 +590,17 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
 
   // _find_sets
   std::set<size_t> visited; 
-  // Note: start_level == 0: PI level 
-  size_t start_level = 1; // TODO: need to change dynamically
-  size_t end_level = 6; // TODO: need to change dynamically 
+
+  // Note: start_level == 0: PI level
+  _pull_up_head_frt_optimization = true; 
+  _start_head_frt_level = 1;
+  _end_head_frt_level = 6;  
+
+  size_t start_level = _start_head_frt_level; // TODO: need to change dynamically
+  size_t end_level = _end_head_frt_level; // TODO: need to change dynamically 
   assert(start_level != 0 && "PI cannot be the start_level\n");
   assert(end_level <= _start_tail_end_level && "end_level cannot equal to _start_tail_end_level\n");
-  // size_t start_level = _start_head_frt_level;
-  // size_t end_level = _start_tail_end_level;
+
   for (size_t lvl = start_level; lvl < end_level; lvl++) {
     // printf("Hello %lu, lvl = %lu\n", gates_per_level[lvl].size(), lvl);
     for (size_t g = 0; g < gates_per_level[lvl].size(); g++) {
@@ -689,7 +707,7 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
   }
   // ＴＯＤＯ：
   // (V) 1. 目前的 bugs: 找出來的 partition_2 有少 gates 
-  // 2. 把小的東東做 merge
+  // (V) 2. 把小的東東做 merge
   // 3. 接 CUDA Graph 接圖
   // 加油（滾滾）
 #endif
@@ -699,20 +717,75 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
   _merge_small_sets(start_level, end_level, partition_sets_2, _partition_results);
 
   // TODO: update 一大堆東西，讓之後建圖的速度不要變慢太多
-  _order_cpu = (size_t *)malloc((_num_PIs+_num_inner_gates+_num_POs)*sizeof(size_t));
-  memset(_order_cpu, 0, ((_num_PIs+_num_inner_gates+_num_POs))*sizeof(size_t));
+  // need to update: 
+  /*
+  1. _num_gates_per_level_gpu -->>>> update _num_gates_per_level (this is an CPU array)
+  2. _order_gpu_ -->>>> update `_order_cpu` array 
+  */
+
+  // Update _num_total_gates_after_head_end_opt
+  _num_total_gates_after_head_end_opt = 0;
+  for (size_t lvl = 0; lvl < start_level; lvl++) {
+    _num_total_gates_after_head_end_opt += _num_gates_per_level[lvl];
+  } 
+  _num_total_gates_after_head_end_opt += _partition_results.size()
+                                        *(end_level-start_level)*_head_front_OPT_threshold;
+  for (size_t lvl = end_level; lvl < _total_num_levels; lvl++) {
+    _num_total_gates_after_head_end_opt += _num_gates_per_level[lvl];
+  }                                        
+
+  // Update _num_gates_per_level_gpu
+  for (size_t lvl = start_level; lvl < end_level; lvl++) {
+    _num_gates_per_level[lvl] = _partition_results.size()*_head_front_OPT_threshold;
+    // gates_per_level --> no need to update!!!
+  }
+
+
+  // note: _num_total_gates_after_head_end_opt contains lots of NULL-gates
+  // printf("_num_total_gates_after_head_end_opt = %lu (ori = %lu)\n", 
+  //       _num_total_gates_after_head_end_opt,
+  //       _num_PIs+_num_inner_gates+_num_POs);
+
+  // Update _order_gpu
+  _order_cpu = (size_t *)malloc(_num_total_gates_after_head_end_opt*sizeof(size_t));
+  memset(_order_cpu, 0, (_num_total_gates_after_head_end_opt)*sizeof(size_t));
   size_t accum = 0;
-  for (size_t i = 0; i < gates_per_level.size(); i++) {
-    for (size_t j = 0; j < gates_per_level[i].size(); j++) {
-      _order_cpu[accum] = gates_per_level[i][j];
+  for (size_t lvl = 0; lvl < start_level; lvl++) {
+    for (size_t g = 0; g < gates_per_level[lvl].size(); g++) {
+      _order_cpu[accum] = gates_per_level[lvl][g];
       accum++;
     }
   }
-  assert(accum == (_num_PIs+_num_inner_gates+_num_POs) && "accum ERROR");
 
+  size_t num_null_gate = 0;
+  // simply use: _partition_results[0].size() as the bound, since all of them are the same
+  assert(_partition_results[0].size() == (end_level-start_level));
+  for (size_t lvl = 0; lvl < _partition_results[0].size(); lvl++) {
+    for (size_t set = 0; set < _partition_results.size(); set++) {
+      for (size_t ele = 0; ele < _partition_results[set][lvl].size(); ele++) {
+        _order_cpu[accum] = _partition_results[set][lvl][ele];
+        accum++;
+      }
+      // NULL gate
+      for (size_t ele = _partition_results[set][lvl].size(); ele < _head_front_OPT_threshold; ele++) {
+        _order_cpu[accum] = NULL_gate_idx; 
+        accum++;
+        num_null_gate++;
+      }
+    }
+  }
 
-
-
+  for (size_t lvl = end_level; lvl < _total_num_levels; lvl++) {
+    for (size_t g = 0; g < gates_per_level[lvl].size(); g++) {
+      _order_cpu[accum] = gates_per_level[lvl][g];
+      accum++;
+    }
+  }
+  
+  // printf("accum = %lu, _num_total_gates_after_head_end_opt = %lu, num_null_gate = %lu\n", 
+  //       accum, _num_total_gates_after_head_end_opt, num_null_gate);
+  assert(accum == _num_total_gates_after_head_end_opt && "accum ERROR");
+  // note: Have checked that all gates are included 
 }
 
 void CUDASimulator::_find_sets(const size_t gate_idx, const size_t start_level, const size_t end_level, 
@@ -1303,6 +1376,110 @@ __global__ void _set_params(size_t *_params_gpu_idx_address,
   _params_gpu_idx_address[6] = var_6;
 }
 
+void CUDASimulator::_construct_push_single_lvl_gate_KN(cudaStream_t stream1, cudaGraph_t graph, 
+                                              const size_t i, const size_t params_gpu_idx_idx, 
+                                              const size_t params_gpu_idx_accum, 
+                                              const size_t num_func_inputs,
+                                              const size_t accum, 
+                                              const size_t num_blocks, 
+                                              const size_t num_threads, 
+                                              size_t **params_gpu_idx,
+                                              void **kernelArgs_gate, 
+                                              cudaGraphNode_t *kernelNode_gate, 
+                                              cudaKernelNodeParams *kernelNode_gate_Params) {
+  
+  params_gpu_idx[params_gpu_idx_idx] = _params_gpu+params_gpu_idx_accum;
+  kernelArgs_gate[(i-1)*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
+  kernelArgs_gate[(i-1)*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
+  kernelArgs_gate[(i-1)*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
+  kernelArgs_gate[(i-1)*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
+  kernelArgs_gate[(i-1)*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
+  kernelArgs_gate[(i-1)*num_func_inputs+5] = (void *)&_patterns_gpu;
+  kernelArgs_gate[(i-1)*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
+  kernelArgs_gate[(i-1)*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
+  kernelArgs_gate[(i-1)*num_func_inputs+8] = (void *)&params_gpu_idx[params_gpu_idx_idx];
+  kernelArgs_gate[(i-1)*num_func_inputs+9] = (void *)&_order_gpu;
+
+
+  // construct gate node
+  // size_t num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);
+  // size_t num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);
+  
+  size_t rd = 0;
+  size_t fault_num = 0;
+  size_t bad_case = 0;
+  size_t reserved_space = 0;
+
+  _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[params_gpu_idx_idx], rd, fault_num, bad_case, 
+                                        _num_gates_per_level[i], accum, _num_PIs, reserved_space);
+  cudaDeviceSynchronize();
+  cudaCheckErrors("gate _set_params cudaDeviceSynchronize failed");
+      
+  // Adding nodes
+  kernelNode_gate_Params[(i-1)].func = (void *)_run_gate_graph;
+  kernelNode_gate_Params[(i-1)].gridDim = dim3(num_blocks, 1, 1);
+  kernelNode_gate_Params[(i-1)].blockDim = dim3(num_threads, 1, 1);
+  kernelNode_gate_Params[(i-1)].sharedMemBytes = 0;
+  kernelNode_gate_Params[(i-1)].kernelParams = (void **)&(kernelArgs_gate[(i-1)*num_func_inputs]);
+  kernelNode_gate_Params[(i-1)].extra = NULL;  
+  cudaCheckErrors("kernelNode_gate_Params failed");
+  
+  // push node: gate
+  cudaGraphAddKernelNode(&kernelNode_gate[(i-1)], graph, NULL, 0, &kernelNode_gate_Params[(i-1)]);
+  cudaCheckErrors("Adding kernelNode_gate failed");
+}
+
+void CUDASimulator::_construct_push_multi_lvl_gate_KN(cudaStream_t stream1, cudaGraph_t graph, 
+                                              const size_t end_level, 
+                                              const size_t params_gpu_idx_idx, 
+                                              const size_t params_gpu_idx_accum, 
+                                              const size_t num_func_inputs,
+                                              const size_t accum, 
+                                              const size_t num_blocks, 
+                                              const size_t num_threads, 
+                                              size_t **params_gpu_idx,
+                                              void **kernelArgs_gate, 
+                                              cudaGraphNode_t *kernelNode_gate, 
+                                              cudaKernelNodeParams *kernelNode_gate_Params) {
+  
+    params_gpu_idx[params_gpu_idx_idx] = _params_gpu+params_gpu_idx_accum;
+    kernelArgs_gate[(end_level-1)*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
+    kernelArgs_gate[(end_level-1)*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
+    kernelArgs_gate[(end_level-1)*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
+    kernelArgs_gate[(end_level-1)*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
+    kernelArgs_gate[(end_level-1)*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
+    kernelArgs_gate[(end_level-1)*num_func_inputs+5] = (void *)&_patterns_gpu;
+    kernelArgs_gate[(end_level-1)*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
+    kernelArgs_gate[(end_level-1)*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
+    kernelArgs_gate[(end_level-1)*num_func_inputs+8] = (void *)&params_gpu_idx[params_gpu_idx_idx];
+    kernelArgs_gate[(end_level-1)*num_func_inputs+9] = (void *)&_order_gpu;
+    kernelArgs_gate[(end_level-1)*num_func_inputs+10] = (void *)&_num_gates_per_level_gpu;
+
+    // construct gate node
+  
+    size_t rd = 0;
+    size_t fault_num = 0;
+    size_t bad_case = 0;
+    
+    _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[params_gpu_idx_idx], rd, fault_num, bad_case, 
+                                          end_level, accum, _total_num_levels-1, _num_PIs);
+    cudaDeviceSynchronize();
+    cudaCheckErrors("tail gate _set_params cudaDeviceSynchronize failed");
+        
+    // Adding nodes
+    kernelNode_gate_Params[(end_level-1)].func = (void *)_run_gate_graph_mul_levels;
+    kernelNode_gate_Params[(end_level-1)].gridDim = dim3(num_blocks, 1, 1);
+    kernelNode_gate_Params[(end_level-1)].blockDim = dim3(num_threads, 1, 1);
+    kernelNode_gate_Params[(end_level-1)].sharedMemBytes = 0;
+    kernelNode_gate_Params[(end_level-1)].kernelParams = (void **)&(kernelArgs_gate[(end_level-1)*num_func_inputs]);
+    kernelNode_gate_Params[(end_level-1)].extra = NULL;  
+    cudaCheckErrors("tail kernelNode_gate_Params failed");
+
+    // push node: gate
+    cudaGraphAddKernelNode(&kernelNode_gate[(end_level-1)], graph, NULL, 0, &kernelNode_gate_Params[(end_level-1)]);
+    cudaCheckErrors("tail Adding kernelNode_gate failed");
+}
+
 void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t graph, 
                                         cudaGraphNode_t *kernelNode_PI, 
                                         cudaKernelNodeParams *kernelNode_PI_Params,
@@ -1362,91 +1539,49 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
   // construct gate nodes
   size_t accum = _num_PIs;
 
-  // i == 0: PI, i == (_total_num_levels-1): PO
   size_t end_level = (_pull_up_tail_end_optimization) 
                     ? (_start_tail_end_level) : (_total_num_levels - 1);
-  for (size_t i = 1; i < end_level; i++) {
-    params_gpu_idx_accum += _num_const_paras;
-    params_gpu_idx_idx++;
 
-    params_gpu_idx[params_gpu_idx_idx] = _params_gpu+params_gpu_idx_accum;
-    kernelArgs_gate[(i-1)*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
-    kernelArgs_gate[(i-1)*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
-    kernelArgs_gate[(i-1)*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
-    kernelArgs_gate[(i-1)*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
-    kernelArgs_gate[(i-1)*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
-    kernelArgs_gate[(i-1)*num_func_inputs+5] = (void *)&_patterns_gpu;
-    kernelArgs_gate[(i-1)*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
-    kernelArgs_gate[(i-1)*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
-    kernelArgs_gate[(i-1)*num_func_inputs+8] = (void *)&params_gpu_idx[params_gpu_idx_idx];
-    kernelArgs_gate[(i-1)*num_func_inputs+9] = (void *)&_order_gpu;
+  if (_pull_up_head_frt_optimization) {
+    // for (size_t i = 1; i < end_level; i++) {
 
+    // }
+  } else {
+    // i == 0: PI, i == (_total_num_levels-1): PO
+    for (size_t i = 1; i < end_level; i++) {
+      params_gpu_idx_accum += _num_const_paras;
+      params_gpu_idx_idx++;
 
-    // construct gate node
-    num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);
-    num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);
-
-    _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[params_gpu_idx_idx], rd, fault_num, bad_case, 
-                                          _num_gates_per_level[i], accum, _num_PIs, reserved_space);
-    cudaDeviceSynchronize();
-    cudaCheckErrors("gate _set_params cudaDeviceSynchronize failed");
-        
-    // Adding nodes
-    kernelNode_gate_Params[(i-1)].func = (void *)_run_gate_graph;
-    kernelNode_gate_Params[(i-1)].gridDim = dim3(num_blocks, 1, 1);
-    kernelNode_gate_Params[(i-1)].blockDim = dim3(num_threads, 1, 1);
-    kernelNode_gate_Params[(i-1)].sharedMemBytes = 0;
-    kernelNode_gate_Params[(i-1)].kernelParams = (void **)&(kernelArgs_gate[(i-1)*num_func_inputs]);
-    kernelNode_gate_Params[(i-1)].extra = NULL;  
-    cudaCheckErrors("kernelNode_gate_Params failed");
-    
-    // push node: gate
-    cudaGraphAddKernelNode(&kernelNode_gate[(i-1)], graph, NULL, 0, &kernelNode_gate_Params[(i-1)]);
-    cudaCheckErrors("Adding kernelNode_gate failed");
-
-    accum += _num_gates_per_level[i];
+      num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);
+      num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);
+      
+      _construct_push_single_lvl_gate_KN(stream1, graph, i, params_gpu_idx_idx, 
+                                params_gpu_idx_accum,
+                                num_func_inputs, accum, 
+                                num_blocks, num_threads, 
+                                params_gpu_idx,
+                                kernelArgs_gate, kernelNode_gate, kernelNode_gate_Params);
+      
+      accum += _num_gates_per_level[i];
+    }
   }
 
   // tail-end optimization 
   if (_pull_up_tail_end_optimization) {
-    // printf("Hello bibi\n");
     params_gpu_idx_accum += _num_const_paras;
     params_gpu_idx_idx++;
-    params_gpu_idx[params_gpu_idx_idx] = _params_gpu+params_gpu_idx_accum;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+0] = (void *)&_gate_inputs_list_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+1] = (void *)&_gate_inputs_list_start_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+2] = (void *)&_pi_gate_po_gate_type_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+3] = (void *)&_pi_gate_po_output_res_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+4] = (void *)&_pi_gate_po_num_inputs_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+5] = (void *)&_patterns_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+6] = (void *)&_fault_gate_idx_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+7] = (void *)&_fault_SA_fault_val_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+8] = (void *)&params_gpu_idx[params_gpu_idx_idx];
-    kernelArgs_gate[(end_level-1)*num_func_inputs+9] = (void *)&_order_gpu;
-    kernelArgs_gate[(end_level-1)*num_func_inputs+10] = (void *)&_num_gates_per_level_gpu;
-
-    // construct gate node
+    
     num_blocks = 1;
     num_threads = _tail_ended_OPT_threshold;
 
-    _set_params <<< 1, 1, 0, stream1 >>> (params_gpu_idx[params_gpu_idx_idx], rd, fault_num, bad_case, 
-                                          end_level, accum, _total_num_levels-1, _num_PIs);
-    cudaDeviceSynchronize();
-    cudaCheckErrors("tail gate _set_params cudaDeviceSynchronize failed");
-        
-    // Adding nodes
-    kernelNode_gate_Params[(end_level-1)].func = (void *)_run_gate_graph_mul_levels;
-    kernelNode_gate_Params[(end_level-1)].gridDim = dim3(num_blocks, 1, 1);
-    kernelNode_gate_Params[(end_level-1)].blockDim = dim3(num_threads, 1, 1);
-    kernelNode_gate_Params[(end_level-1)].sharedMemBytes = 0;
-    kernelNode_gate_Params[(end_level-1)].kernelParams = (void **)&(kernelArgs_gate[(end_level-1)*num_func_inputs]);
-    kernelNode_gate_Params[(end_level-1)].extra = NULL;  
-    cudaCheckErrors("tail kernelNode_gate_Params failed");
-
-    // push node: gate
-    cudaGraphAddKernelNode(&kernelNode_gate[(end_level-1)], graph, NULL, 0, &kernelNode_gate_Params[(end_level-1)]);
-    cudaCheckErrors("tail Adding kernelNode_gate failed");
-
+    _construct_push_multi_lvl_gate_KN(stream1, graph, end_level,
+                                    params_gpu_idx_idx, 
+                                    params_gpu_idx_accum,
+                                    num_func_inputs, accum, 
+                                    num_blocks, num_threads, 
+                                    params_gpu_idx,
+                                    kernelArgs_gate, kernelNode_gate, kernelNode_gate_Params);
+    
     for (size_t j = end_level; j < (_total_num_levels-1); j++) {
       accum += _num_gates_per_level[j];
     }
@@ -1559,7 +1694,7 @@ void CUDASimulator::_run_parallel_cuda_graph() {
   cudaGraph_t graph; // main graph
   cudaGraphCreate(&graph, 0); // create the graph
   cudaCheckErrors("cudaGraphCreate failure");
-  
+
   // construct_graph
   cudaGraphNode_t kernelNode_PI;
   cudaKernelNodeParams kernelNode_PI_Params {0};
@@ -1568,13 +1703,12 @@ void CUDASimulator::_run_parallel_cuda_graph() {
   cudaGraphNode_t kernelNode_PO;
   cudaKernelNodeParams kernelNode_PO_Params {0};
   
-  size_t num_func_inputs = 10;
+  size_t num_func_inputs = 11; // ask a larger memory size, corresponding to the size of tail-end function 
   void **kernelArgs_PI = (void **)malloc(num_func_inputs*sizeof(void *));
   void **kernelArgs_gate = (void **)malloc((1+num_func_inputs*(_total_num_levels-2))*sizeof(void *));
   void **kernelArgs_PO = (void **)malloc(num_func_inputs*sizeof(void *));
   size_t **params_gpu_idx = (size_t **)malloc((_total_num_levels)*sizeof(void *));
   memset(params_gpu_idx, 0, (_total_num_levels)*sizeof(void *));
-
 
   _construct_cuda_graph(stream1, graph, 
                         &kernelNode_PI, &kernelNode_PI_Params,

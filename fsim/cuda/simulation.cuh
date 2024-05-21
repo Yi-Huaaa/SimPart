@@ -87,6 +87,7 @@ class CUDASimulator {
 // constexpr size_t SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
 const size_t SIZE_T_MAX = std::numeric_limits<size_t>::max();
+const size_t NULL_gate_idx = SIZE_T_MAX;
 
 public:
   // cuda simulator functions 
@@ -164,6 +165,7 @@ private:
   size_t _sum_inputs_gates;
   size_t *_found_fault_to_pattern;
   size_t *_order_cpu;
+  size_t _num_total_gates_after_head_end_opt;
 
 // GPU pointers
   // CSR format: 
@@ -198,9 +200,11 @@ private:
   size_t _num_const_paras = 7; // ask more memory than we actually need
   void _gpu_ask_copy_mem();
   void _free_all();
+  bool _pull_up_head_frt_optimization = false;
   bool _pull_up_tail_end_optimization = false; 
   size_t _start_head_frt_level; // head-front
-  size_t _start_tail_end_level;
+  size_t _end_head_frt_level; // head-front 
+  size_t _start_tail_end_level; // tail-end
   size_t *_num_gates_per_level_gpu; 
 
   // parallel-cuda
@@ -210,6 +214,31 @@ private:
   void _shift_to_correct_answer(size_t *results, const size_t bits, const size_t num_shift_gates);
 
   // parallel-cuda-graph
+  void _construct_push_single_lvl_gate_KN(cudaStream_t stream1, cudaGraph_t graph,
+                                  const size_t i, const size_t params_gpu_idx_idx, 
+                                  const size_t params_gpu_idx_accum, 
+                                  const size_t num_func_inputs,
+                                  const size_t accum, 
+                                  const size_t num_blocks, 
+                                  const size_t num_threads,                                   
+                                  size_t **params_gpu_idx,
+                                  void **kernelArgs_gate, 
+                                  cudaGraphNode_t *kernelNode_gate, 
+                                  cudaKernelNodeParams *kernelNode_gate_Params);
+
+void _construct_push_multi_lvl_gate_KN(cudaStream_t stream1, cudaGraph_t graph, 
+                                  const size_t end_level, 
+                                  const size_t params_gpu_idx_idx, 
+                                  const size_t params_gpu_idx_accum, 
+                                  const size_t num_func_inputs,
+                                  const size_t accum, 
+                                  const size_t num_blocks, 
+                                  const size_t num_threads, 
+                                  size_t **params_gpu_idx,
+                                  void **kernelArgs_gate, 
+                                  cudaGraphNode_t *kernelNode_gate, 
+                                  cudaKernelNodeParams *kernelNode_gate_Params);
+
   void _construct_cuda_graph(cudaStream_t stream1, cudaGraph_t graph, 
                             cudaGraphNode_t *kernelNode_PI, 
                             cudaKernelNodeParams *kernelNode_PI_Params,
