@@ -501,6 +501,7 @@ void CUDASimulator::_read_graph(std::istream &ckt) {
   // printf("_start_tail_end_level = %lu %d\n", _start_tail_end_level, _pull_up_tail_end_optimization);
 
   _pull_up_head_frt_optimization = true;
+  // _pull_up_head_frt_optimization = false; 
   if (!_pull_up_head_frt_optimization) {
     _order_cpu = (size_t *)malloc((_num_PIs+_num_inner_gates+_num_POs)*sizeof(size_t));
     memset(_order_cpu, 0, ((_num_PIs+_num_inner_gates+_num_POs))*sizeof(size_t));
@@ -538,6 +539,8 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
   std::set<size_t> visited; 
 
   // Note: start_level == 0: PI level
+  _end_head_frt_level = _start_tail_end_level;
+  assert(_start_head_frt_level != _end_head_frt_level);
   size_t start_level = _start_head_frt_level; // TODO: need to change dynamically
   size_t end_level = _end_head_frt_level; // TODO: need to change dynamically 
   assert(start_level != 0 && "PI cannot be the start_level\n");
@@ -1543,8 +1546,6 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
     }
     
     // after head_front optimization
-    // for (size_t i = (_end_head_frt_level-_start_head_frt_level+1); 
-    //     i < (end_level-_start_head_frt_level+1); i++) {
     for (size_t i = _end_head_frt_level; i < end_level; i++) {
       size_t act_level = i;
 #ifdef FSIM_CHECK_CONSTRUCT_GATE_KNS
@@ -1576,6 +1577,10 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
       params_gpu_idx_accum += _num_const_paras;
       params_gpu_idx_idx++;
 
+#ifdef FSIM_CHECK_CONSTRUCT_GATE_KNS
+    printf("Act_level_%lu, ", i);
+#endif 
+
       num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);
       num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);
       
@@ -1604,7 +1609,10 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
     num_blocks = 1;
     num_threads = _tail_ended_OPT_threshold;
 
-    _construct_push_multi_lvl_gate_KN(stream1, graph, end_level-num_reduced_KNs_in_head_front_opt,
+    size_t level_tail = (_pull_up_head_frt_optimization) ? 
+        (end_level-num_reduced_KNs_in_head_front_opt) : (end_level) ;
+
+    _construct_push_multi_lvl_gate_KN(stream1, graph, level_tail,
                                     params_gpu_idx_idx, 
                                     params_gpu_idx_accum,
                                     num_func_inputs, accum, 
@@ -1673,6 +1681,7 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
           (end_dep - (_end_head_frt_level-_start_head_frt_level) + 1) : (end_dep);
   // printf("end_dep = %lu\n", end_dep);
   for (size_t i = 0; i < end_dep; i++) {
+    // printf("%lu -> %lu\n", i, i+1);
     cudaGraphAddDependencies(graph, &kernelNode_gate[i], &kernelNode_gate[i+1], 1);
     cudaCheckErrors("cudaGraphAddDependencies gate[i] -> gate[i+1]");
   }
@@ -1750,7 +1759,7 @@ void CUDASimulator::_run_parallel_cuda_graph() {
   
   size_t num_func_inputs = 11; // ask a larger memory size, corresponding to the size of tail-end function 
   void **kernelArgs_PI = (void **)malloc(num_func_inputs*sizeof(void *));
-  void **kernelArgs_gate = (void **)malloc((1+num_func_inputs*(_total_num_levels-2))*sizeof(void *));
+  void **kernelArgs_gate = (void **)malloc((num_func_inputs*(_total_num_levels-2))*sizeof(void *));
   void **kernelArgs_PO = (void **)malloc(num_func_inputs*sizeof(void *));
   size_t **params_gpu_idx = (size_t **)malloc((_total_num_levels)*sizeof(void *));
   memset(params_gpu_idx, 0, (_total_num_levels)*sizeof(void *));
