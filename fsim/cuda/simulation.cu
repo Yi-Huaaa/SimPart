@@ -524,68 +524,13 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
                               std::vector<std::vector<size_t>> &gates_per_level,
                               std::vector<size_t> &level_of_gates) {
   
-  /*
-    // // Check adj_topol; inv_adj_topol
-    // // traverse all gates's inputs
-    // for (size_t g = 0; g < _num_inner_gates; g++) {
-    //   size_t to_gate_idx = _gates[g]._idx;
-    //   for (size_t in = 0; in < _gates[g]._num_inputs; in++) {
-    //     size_t from_gate_idx = (_gates[g]._inputs[in])->_idx;
-    //     bool adj_bool = false;
-    //     bool inv_adj_bool = false;
-    //     // check adj_topol: 
-    //     for (size_t i = 0; i < adj_topol[from_gate_idx].size(); i++) {
-    //       if (adj_topol[from_gate_idx][i] == to_gate_idx) {
-    //         adj_bool = true;
-    //       }
-    //     }
-    //     // check inv_adj_topol: 
-    //     for (size_t i = 0; i < inv_adj_topol[to_gate_idx].size(); i++) {
-    //       if (inv_adj_topol[to_gate_idx][i] == from_gate_idx) {
-    //         inv_adj_bool = true;
-    //       }
-    //     }
-    //     assert(adj_bool == true && "adj_topol ERROR\n");
-    //     assert(inv_adj_bool == true && "inv_adj_topol ERROR\n");
-    //   }
-    // }
-    // // traverse all POs's inputs
-    // for (size_t g = 0; g < _num_POs; g++) {
-    //   size_t to_gate_idx = _POs[g]._idx;
-    //   for (size_t in = 0; in < _POs[g]._num_inputs; in++) {
-    //     size_t from_gate_idx = (_POs[g]._inputs[in])->_idx;
-    //     bool adj_bool = false;
-    //     bool inv_adj_bool = false;
-    //     // check adj_topol: 
-    //     for (size_t i = 0; i < adj_topol[from_gate_idx].size(); i++) {
-    //       if (adj_topol[from_gate_idx][i] == to_gate_idx) {
-    //         adj_bool = true;
-    //       }
-    //     }
-    //     // check inv_adj_topol: 
-    //     for (size_t i = 0; i < inv_adj_topol[to_gate_idx].size(); i++) {
-    //       if (inv_adj_topol[to_gate_idx][i] == from_gate_idx) {
-    //         inv_adj_bool = true;
-    //       }
-    //     }
-    //     assert(adj_bool == true && "adj_topol ERROR\n");
-    //     assert(inv_adj_bool == true && "inv_adj_topol ERROR\n");
-    //   }
-    // }
-  */
+  // for (size_t lvl = 0; lvl < _start_tail_end_level; lvl++) {
+  //   printf("lvl %lu.size() = %lu\n", lvl, _num_gates_per_level[lvl]);
+  // }
+  // printf("Note: only show before lvl__start_tail_end_level\n");
 
   // Decide which levels are going to merged into one kernel node 
-  // 目前的做法很簡單，直接從 tail-end 往前，少於 2048 的先 merge -> give it a try
   // note: level_0: PIs
-  for (size_t lvl = _start_tail_end_level - 1; lvl > 0; lvl--) {
-    if (gates_per_level[lvl].size() <= 2048) {
-      _start_head_frt_level = lvl;
-    } else {
-      break;
-    }
-  }
-  // printf("_start_head_frt_level = %lu\n", _start_head_frt_level);
-
   // vectors: (0, 1, 2): (which set, which level, contains gates index)
   std::vector<std::vector<std::vector<size_t>>> partition_sets;
 
@@ -593,9 +538,6 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
   std::set<size_t> visited; 
 
   // Note: start_level == 0: PI level
-  _start_head_frt_level = 1;
-  _end_head_frt_level = 6;  
-
   size_t start_level = _start_head_frt_level; // TODO: need to change dynamically
   size_t end_level = _end_head_frt_level; // TODO: need to change dynamically 
   assert(start_level != 0 && "PI cannot be the start_level\n");
@@ -1425,7 +1367,9 @@ void CUDASimulator::_construct_push_single_lvl_gate_KN(cudaStream_t stream1, cud
   // push node: gate
   cudaGraphAddKernelNode(&kernelNode_gate[(i-1)], graph, NULL, 0, &kernelNode_gate_Params[(i-1)]);
   cudaCheckErrors("Adding kernelNode_gate failed");
-  // printf("s Construct gate_KN_%lu\n", i-1);
+#ifdef FSIM_CHECK_CONSTRUCT_GATE_KNS
+  printf("s Construct gate_KN_%lu\n", i-1);
+#endif
 }
 
 void CUDASimulator::_construct_push_multi_lvl_gate_KN(cudaStream_t stream1, cudaGraph_t graph, 
@@ -1478,7 +1422,9 @@ void CUDASimulator::_construct_push_multi_lvl_gate_KN(cudaStream_t stream1, cuda
   // push node: gate
   cudaGraphAddKernelNode(&kernelNode_gate[(level-1)], graph, NULL, 0, &kernelNode_gate_Params[(level-1)]);
   cudaCheckErrors("tail Adding kernelNode_gate failed");
-  // printf("m Construct gate_KN_%lu (ACT level: %lu - %lu)\n", level-1, start_level, end_level-1);
+#ifdef FSIM_CHECK_CONSTRUCT_GATE_KNS
+  printf("m Construct gate_KN_%lu (ACT level: %lu - %lu)\n", level-1, start_level, end_level-1);
+#endif 
 }
 
 void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t graph, 
@@ -1550,6 +1496,10 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
       params_gpu_idx_accum += _num_const_paras;
       params_gpu_idx_idx++;
 
+#ifdef FSIM_CHECK_CONSTRUCT_GATE_KNS      
+      printf("Act_level_%lu, ", i);
+#endif 
+
       num_blocks = (_num_gates_per_level[i] > 1024) ? (_num_gates_per_level[i] + 1024 - 1) >> 10 : (1);
       num_threads = (_num_gates_per_level[i] > 1024) ? (1024) : (_num_gates_per_level[i]);
       
@@ -1568,7 +1518,10 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
     // head_front_single KN
     params_gpu_idx_accum += _num_const_paras;
     params_gpu_idx_idx++;
-    // printf("Act_level_%lu, ", _start_head_frt_level);
+
+#ifdef FSIM_CHECK_CONSTRUCT_GATE_KNS
+    printf("Act_level_%lu, ", _start_head_frt_level);
+#endif
 
     
     num_blocks = (_num_gates_per_level[_start_head_frt_level] > _head_front_OPT_threshold) ? 
@@ -1590,10 +1543,13 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
     }
     
     // after head_front optimization
-    for (size_t i = (_end_head_frt_level-_start_head_frt_level+1); 
-        i < (end_level-_start_head_frt_level+1); i++) {
+    // for (size_t i = (_end_head_frt_level-_start_head_frt_level+1); 
+    //     i < (end_level-_start_head_frt_level+1); i++) {
+    for (size_t i = _end_head_frt_level; i < end_level; i++) {
       size_t act_level = i;
-      // printf("Act_level_%lu, ", act_level);
+#ifdef FSIM_CHECK_CONSTRUCT_GATE_KNS
+      printf("Act_level_%lu, ", act_level);
+#endif
       
       params_gpu_idx_accum += _num_const_paras;
       params_gpu_idx_idx++;
@@ -1641,8 +1597,10 @@ void CUDASimulator::_construct_cuda_graph(cudaStream_t stream1, cudaGraph_t grap
   if (_pull_up_tail_end_optimization) {
     params_gpu_idx_accum += _num_const_paras;
     params_gpu_idx_idx++;
-    // printf("Act_level_%lu, ", end_level);
-    
+#ifdef FSIM_CHECK_CONSTRUCT_GATE_KNS
+    printf("Act_level_%lu, ", end_level);
+#endif 
+
     num_blocks = 1;
     num_threads = _tail_ended_OPT_threshold;
 
@@ -1811,8 +1769,8 @@ void CUDASimulator::_run_parallel_cuda_graph() {
 
   size_t fault_num, bad_case;
 
-  // for (size_t rd = 0; rd < _num_rounds; rd++) {
-  for (size_t rd = 0; rd < 1; rd++) {
+  for (size_t rd = 0; rd < _num_rounds; rd++) {
+  // for (size_t rd = 0; rd < 1; rd++) {
     size_t num_testcases_this_round =
         ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
             ? (SIZE_T_BITS)
@@ -1829,30 +1787,30 @@ void CUDASimulator::_run_parallel_cuda_graph() {
 
     _run_good_case_cuda_graph(num_testcases_this_round, stream1, instance);
     
-    // // bad simulation (fault simulation)
-    // for (size_t j = 0; j < _num_faults; j++) {
-    //   // update to bad case parameters
-    //   fault_num = j;
-    //   bad_case = 1;
+    // bad simulation (fault simulation)
+    for (size_t j = 0; j < _num_faults; j++) {
+      // update to bad case parameters
+      fault_num = j;
+      bad_case = 1;
 
-    //   // update KernelNodes params (bad case)
-    //   _update_cuda_graph_params(stream1, rd, fault_num, bad_case);
-    //   cudaCheckErrors("_update_cuda_graph_params failed");
+      // update KernelNodes params (bad case)
+      _update_cuda_graph_params(stream1, rd, fault_num, bad_case);
+      cudaCheckErrors("_update_cuda_graph_params failed");
 
-    //   _run_bad_case_cuda_graph(num_testcases_this_round, stream1, instance);
-    //   _compare_g_b_results <<< 1, 1, 0, stream1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
-    // }
+      _run_bad_case_cuda_graph(num_testcases_this_round, stream1, instance);
+      _compare_g_b_results <<< 1, 1, 0, stream1 >>> (j, _num_POs, rd, _g_po_results_gpu, _b_po_results_gpu, _found_fault_to_pattern_gpu);
+    }
   }
 
-  // TEST the correctness of the answer
-  cudaDeviceSynchronize();
-  cudaStreamSynchronize(stream1);
-  cudaDeviceSynchronize();
-  cudaStreamSynchronize(stream1);
-  _show_computational_results <<< 1, 1, 0, stream1 >>> (_pi_gate_po_output_res_gpu, 0, _num_PIs+_num_inner_gates+_num_POs);
-  cudaStreamSynchronize(stream1);
-  cudaDeviceSynchronize();
-  // TEST the correctness of the answer
+  // // TEST the correctness of the answer
+  // cudaDeviceSynchronize();
+  // cudaStreamSynchronize(stream1);
+  // cudaDeviceSynchronize();
+  // cudaStreamSynchronize(stream1);
+  // _show_computational_results <<< 1, 1, 0, stream1 >>> (_pi_gate_po_output_res_gpu, 0, _num_PIs+_num_inner_gates+_num_POs);
+  // cudaStreamSynchronize(stream1);
+  // cudaDeviceSynchronize();
+  // // TEST the correctness of the answer
 
 
   // // free mem
