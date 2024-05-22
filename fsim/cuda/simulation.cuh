@@ -154,6 +154,7 @@ private:
 
   const size_t _tail_ended_OPT_threshold = 1024;
   const size_t _head_front_OPT_threshold = 1024;
+  const size_t _head_front_OPT_threshold_log = 10;
   size_t _total_num_levels;
   
   // compute number of FFRs in each level 
@@ -207,6 +208,7 @@ private:
   size_t _start_tail_end_level; // tail-end
   size_t *_num_gates_per_level_gpu; 
 
+
   // parallel-cuda
   void _run_parallel_cuda();
   void _run_good_case_cuda(const size_t rd, const size_t bits);
@@ -218,6 +220,7 @@ private:
                                   const size_t i, const size_t params_gpu_idx_idx, 
                                   const size_t params_gpu_idx_accum, 
                                   const size_t num_func_inputs,
+                                  const size_t num_gates_this_level,
                                   const size_t accum, 
                                   const size_t num_blocks, 
                                   const size_t num_threads,                                   
@@ -227,13 +230,15 @@ private:
                                   cudaKernelNodeParams *kernelNode_gate_Params);
 
 void _construct_push_multi_lvl_gate_KN(cudaStream_t stream1, cudaGraph_t graph, 
-                                  const size_t end_level, 
+                                  const size_t level, 
                                   const size_t params_gpu_idx_idx, 
                                   const size_t params_gpu_idx_accum, 
                                   const size_t num_func_inputs,
                                   const size_t accum, 
                                   const size_t num_blocks, 
                                   const size_t num_threads, 
+                                  const size_t start_level, 
+                                  const size_t end_level,                                   
                                   size_t **params_gpu_idx,
                                   void **kernelArgs_gate, 
                                   cudaGraphNode_t *kernelNode_gate, 
