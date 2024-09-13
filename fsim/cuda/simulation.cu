@@ -1,5 +1,3 @@
-#include <stdio.h>
-
 #include <chrono>
 #include <thread>
 #include <assert.h>
@@ -14,6 +12,7 @@
 #include <list>
 #include <set>
 #include <cmath>
+#include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <unordered_set>
@@ -728,6 +727,8 @@ void CUDASimulator::_partition(std::vector<std::vector<size_t>> &adj_topol,
   // printf("accum = %lu, _num_total_gates_after_head_end_opt = %lu, num_null_gate = %lu\n", 
   //       accum, _num_total_gates_after_head_end_opt, num_null_gate);
   assert(accum == _num_total_gates_after_head_end_opt && "accum ERROR");
+  printf("_num_inner_gates = %lu, _num_total_gates_after_head_end_opt = %lu, num_null_gate = %lu, \n", 
+        _num_inner_gates, _num_total_gates_after_head_end_opt-_num_PIs-_num_POs, num_null_gate);  
   // note: Have checked that all gates are included 
 }
 

@@ -19,6 +19,7 @@ class PI;
 class Gate;
 class PO;
 class FFR;
+class CUDAPartitioner;
 
 
 // TOOD: ElementType
@@ -41,6 +42,8 @@ enum class GateType {
 class ElementBase {
 
   friend class CUDASimulator;
+  friend class CUDAPartitioner;
+
 
 public:
   // accessor

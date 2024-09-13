@@ -12,11 +12,15 @@
 
 
 // Forward declaration
+  class CUDASimulator;
+  class CUDAPartitioner;
 
 
 class FFR_CPU {
 
   friend class CUDASimulator;
+  friend class CUDAPartitioner;
+  
 
 public:
 

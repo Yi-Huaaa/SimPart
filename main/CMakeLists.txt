@@ -2,11 +2,13 @@
 add_executable(simple simple.cpp)
 add_executable(simple_cuda simple_cuda.cu)
 add_executable(simple_cuda_graph simple_cuda_graph.cu)
+add_executable(simple_cuda_partition simple_partition.cu)
 
 # Link fsim libraries
 target_link_libraries(simple PRIVATE fsim)
 target_link_libraries(simple_cuda PRIVATE fsim_cuda)
 target_link_libraries(simple_cuda_graph PRIVATE fsim_cuda_graph)
+target_link_libraries(simple_cuda_partition PRIVATE fsim_cuda_partition)
 
 # Link cuBLAS library
 target_link_libraries(simple_cuda_graph PRIVATE ${CUBLAS_LIBRARIES})
@@ -39,5 +41,16 @@ target_compile_options(simple_cuda_graph PRIVATE
   -Wextra
   -Wfatal-errors
   -Wshadow
+  -O3
+)
+
+
+# Set compiler flags for the "main" target
+target_compile_options(simple_cuda_partition PRIVATE
+  -Wall
+  -Wextra
+  -Wfatal-errors
+  -Wshadow
+  -lineinfo
   -O3
 )

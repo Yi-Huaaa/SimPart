@@ -83,12 +83,20 @@ __global__ void _show_computational_results (size_t *a, size_t start, size_t end
 // #define FSIM_CHECK_CONSTRUCT_GATE_KNS // show the processes of constructing gates' KNs
 
 
+// forward declaration 
+class CUDAPartitioner;
+
+
+
 class CUDASimulator {
 
-// constexpr size_t SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
-const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
-const size_t SIZE_T_MAX = std::numeric_limits<size_t>::max();
-const size_t NULL_gate_idx = SIZE_T_MAX;
+  // constexpr size_t SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
+  const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
+  const size_t SIZE_T_MAX = std::numeric_limits<size_t>::max();
+  const size_t NULL_gate_idx = SIZE_T_MAX;
+
+  friend class CUDAPartitioner;
+  friend class CUDAPartitioner;
 
 public:
   // cuda simulator functions 
@@ -204,7 +212,7 @@ private:
   void _free_all();
   bool _pull_up_head_frt_optimization = false; // init: false
   bool _pull_up_tail_end_optimization = false; // init: false
-  size_t _start_head_frt_level = 4; // head-front
+  size_t _start_head_frt_level = 21; // head-front
   size_t _end_head_frt_level; // head-front --> simply set before _start_tail_end_level
   size_t _start_tail_end_level; // tail-end
   size_t *_num_gates_per_level_gpu; 

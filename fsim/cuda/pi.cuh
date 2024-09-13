@@ -9,11 +9,13 @@
 
 // forward declaration 
 class CUDASimulator;
+class CUDAPartitioner;
 
 
 class PI : public ElementBase {
 
   friend class CUDASimulator;
+  friend class CUDAPartitioner;
  
 public:
 

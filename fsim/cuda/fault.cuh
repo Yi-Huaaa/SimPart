@@ -7,11 +7,13 @@
 class CUDASimulator;
 class ElementBase;
 class Pattern;
+class CUDAPartitioner;
 
 
 class Fault {
 
   friend class CUDASimulator;
+  friend class CUDAPartitioner;
 
 public:
   // accessor

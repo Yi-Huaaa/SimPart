@@ -24,6 +24,10 @@ add_library(fsim_cuda_graph
   ./cuda_graph/simulation.cu ./cuda_graph/simulation.cuh
 )
 
+add_library(fsim_cuda_partition
+  ./cuda_partition/partition.cu ./cuda_partition/partition.cuh
+)
+
 # Add cuBLAS library if necessary
 if (FSIM_BUILD_CUDA)
   target_link_libraries(${PROJECT_NAME} INTERFACE ${CUBLAS_LIBRARIES})
@@ -47,6 +51,13 @@ target_compile_options(fsim_cuda PRIVATE
 )
 
 target_compile_options(fsim_cuda_graph PRIVATE
+  -Wall
+  -Wextra
+  -Wfatal-errors
+  -Wshadow
+)
+
+target_compile_options(fsim_cuda_partition PRIVATE
   -Wall
   -Wextra
   -Wfatal-errors

@@ -17,12 +17,14 @@ class CUDASimulator;
 class ElementBase;
 class Pattern;
 class Fault;
+class CUDAPartitioner;
 
 class Gate : public ElementBase {
 
   friend class CUDASimulator;
   friend class PI;
   friend class PO; 
+  friend class CUDAPartitioner;
   
 
 public:
