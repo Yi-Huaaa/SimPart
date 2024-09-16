@@ -18,12 +18,17 @@
 #include <unordered_set>
 #include <utility> 
 #include <algorithm>
+#include <cstddef>  // For size_t and SIZE_MAX
 
 #include <cuda_runtime_api.h>
 #include <cublas_v2.h>
 
 #include "partition.cuh"
 
+#define SIZE_T_MAX SIZE_MAX 
+
+// define print for check 
+#define CPU_PARTITIONER_PRINT_FOR_CHECK
 
 
 // Implement your own remove_if function
@@ -39,9 +44,6 @@ ForwardIterator remove_if(ForwardIterator first, ForwardIterator last, UnaryPred
     }
     return result;
 }
-
-
-
 
 // error checking macro
 #define cudaCheckErrors(msg) \
@@ -78,42 +80,36 @@ void CUDAPartitioner::read(const std::string &ckt_path, const std::string &flst_
 void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &ptn) {
   printf("Get inside CUDAPartitioner::read second\n");
 
-  // gate
+  // Read gate 
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
   printf("_num_PIs = %lu, _num_POs = %lu, _num_inner_gates = %lu, _num_wires = %lu\n", 
           _num_PIs, _num_POs, _num_inner_gates, _num_wires);
-  _read_graph(ckt);
+  std::vector<std::vector<size_t>> adj;
+  std::vector<std::vector<size_t>> invAdj;
+  _read_graph(ckt, adj, invAdj);
 
-  // fault
-  flst >> _num_faults;
-  printf("_num_faults = %lu\n", _num_faults);
-  _read_fault(flst);
-
-  // pattern
-  ptn >> _num_pattern;
-  printf("_num_pattern = %lu\n", _num_pattern);
-  _read_pattern(ptn);
+  /* Construct GPU */
+  _CPU_levelization(adj);
+  _CPU_partition(adj, invAdj);
 }
 
-void CUDAPartitioner::_read_graph(std::istream &ckt) {
-  size_t sum_pi_gates_pos = _num_PIs + _num_inner_gates + _num_POs;
 
-  // for topological sort
-  std::vector<std::vector<size_t>> adj;
-  adj.resize(sum_pi_gates_pos);
-  std::vector<size_t> indegree;
-  indegree.resize(sum_pi_gates_pos);
+void CUDAPartitioner::_read_graph(std::istream &ckt, 
+                                  std::vector<std::vector<size_t>> &adj,
+                                  std::vector<std::vector<size_t>> &invAdj) {
+  _sum_pi_gates_pos = _num_PIs + _num_inner_gates + _num_POs;
 
-  // map table for recording gate input _order
-  // record for each to_gate, its from_gates's are which _order (#_inputs, A/A1, B/A2, A3/S, A4)
-  std::vector<std::vector<size_t>> gate_input_order_table; 
-  gate_input_order_table.resize(sum_pi_gates_pos);
-  for (size_t i = 0; i < sum_pi_gates_pos; i++) {
-    gate_input_order_table[i].resize(5);
-  }
+  adj.resize(_sum_pi_gates_pos);
+  invAdj.resize(_sum_pi_gates_pos);
 
-  /** Levelized the input gates before constructing the circuit graph */
-  // read file, construct adjacent list, construct indegree array
+  // Map table for recording gate input _order
+  // Record for each to_gate, its from_gates's are which _order (#_inputs, A/A1, B/A2, A3/S, A4)
+  
+  size_t sz = 5*_sum_pi_gates_pos*sizeof(size_t);
+  _gate_input_order_table = (size_t*)malloc(sz);
+  memset(_gate_input_order_table, 0, sz);
+
+  // Construct adjacent list
   for (size_t i = 0; i < _num_wires; i++) {
     size_t gate_0, pin_Y, num_post_gates;
     ckt >> gate_0 >> pin_Y >> num_post_gates;
@@ -123,45 +119,296 @@ void CUDAPartitioner::_read_graph(std::istream &ckt) {
       ckt >> gate_tmp >> pin_tmp;
       pin_tmp = (pin_tmp == 5) ? (3) : (pin_tmp);
       adj[gate_0].push_back(gate_tmp);
-      indegree[gate_tmp]++;
+      invAdj[gate_tmp].push_back(gate_0);
 
-      gate_input_order_table[gate_tmp][pin_tmp] = gate_0;
-      gate_input_order_table[gate_tmp][0] ++; // calculate how many inputs for this to_gate
+      _gate_input_order_table[gate_tmp*5+pin_tmp] = gate_0;
+      _gate_input_order_table[gate_tmp*5+0]++;
     }
   }
+  
+  // Find all _sources, actually == PIs
+  for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
+    if (_gate_input_order_table[i*5] == 0) {
+      _sources.push_back(i);
+    }
+  }  
 
-  // read gate type array
+  printf("Check _gate_input_order_table\n");
+  for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
+    printf("_gate_input_order_table[%lu] = ", i);
+    for (size_t j = 0; j < 5; j++) {
+      printf("%lu, ", _gate_input_order_table[i*5+j]);
+    }
+    printf("\n");
+  }
+
+  // ---------------------------------------------------------------  
+
+
+  // Read GateType
+  // Note: GateType will not utilize during the step of partition
   std::vector<GateType> gate_type;
-  gate_type.resize(sum_pi_gates_pos);
+  gate_type.resize(_sum_pi_gates_pos);
   for (size_t i = 0; i < _num_PIs; i++) {
     gate_type[i] = GateType::PI;
   }
   for (size_t i = _num_PIs; i < (_num_PIs + _num_POs); i++) {
     gate_type[i] = GateType::PO;
   }
-  for (size_t i = (_num_PIs + _num_POs); i < (sum_pi_gates_pos); i++) {
+  for (size_t i = (_num_PIs + _num_POs); i < (_sum_pi_gates_pos); i++) {
     size_t t; // type
     ckt >> t;
     gate_type[i] = static_cast<GateType>(t);
   }
+}
 
-  /** Constructing circuit graph on GPU */
 
-  // TODO:
-  // 1. find sinks while read in file
-  // 2, 
+// CPU version first
+void CUDAPartitioner::_CPU_levelization(std::vector<std::vector<size_t>> &adj) {
+  printf("_sources.size() = %lu\n", _sources.size());
 
+  _max_level = 0;
+  _level_of_gates.resize(_sum_pi_gates_pos, 0);
+
+  for (size_t fromGate = 0; fromGate < _sources.size(); fromGate++) {
+    size_t sourceIdx = _sources[fromGate];
+    std::queue<size_t> postGates; 
+    postGates.push(sourceIdx);
+    _level_of_gates[sourceIdx] = 0;
+
+    while (!postGates.empty()) {
+      size_t startGateIdx = postGates.front(); 
+      postGates.pop();
+
+      for (size_t j = 0; j < adj[startGateIdx].size(); j++) {
+        size_t postGateIdx = adj[startGateIdx][j];
+        bool update = (_level_of_gates[startGateIdx] >= _level_of_gates[postGateIdx]);
+        _level_of_gates[postGateIdx] = (update)  
+                                    ? (_level_of_gates[startGateIdx]+1) 
+                                    : (_level_of_gates[postGateIdx]);
+        _max_level = (_level_of_gates[postGateIdx] > _max_level) 
+                  ? (_level_of_gates[postGateIdx]) 
+                  : (_max_level);
+        if (update) {
+          postGates.push(postGateIdx);
+        }
+      }
+    }
+  }
+
+  // Find all _sinks 
+  for (size_t i = 0; i < adj.size(); i ++) {
+    if (adj[i].size() == 0) {
+      _sinks.push_back(i);
+    }
+  }
+
+  _total_num_levels = _max_level + 1;
+
+  // Construct _gateIdx_in_each_level
+  _gateIdx_in_each_level.resize(_total_num_levels);
+  for (size_t gateIdx = 0; gateIdx < _level_of_gates.size(); gateIdx++) {
+    size_t gateLvl = _level_of_gates[gateIdx];
+    _gateIdx_in_each_level[gateLvl].push_back(gateIdx);
+  }
+
+
+#ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
+  for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
+    printf("gate_%lu, level = %lu\n", i, _level_of_gates[i]);
+  }
+  for (size_t i = 0; i < _gateIdx_in_each_level.size(); i++) {
+    printf("level_%lu: ", i);
+    for (size_t j = 0; j < _gateIdx_in_each_level[i].size(); j++) {
+      printf("%lu, ", _gateIdx_in_each_level[i][j]);
+    } printf("\n");
+  }
+  printf("_max_level = %lu, _total_num_levels = %lu\n", 
+          _max_level, _total_num_levels);
+#endif
+}
+
+void CUDAPartitioner::_CPU_partition(std::vector<std::vector<size_t>> &adj, 
+                                    std::vector<std::vector<size_t>> &invAdj) {
+  std::vector<std::vector<std::vector<size_t>>> cones;  
+  
+  bool conti = true; 
+  size_t lvl = _max_level; 
+
+  while(conti) {
+    printf("Inside conti\n");
+    // For all sinks, find and construct its cone 
+    _CPU_find_all_cones(lvl, adj, cones);      
+
+    // // Merge cones 
+    // _CPU_merge_cones();
+
+    // TODO: Update lvl & conti 
+    // lvl -= ; 
+    // conti = () ? () : ();
+    conti = false; 
+  }
+
+#ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
+  printf("Check _CPU_find_all_cones, cones.size() = %lu\n", cones.size());
+  for (size_t c = 0; c < cones.size(); c++) {
+    printf("Cone_%lu:\n", c);
+    for (size_t level = 0; level < cones[c].size(); level++) {
+      printf("\tlevel_%lu: ", level);
+      for (size_t g = 0; g < cones[c][level].size(); g++) {
+        printf("%lu, ", cones[c][level][g]);
+      } 
+      printf("\n");
+    }
+  }
+#endif
+}
+
+bool CUDAPartitioner::_gateHasCone(std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
+                                  const size_t gateIdx) {
+  return (gateBelongsToWhichCones[gateIdx].size() > 0);
+}
+
+// gate has postGates in this time during the construction of its cones 
+bool CUDAPartitioner::_gateHasPostGates(std::vector<std::vector<size_t>> &adj, 
+                                      const size_t gateIdx, const size_t startLevel) {
+  if ((_level_of_gates[gateIdx] == startLevel) || 
+      (adj[gateIdx].size() == 0)) {
+    return false; 
+  }
+  
+  // All of its post gates's level are larger than startLevel, which means that they have been processed  
+  size_t i = 0; 
+  while(i < adj[gateIdx].size()) {
+    size_t postGateIdx = adj[gateIdx][i];
+    if (startLevel >= _level_of_gates[postGateIdx]) {
+      return true; 
+    }
+    i++;
+  }
+
+  return false;
+}
+
+void CUDAPartitioner::_getConeIdices(const size_t conesSz, const size_t gateIdx, 
+                                    const size_t startLevel, bool newCone, 
+                                    std::vector<std::vector<size_t>> &adj, 
+                                    std::vector<std::vector<size_t>> &gateBelongsToWhichCones) {
+  if (newCone) {
+    gateBelongsToWhichCones[gateIdx].push_back(conesSz);
+  } else {
+    std::unordered_set<size_t> unique_numbers;
+    for (size_t postGate = 0; postGate < adj[gateIdx].size(); postGate++) {
+      size_t postGateIdx = adj[gateIdx][postGate];
+      if (startLevel >= _level_of_gates[postGateIdx]) {
+        for (size_t c = 0; c < gateBelongsToWhichCones[postGateIdx].size(); c++) {
+          size_t postGateCone = gateBelongsToWhichCones[postGateIdx][c];
+          unique_numbers.insert(postGateCone);
+        }
+      }
+    }
+    // Update ret
+    for (const size_t& conIdx : unique_numbers) {
+      gateBelongsToWhichCones[gateIdx].push_back(conIdx);
+    }
+  }
+
+  // printf("\tgateIdx = %lu: Final gateBelongsToWhichCones = [", gateIdx);
+  // for (size_t i = 0; i < gateBelongsToWhichCones[gateIdx].size(); i++) {
+  //   printf("%lu, ", gateBelongsToWhichCones[gateIdx][i]);
+  // } printf("]\n");
+}
+
+void CUDAPartitioner::_updateConIdxTable(bool newCone, const size_t gateIdx, 
+                      std::vector<size_t> &coneIdxToSinkGateIdx) {
+  if (newCone) {
+    coneIdxToSinkGateIdx.push_back(gateIdx);
+  }
+}
+
+void CUDAPartitioner::_update_cones(bool newCone, const size_t gateIdx, 
+                                    const size_t startLevel, 
+                                    std::vector<std::vector<std::vector<size_t>>> &cones,
+                                    std::vector<std::vector<size_t>> &gateBelongsToWhichCones) {
+  // If no cone, construct a new cone 
+  if (newCone) {
+    cones.push_back(std::vector<std::vector<size_t>>());
+  }     
+
+  const size_t coneLevel = startLevel - _level_of_gates[gateIdx]; 
+  // Push the gate to all of the cones it belongs to 
+  for (size_t cIdx = 0; cIdx < gateBelongsToWhichCones[gateIdx].size(); cIdx++) {
+    size_t coneIdx = gateBelongsToWhichCones[gateIdx][cIdx];
+    while(coneLevel >= cones[coneIdx].size()) {
+      cones[coneIdx].push_back(std::vector<size_t>());
+    }
+    cones[coneIdx][coneLevel].push_back(gateIdx);  
+  }
+}
+
+// Note: _CPU_find_all_cones
+/* DOING: 
+For _CPU_find_all_cones, need to find all cones (two steps)
+1. those cones start from the start merged level 
+2. those cones are not starting from the start merged level 
+
+*/
+// Find cones and _CPU_construct_duplication_table at the same time 
+void CUDAPartitioner::_CPU_find_all_cones(const size_t startLevel, 
+                      std::vector<std::vector<size_t>> &adj, 
+                      std::vector<std::vector<std::vector<size_t>>> &cones) {
+  
+  // Backward, traverse all gates and find its cones 
+  // A gate can belong to multiple cones 
+  std::vector<std::vector<size_t>> gateBelongsToWhichCones; 
+  std::vector<size_t> coneIdxToSinkGateIdx;
+  gateBelongsToWhichCones.resize(_sum_pi_gates_pos);
+
+  for (int level = startLevel; level > -1; level--) {
+    for (size_t g = 0; g < _gateIdx_in_each_level[level].size(); g++) {
+      size_t gateIdx = _gateIdx_in_each_level[level][g];
+      bool hasCone = _gateHasCone(gateBelongsToWhichCones, gateIdx);
+      bool hasPostGate = _gateHasPostGates(adj, gateIdx, startLevel);
+      bool newCone = (!hasCone && !hasPostGate);
+      printf("gateIdx = %lu, newCone = %d\n", gateIdx, newCone);
+
+      // It can have multiple cone Idices 
+      _getConeIdices(cones.size(), gateIdx, startLevel, 
+                    newCone, adj, gateBelongsToWhichCones);
+      _updateConIdxTable(newCone, gateIdx, coneIdxToSinkGateIdx);
+
+      // Update cone
+      _update_cones(newCone, gateIdx, startLevel, cones, gateBelongsToWhichCones); 
+    }
+  }
+
+#ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
+  printf("gateBelongsToWhichCones:\n");
+  for (size_t i = 0; i < gateBelongsToWhichCones.size(); i++) {
+    printf("gateBelongsToWhichCones[%lu]: ", i);
+    for (size_t j = 0; j < gateBelongsToWhichCones[i].size(); j++) {
+      printf("%lu, ", gateBelongsToWhichCones[i][j]);
+    } printf("\n");
+  }
+
+  printf("coneIdxToSinkGateIdx:\n");
+  for (size_t i = 0; i < coneIdxToSinkGateIdx.size(); i++) {
+    printf("cone_%lu, sinkGateIdx = %lu\n", i, coneIdxToSinkGateIdx[i]);
+  }
+#endif 
+
+  
+  // Update: 
+  // Construct cones with width constraint
+  // // Upper: before 18. 
+  // Construct merge table 
+  // Merge cones 
 
 }
 
-void CUDAPartitioner::_read_fault(std::istream &flst) {
-  printf("Get inside CUDAPartitioner::_read_fault\n");
-  
-}
 
-void CUDAPartitioner::_read_pattern(std::istream &ptn) {
-  printf("Get inside CUDAPartitioner::_read_pattern\n");
-  
+void CUDAPartitioner::_CPU_merge_cones() {
+
 }
 
 
@@ -169,6 +416,47 @@ void CUDAPartitioner::run() {
   printf("Get inside CUDAPartitioner::run\n");
 
 }
+
+// ---------------------------------------------------------------
+
+
+void CUDAPartitioner::_GPU_partition() {
+  
+  // // Ask GPU memory 
+  // _GPU_memory();
+
+  // // BFS for finding all of the cones 
+  // _GPU_BFS_find_cones();
+
+  // // Construct duplication table
+  // _GPU_construct_duplication_table();
+
+  // // Iteratively merge steps 
+  // for (size_t i = 0; i < _merge_threshold; i++) {
+  //   _GPU_merge();
+  // }
+}
+
+void CUDAPartitioner::_GPU_memory() {
+  /* we need to know: 
+    1. for each gate, which level it belongs to
+    2. for each gate, which partition it belongs to 
+  */
+
+}
+void CUDAPartitioner::_GPU_BFS_find_cones() {
+
+}
+
+
+void CUDAPartitioner::_GPU_construct_duplication_table() {
+
+}
+
+void CUDAPartitioner::_GPU_merge() {
+
+}
+
 
 
 
