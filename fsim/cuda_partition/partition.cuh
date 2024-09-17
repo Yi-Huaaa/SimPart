@@ -52,7 +52,7 @@ private:
 
   // For merge
   // const size_t _merge_threshold = 11; // adjustable  
-  const size_t _merge_bound = 10000;
+  const size_t _merge_bound = 2;
 
   // Construct
   void _read_graph(std::istream &ckt, 
@@ -63,8 +63,7 @@ private:
   void _CPU_levelization(std::vector<std::vector<size_t>> &adj);
   
 
-  void _CPU_partition(std::vector<std::vector<size_t>> &adj,
-                      std::vector<std::vector<size_t>> &invAdj);
+  void _CPU_partition(std::vector<std::vector<size_t>> &adj);
   bool _gateHasCone(std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                     const size_t gateIdx);
   bool _gateHasPostGates(std::vector<std::vector<size_t>> &adj, 
@@ -78,11 +77,19 @@ private:
   void _update_cones(bool newCone, const size_t gateIdx, 
                     const size_t startLevel, 
                     std::vector<std::vector<std::vector<size_t>>> &cones,
-                    std::vector<std::vector<size_t>> &gateBelongsToWhichCones);
+                    std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
+                    size_t &coneWidth);
   void _CPU_find_all_cones(const size_t startLevel, 
                           std::vector<std::vector<size_t>> &adj, 
-                          std::vector<std::vector<std::vector<size_t>>> &cones);
-
+                          std::vector<std::vector<std::vector<size_t>>> &cones,
+                          std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
+                          std::vector<size_t> &coneIdxToSinkGateIdx,
+                          int &stopLevel);
+void _CPU_construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
+                      std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
+                      std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
+                      const size_t startLevel, const int stopLevel, 
+                      const size_t numLevels);
 
   void _CPU_merge_cones();
 
