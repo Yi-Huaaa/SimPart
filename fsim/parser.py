@@ -36,6 +36,7 @@ connections = [
 pin_d = {
     'CLKBUF':{'A':  1, 'Z':  0},
     'INV':   {'A':  1, 'ZN': 0},
+    'AND2':  {'A':  1, 'B':  2, 'Y': 0},
     'NAND2': {'A1': 1, 'A2': 2, 'ZN': 0},
     'NAND3': {'A1': 1, 'A2': 2, 'A3': 3, 'ZN': 0},
     'NAND4': {'A1': 1, 'A2': 2, 'A3': 3, 'A4': 4, 'ZN': 0},
@@ -47,6 +48,9 @@ pin_d = {
     'DFF':   {'D':  1, 'CK': 2, 'Q':  0}, # change to NAND2
     'OAI21': {'A':  1, 'B1': 2, 'B2': 3, 'ZN': 0}, # change to NOR3
     'OAI22': {'A1': 1, 'A2': 2, 'B1': 3, 'B2': 4, 'ZN': 0}, # change to NOR4
+    'AND2X1':{'A': 1,  'B': 2,  'Y': 0},  # Add this line
+    'INVX1': {'A': 1,  'Y': 0},  # Add this line
+    'NAND3X1': {'A': 1, 'B': 2, 'C': 3, 'Y': 0},
 }
 
 # IMPORTANT: note: for unchanged gates, their order should be the same as in C code
@@ -149,14 +153,18 @@ while source:
     if len(visited) % 100000 == 0:
         print('progress', len(visited))
 
-    for post in ['', ':Z', ':ZN', ':Q']:
+    for post in ['', ':Z', ':ZN', ':Q', ':Y']:
         if cur + post in connections_d:
             outputs = connections_d[cur + post]
             break
     else:
         if cur in pos:
             continue
+        print(f"Failed to find connection for: {cur}")
         raise Exception('not found!')
+        # if cur in pos:
+        #     continue
+        # raise Exception('not found!')
 
     outputs = [x.split(':')[0] for x in outputs]
     for out in outputs:

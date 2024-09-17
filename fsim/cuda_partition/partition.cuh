@@ -91,7 +91,9 @@ void _CPU_construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                       const size_t startLevel, const int stopLevel, 
                       const size_t numLevels);
 
-  void _CPU_merge_cones();
+  void _CPU_merge_cones(std::vector<std::vector<std::vector<size_t>>> &cones,
+                      std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
+                      std::vector<std::vector<std::vector<size_t>>> &outputCones);
 
   void _GPU_partition();
   void _GPU_memory();

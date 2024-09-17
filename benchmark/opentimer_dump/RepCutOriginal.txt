@@ -1,0 +1,195 @@
+module a (
+inp5,
+inp4,
+inp3,
+inp1,
+inp2,
+inp0,
+out4,
+out3,
+out2,
+out1,
+out0
+);
+
+// Start PIs
+input inp5;
+input inp4;
+input inp3;
+input inp1;
+input inp2;
+input inp0;
+
+// Start POs
+output out4;
+output out3;
+output out2;
+output out1;
+output out0;
+
+// Start wires
+wire w9;
+wire w7;
+wire w6;
+wire w5;
+wire w4;
+wire inp0;
+wire w8;
+wire inp1;
+wire w3;
+wire inp2;
+wire out2;
+wire inp3;
+wire out1;
+wire w2;
+wire inp4;
+wire out0;
+wire inp5;
+wire w1;
+wire out3;
+wire w0;
+wire out4;
+
+// Start cells
+AND2X1 u14 ( .Y(out4) .B(w5) .A(w9) );
+INVX1 u2 ( .Y(w2) .A(inp2) );
+INVX1 u4 ( .Y(w4) .A(inp4) );
+AND2X1 u6 ( .Y(w6) .B(w1) .A(w0) );
+INVX1 u11 ( .Y(out1) .A(w6) );
+AND2X1 u12 ( .Y(out2) .B(w8) .A(w7) );
+AND2X1 u13 ( .Y(out3) .B(w9) .A(w8) );
+INVX1 u5 ( .Y(w5) .A(inp5) );
+INVX1 u3 ( .Y(w3) .A(inp3) );
+NAND3X1 u7 ( .Y(w7) .B(w2) .C(w3) .A(w1) );
+INVX1 u0 ( .Y(w0) .A(inp0) );
+AND2X1 u8 ( .Y(w8) .B(w4) .A(w3) );
+AND2X1 u9 ( .Y(w9) .B(w5) .A(w4) );
+INVX1 u1 ( .Y(w1) .A(inp1) );
+INVX1 u10 ( .Y(out0) .A(w6) );
+
+endmodule
+digraph TimingGraph {
+  "u13:A";
+  "u14:Y";
+  "u13:B";
+  "u11:A";
+  "u9:A";
+  "u9:Y";
+  "u8:B";
+  "u12:Y";
+  "u11:Y";
+  "u10:Y";
+  "u8:Y";
+  "u7:A";
+  "u4:Y";
+  "u6:A";
+  "u12:A";
+  "u6:B";
+  "u8:A";
+  "u7:Y";
+  "u0:Y";
+  "u13:Y";
+  "inp4";
+  "out1";
+  "u14:A";
+  "u1:A";
+  "u3:A";
+  "inp3";
+  "out2";
+  "u14:B";
+  "u12:B";
+  "inp2";
+  "u10:A";
+  "out0";
+  "inp1";
+  "u7:C";
+  "out3";
+  "u3:Y";
+  "u5:A";
+  "inp5";
+  "inp0";
+  "out4";
+  "u2:Y";
+  "u9:B";
+  "u2:A";
+  "u1:Y";
+  "u4:A";
+  "u5:Y";
+  "u0:A";
+  "u6:Y";
+  "u7:B";
+  "u9:Y" -> "u14:A";
+  "u5:Y" -> "u14:B";
+  "u14:Y" -> "out4";
+  "u14:B" -> "u14:Y";
+  "u14:A" -> "u14:Y";
+  "u14:B" -> "u14:Y";
+  "u14:A" -> "u14:Y";
+  "u8:Y" -> "u13:A";
+  "u9:Y" -> "u13:B";
+  "u13:Y" -> "out3";
+  "u13:B" -> "u13:Y";
+  "u13:A" -> "u13:Y";
+  "u13:B" -> "u13:Y";
+  "u13:A" -> "u13:Y";
+  "u7:Y" -> "u12:A";
+  "u8:Y" -> "u12:B";
+  "u12:Y" -> "out2";
+  "u12:B" -> "u12:Y";
+  "u12:A" -> "u12:Y";
+  "u12:B" -> "u12:Y";
+  "u12:A" -> "u12:Y";
+  "u6:Y" -> "u11:A";
+  "u11:Y" -> "out1";
+  "u11:A" -> "u11:Y";
+  "u11:A" -> "u11:Y";
+  "u6:Y" -> "u10:A";
+  "u10:Y" -> "out0";
+  "u10:A" -> "u10:Y";
+  "u10:A" -> "u10:Y";
+  "u4:Y" -> "u9:A";
+  "u5:Y" -> "u9:B";
+  "u9:B" -> "u9:Y";
+  "u9:A" -> "u9:Y";
+  "u9:B" -> "u9:Y";
+  "u9:A" -> "u9:Y";
+  "u3:Y" -> "u8:A";
+  "u4:Y" -> "u8:B";
+  "u8:B" -> "u8:Y";
+  "u8:A" -> "u8:Y";
+  "u8:B" -> "u8:Y";
+  "u8:A" -> "u8:Y";
+  "u1:Y" -> "u7:A";
+  "u3:Y" -> "u7:C";
+  "u2:Y" -> "u7:B";
+  "u7:C" -> "u7:Y";
+  "u7:B" -> "u7:Y";
+  "u7:A" -> "u7:Y";
+  "u7:C" -> "u7:Y";
+  "u7:B" -> "u7:Y";
+  "u7:A" -> "u7:Y";
+  "u0:Y" -> "u6:A";
+  "u1:Y" -> "u6:B";
+  "u6:B" -> "u6:Y";
+  "u6:A" -> "u6:Y";
+  "u6:B" -> "u6:Y";
+  "u6:A" -> "u6:Y";
+  "inp5" -> "u5:A";
+  "u5:A" -> "u5:Y";
+  "u5:A" -> "u5:Y";
+  "inp4" -> "u4:A";
+  "u4:A" -> "u4:Y";
+  "u4:A" -> "u4:Y";
+  "inp3" -> "u3:A";
+  "u3:A" -> "u3:Y";
+  "u3:A" -> "u3:Y";
+  "inp2" -> "u2:A";
+  "u2:A" -> "u2:Y";
+  "u2:A" -> "u2:Y";
+  "inp1" -> "u1:A";
+  "u1:A" -> "u1:Y";
+  "u1:A" -> "u1:Y";
+  "inp0" -> "u0:A";
+  "u0:A" -> "u0:Y";
+  "u0:A" -> "u0:Y";
+}

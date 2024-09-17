@@ -28,7 +28,7 @@
 #define SIZE_T_MAX SIZE_MAX 
 
 // define print for check 
-#define CPU_PARTITIONER_PRINT_FOR_CHECK
+// #define CPU_PARTITIONER_PRINT_FOR_CHECK
 
 
 // Implement your own remove_if function
@@ -61,7 +61,7 @@ ForwardIterator remove_if(ForwardIterator first, ForwardIterator last, UnaryPred
 
 // CUDAPartitioner fucntions
 void CUDAPartitioner::read(const std::string &ckt_path, const std::string &flst_path, const std::string &ptn_path) {
-  printf("Get inside CUDAPartitioner::read first\n");
+  // printf("Get inside CUDAPartitioner::read first\n");
 
   using std::string_literals::operator""s;
 
@@ -78,12 +78,12 @@ void CUDAPartitioner::read(const std::string &ckt_path, const std::string &flst_
 }
 
 void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &ptn) {
-  printf("Get inside CUDAPartitioner::read second\n");
+  // printf("Get inside CUDAPartitioner::read second\n");
 
   // Read gate 
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
-  printf("_num_PIs = %lu, _num_POs = %lu, _num_inner_gates = %lu, _num_wires = %lu\n", 
-          _num_PIs, _num_POs, _num_inner_gates, _num_wires);
+  // printf("_num_PIs = %lu, _num_POs = %lu, _num_inner_gates = %lu, _num_wires = %lu\n", 
+  //         _num_PIs, _num_POs, _num_inner_gates, _num_wires);
   std::vector<std::vector<size_t>> adj;
   std::vector<std::vector<size_t>> invAdj;
   _read_graph(ckt, adj, invAdj);
@@ -133,6 +133,7 @@ void CUDAPartitioner::_read_graph(std::istream &ckt,
     }
   }  
 
+#ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
   printf("Check _gate_input_order_table\n");
   for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
     printf("_gate_input_order_table[%lu] = ", i);
@@ -141,7 +142,7 @@ void CUDAPartitioner::_read_graph(std::istream &ckt,
     }
     printf("\n");
   }
-
+#endif 
   // ---------------------------------------------------------------  
 
 
@@ -165,11 +166,11 @@ void CUDAPartitioner::_read_graph(std::istream &ckt,
 
 // CPU version first
 void CUDAPartitioner::_CPU_levelization(std::vector<std::vector<size_t>> &adj) {
-  printf("_sources.size() = %lu\n", _sources.size());
 
   _max_level = 0;
   _level_of_gates.resize(_sum_pi_gates_pos, 0);
-
+  
+  // Discussion: More faster GPU levelization strategy 
   for (size_t fromGate = 0; fromGate < _sources.size(); fromGate++) {
     size_t sourceIdx = _sources[fromGate];
     std::queue<size_t> postGates; 
@@ -214,6 +215,7 @@ void CUDAPartitioner::_CPU_levelization(std::vector<std::vector<size_t>> &adj) {
 
 
 #ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
+  printf("_sources.size() = %lu\n", _sources.size());
   for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
     printf("gate_%lu, level = %lu\n", i, _level_of_gates[i]);
   }
@@ -234,30 +236,30 @@ void CUDAPartitioner::_CPU_partition(std::vector<std::vector<size_t>> &adj) {
   size_t startLevel = _max_level; 
 
   while(!stop) {
-    printf("start _CPU_partition\n");
+    // printf("start _CPU_partition\n");
 
     std::vector<std::vector<std::vector<size_t>>> cones;
     std::vector<std::vector<size_t>> gateBelongsToWhichCones; 
     std::vector<size_t> coneIdxToSinkGateIdx;
     std::vector<std::vector<std::vector<size_t>>> duplicationTable; 
+    std::vector<std::vector<std::vector<size_t>>> outputCones;
 
     int stopLevel = -1;
     _CPU_find_all_cones(startLevel, adj, cones, 
                         gateBelongsToWhichCones, 
                         coneIdxToSinkGateIdx, 
                         stopLevel);
-    // Construct  
-    const size_t numLevels = startLevel - stopLevel;
-    _CPU_construct_duplication_table(coneIdxToSinkGateIdx, 
-                                    gateBelongsToWhichCones, 
-                                    duplicationTable, 
-                                    startLevel, stopLevel,  
-                                    numLevels);
+    // // Construct  
+    // const size_t numLevels = startLevel - stopLevel;
+    // _CPU_construct_duplication_table(coneIdxToSinkGateIdx, 
+    //                                 gateBelongsToWhichCones, 
+    //                                 duplicationTable, 
+    //                                 startLevel, stopLevel,  
+    //                                 numLevels);
     
+    // // Merge cones 
+    // _CPU_merge_cones(cones, duplicationTable, outputCones);
 
-
-    // Merge cones 
-    _CPU_merge_cones();
 
     // Update startLevel & conti 
     stop = (stopLevel == -1) ? (true) : (false);
@@ -355,6 +357,7 @@ void CUDAPartitioner::_update_cones(bool newCone, const size_t gateIdx,
 For finding all cones: needing to find all cones (two kinds)
 1. those cones start from the start merged level 
 2. those cones are not starting from the start merged level 
+* Note: this version without considering the "_merge_bound"
 */
 void CUDAPartitioner::_CPU_find_all_cones(const size_t startLevel, 
                       std::vector<std::vector<size_t>> &adj, 
@@ -375,7 +378,6 @@ void CUDAPartitioner::_CPU_find_all_cones(const size_t startLevel,
       bool hasCone = _gateHasCone(gateBelongsToWhichCones, gateIdx);
       bool hasPostGate = _gateHasPostGates(adj, gateIdx, startLevel);
       bool newCone = (!hasCone && !hasPostGate);
-      // printf("gateIdx = %lu, newCone = %d\n", gateIdx, newCone);
 
       // It can have multiple cone Idices 
       _getConeIdices(cones.size(), gateIdx, startLevel, 
@@ -387,14 +389,8 @@ void CUDAPartitioner::_CPU_find_all_cones(const size_t startLevel,
                     gateBelongsToWhichCones, coneWidth); 
     }
 
-    // printf("coneWidth = %lu, _merge_bound = %lu, level = %d\n", coneWidth, _merge_bound, level);
-    // Ensure that 
-    if (coneWidth > _merge_bound) {
-      // update stopLevel
-      stopLevel = level; // we can only merge to (level+1)
-      break;
-    }   
   }
+  
 #ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
   printf("startLevel = %lu (include), stopLevel = %d (exclude)\n", 
         startLevel, stopLevel);
@@ -500,12 +496,39 @@ void CUDAPartitioner::_CPU_construct_duplication_table(std::vector<size_t> &cone
 #endif 
 }
 
-void CUDAPartitioner::_CPU_merge_cones() {
+void CUDAPartitioner::_CPU_merge_cones(std::vector<std::vector<std::vector<size_t>>> &cones,
+                              std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
+                              std::vector<std::vector<std::vector<size_t>>> &outputCones) {
+  printf("Get _CPU_merge_cones\n");
+  // std::vector<bool> canMerge;
+  // canMerge.resize(??);  
+
+  // Steps:
+  // for (size_t mr = 0; mr < _mergedRound; mr++) {
+  //   _updateCanMerge();
+  //   for (m in all possible merge) {
+  //     if (canMerge[m]) {
+  //       update for each cone, which cone it should merge with (); // construct a table to record
+  //     }
+  //   }
+  
+  //   // After merging 
+  //   update duplicationTable();   
+  // }
+
+
+
+  // // After all of the merge steps finished
+  // construct the outputCones();
+  // // note: before finishing deciding all of the cones should merge with which cones, 
+  // // do not construct the outputCones
+
+
 }
 
 
 void CUDAPartitioner::run() {
-  printf("Get inside CUDAPartitioner::run\n");
+  // printf("Get inside CUDAPartitioner::run\n");
 
 }
 
