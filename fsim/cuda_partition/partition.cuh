@@ -63,7 +63,9 @@ private:
   void _CPU_levelization(std::vector<std::vector<size_t>> &adj);
   
 
-  void _CPU_partition(std::vector<std::vector<size_t>> &adj);
+  void _CPU_partition(std::vector<std::vector<size_t>> &adj,
+                      std::vector<std::vector<std::vector<size_t>>> &cones);
+  void _CPU_show_cones_size(std::vector<std::vector<std::vector<size_t>>> &cones);
   bool _gateHasCone(std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                     const size_t gateIdx);
   bool _gateHasPostGates(std::vector<std::vector<size_t>> &adj, 

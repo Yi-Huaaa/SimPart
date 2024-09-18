@@ -89,8 +89,9 @@ void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &
   _read_graph(ckt, adj, invAdj);
 
   /* Construct GPU */
+  std::vector<std::vector<std::vector<size_t>>> cones;
   _CPU_levelization(adj);
-  _CPU_partition(adj);
+  _CPU_partition(adj, cones);
 }
 
 
@@ -166,12 +167,16 @@ void CUDAPartitioner::_read_graph(std::istream &ckt,
 
 // CPU version first
 void CUDAPartitioner::_CPU_levelization(std::vector<std::vector<size_t>> &adj) {
+  printf("start _CPU_levelization\n");
 
   _max_level = 0;
   _level_of_gates.resize(_sum_pi_gates_pos, 0);
   
-  // Discussion: More faster GPU levelization strategy 
+size_t num_threads = 8;
+omp_set_num_threads(num_threads);
+#pragma omp parallel for
   for (size_t fromGate = 0; fromGate < _sources.size(); fromGate++) {
+    // printf("fromGate = %lu\n", fromGate);
     size_t sourceIdx = _sources[fromGate];
     std::queue<size_t> postGates; 
     postGates.push(sourceIdx);
@@ -180,6 +185,7 @@ void CUDAPartitioner::_CPU_levelization(std::vector<std::vector<size_t>> &adj) {
     while (!postGates.empty()) {
       size_t startGateIdx = postGates.front(); 
       postGates.pop();
+      // printf("\tstartGateIdx = %lu\n", startGateIdx);
 
       for (size_t j = 0; j < adj[startGateIdx].size(); j++) {
         size_t postGateIdx = adj[startGateIdx][j];
@@ -191,6 +197,7 @@ void CUDAPartitioner::_CPU_levelization(std::vector<std::vector<size_t>> &adj) {
                   ? (_level_of_gates[postGateIdx]) 
                   : (_max_level);
         if (update) {
+          // printf("\t\tpostGateIdx = %lu\n", postGateIdx);
           postGates.push(postGateIdx);
         }
       }
@@ -230,15 +237,15 @@ void CUDAPartitioner::_CPU_levelization(std::vector<std::vector<size_t>> &adj) {
 #endif
 }
 
-void CUDAPartitioner::_CPU_partition(std::vector<std::vector<size_t>> &adj) {
+void CUDAPartitioner::_CPU_partition(std::vector<std::vector<size_t>> &adj,
+                      std::vector<std::vector<std::vector<size_t>>> &cones) {
+  
+  printf("start _CPU_partition\n");
   
   bool stop = false; 
   size_t startLevel = _max_level; 
 
   while(!stop) {
-    // printf("start _CPU_partition\n");
-
-    std::vector<std::vector<std::vector<size_t>>> cones;
     std::vector<std::vector<size_t>> gateBelongsToWhichCones; 
     std::vector<size_t> coneIdxToSinkGateIdx;
     std::vector<std::vector<std::vector<size_t>>> duplicationTable; 
@@ -265,6 +272,33 @@ void CUDAPartitioner::_CPU_partition(std::vector<std::vector<size_t>> &adj) {
     stop = (stopLevel == -1) ? (true) : (false);
     startLevel = stopLevel;
   }
+  _CPU_show_cones_size(cones);
+}
+
+void CUDAPartitioner::_CPU_show_cones_size(
+                      std::vector<std::vector<std::vector<size_t>>> &cones) {
+  printf("cones.size() = %lu\n", cones.size());
+  size_t maxWidth = 0, conWithMaxWidth = 0;
+  for (size_t c = 0; c < cones.size(); c++) {
+    for (size_t lvl = 0; lvl < cones[c].size(); lvl++) {
+      bool update = cones[c][lvl].size() > maxWidth;
+      maxWidth = (update) 
+                ? (cones[c][lvl].size()) : (maxWidth);
+      conWithMaxWidth = (update) ? (c) : (conWithMaxWidth);
+    }
+  }
+  printf("cone_%lu, maxWidth = %lu\n", conWithMaxWidth, maxWidth);
+
+  // for (size_t c = 0; c < cones.size(); c++) {
+  //   size_t maxWidth = 0;
+  //   for (size_t level = 0; level < cones[c].size(); level++) {
+  //     printf("\tlevel_%lu: ", level);
+  //     for (size_t g = 0; g < cones[c][level].size(); g++) {
+  //       printf("%lu, ", cones[c][level][g]);
+  //     } 
+  //     printf("\n");
+  //   }
+  // }  
 }
 
 bool CUDAPartitioner::_gateHasCone(std::vector<std::vector<size_t>> &gateBelongsToWhichCones,

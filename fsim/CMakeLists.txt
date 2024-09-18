@@ -28,6 +28,11 @@ add_library(fsim_cuda_partition
   ./cuda_partition/partition.cu ./cuda_partition/partition.cuh
 )
 
+
+# Link OpenMP for CUDA partition (needed for OpenMP support in CUDA code)
+target_link_libraries(fsim_cuda_partition PRIVATE OpenMP::OpenMP_CXX)
+
+
 # Add cuBLAS library if necessary
 if (FSIM_BUILD_CUDA)
   target_link_libraries(${PROJECT_NAME} INTERFACE ${CUBLAS_LIBRARIES})
@@ -62,4 +67,5 @@ target_compile_options(fsim_cuda_partition PRIVATE
   -Wextra
   -Wfatal-errors
   -Wshadow
+  -lineinfo
 )

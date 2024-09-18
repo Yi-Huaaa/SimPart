@@ -33,9 +33,12 @@ project(
 # -----------------------------------------------------------------------------
 find_package(OpenMP REQUIRED)
 if (OPENMP_FOUND)
+    # Add OpenMP flags to the C++ and CUDA compilers
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+    # make the .cu files can utilize the OMP
+    set (CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xcompiler=${OpenMP_CXX_FLAGS}")
 endif()
 
 # build options

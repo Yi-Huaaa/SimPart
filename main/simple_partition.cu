@@ -33,16 +33,16 @@ int main(int argc, char *argv[]) {
   auto end = std::chrono::steady_clock::now();
   duration_read_data = end - start;
   
-  // Run partitioner 
-  for (size_t t = 0; t < TIMES; t++) {
-    start = std::chrono::steady_clock::now();
-      partitioner.run();
-    end = std::chrono::steady_clock::now();
-    duration_CUDAPartition += (end - start);
-  }
+  // // Run partitioner 
+  // for (size_t t = 0; t < TIMES; t++) {
+  //   start = std::chrono::steady_clock::now();
+  //     partitioner.run();
+  //   end = std::chrono::steady_clock::now();
+  //   duration_CUDAPartition += (end - start);
+  // }
   
-  // Output visualization graph
-  partitioner.visualization_graph(outputfile_path);
+  // // Output visualization graph
+  // partitioner.visualization_graph(outputfile_path);
   
   // Show time 
   std::cout << "Execution Time:\n";
