@@ -19,6 +19,7 @@
 #include <utility> 
 #include <algorithm>
 #include <cstddef>  // For size_t and SIZE_MAX
+#include <cstdio>
 
 #include <cuda_runtime_api.h>
 #include <cublas_v2.h>
@@ -27,7 +28,11 @@
 
 #define SIZE_T_MAX SIZE_MAX 
 
-// define print for check 
+#define CUDAPAR_OMP_MODE
+#ifdef CUDAPAR_OMP_MODE
+  #define num_threads 4
+#endif 
+
 // #define CPU_PARTITIONER_PRINT_FOR_CHECK
 
 
@@ -82,8 +87,8 @@ void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &
 
   // Read gate 
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
-  // printf("_num_PIs = %lu, _num_POs = %lu, _num_inner_gates = %lu, _num_wires = %lu\n", 
-  //         _num_PIs, _num_POs, _num_inner_gates, _num_wires);
+  printf("_num_PIs = %lu, _num_POs = %lu, _num_inner_gates = %lu, _num_wires = %lu\n", 
+          _num_PIs, _num_POs, _num_inner_gates, _num_wires);
   std::vector<std::vector<size_t>> adj;
   std::vector<std::vector<size_t>> invAdj;
   _read_graph(ckt, adj, invAdj);
@@ -132,7 +137,32 @@ void CUDAPartitioner::_read_graph(std::istream &ckt,
     if (_gate_input_order_table[i*5] == 0) {
       _sources.push_back(i);
     }
-  }  
+  }
+  assert(_sources.size() == _num_PIs && "_sources.size() != _num_PIs");
+  
+  // printf("_sources.size() = %lu\n", _sources.size());
+  // for (size_t i = 0; i < _num_PIs; i++) {
+  //   if (adj[i].size() == 0) {
+  //     printf("adj[%lu].size() = %lu;;; gates = ", i, adj[i].size());
+  //     for (size_t j = 0; j < adj[i].size(); j++) {
+  //       printf("%lu, ", adj[i][j]);
+  //     }
+  //     printf("\n");
+  //   }
+  // }
+  // printf("\n");
+
+  // for (size_t i = 0; i < _num_PIs; i++) {
+  //   printf("invAdj[%lu].size() = %lu;;; gates = ", i, invAdj[i].size());
+  //   for (size_t j = 0; j < invAdj[i].size(); j++) {
+  //     printf("%lu, ", invAdj[i][j]);
+  //   }
+  //   printf("\n");
+  // }
+  // printf("\n");
+
+
+
 
 #ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
   printf("Check _gate_input_order_table\n");
@@ -164,50 +194,52 @@ void CUDAPartitioner::_read_graph(std::istream &ckt,
   }
 }
 
-
-// CPU version first
 void CUDAPartitioner::_CPU_levelization(std::vector<std::vector<size_t>> &adj) {
   printf("start _CPU_levelization\n");
+  omp_set_num_threads(num_threads);
 
   _max_level = 0;
   _level_of_gates.resize(_sum_pi_gates_pos, 0);
-  
-size_t num_threads = 8;
-omp_set_num_threads(num_threads);
-#pragma omp parallel for
+
+  // Parallelizing the outer loop with OpenMP
+  #pragma omp parallel for shared(adj) reduction(max:_max_level)
   for (size_t fromGate = 0; fromGate < _sources.size(); fromGate++) {
-    // printf("fromGate = %lu\n", fromGate);
     size_t sourceIdx = _sources[fromGate];
     std::queue<size_t> postGates; 
     postGates.push(sourceIdx);
     _level_of_gates[sourceIdx] = 0;
+    // printf("fromGate = %lu, sourceIdx = %lu\n", fromGate, sourceIdx);
 
     while (!postGates.empty()) {
       size_t startGateIdx = postGates.front(); 
       postGates.pop();
-      // printf("\tstartGateIdx = %lu\n", startGateIdx);
+      // printf("\tstartGateIdx = %lu %lu\n", startGateIdx, adj[startGateIdx].size());
 
       for (size_t j = 0; j < adj[startGateIdx].size(); j++) {
         size_t postGateIdx = adj[startGateIdx][j];
         bool update = (_level_of_gates[startGateIdx] >= _level_of_gates[postGateIdx]);
         _level_of_gates[postGateIdx] = (update)  
-                                    ? (_level_of_gates[startGateIdx]+1) 
-                                    : (_level_of_gates[postGateIdx]);
-        _max_level = (_level_of_gates[postGateIdx] > _max_level) 
-                  ? (_level_of_gates[postGateIdx]) 
-                  : (_max_level);
+                                        ? (_level_of_gates[startGateIdx]+1) 
+                                        : (_level_of_gates[postGateIdx]);
+
+        // Update max level in a thread-safe way
+        _max_level = std::max(_max_level, _level_of_gates[postGateIdx]);
+
         if (update) {
-          // printf("\t\tpostGateIdx = %lu\n", postGateIdx);
           postGates.push(postGateIdx);
         }
       }
     }
   }
 
-  // Find all _sinks 
-  for (size_t i = 0; i < adj.size(); i ++) {
+  // Find all _sinks
+  #pragma omp parallel for
+  for (size_t i = 0; i < adj.size(); i++) {
     if (adj[i].size() == 0) {
-      _sinks.push_back(i);
+      #pragma omp critical
+      {
+        _sinks.push_back(i);
+      }
     }
   }
 
@@ -215,17 +247,28 @@ omp_set_num_threads(num_threads);
 
   // Construct _gateIdx_in_each_level
   _gateIdx_in_each_level.resize(_total_num_levels);
+  #pragma omp parallel for
   for (size_t gateIdx = 0; gateIdx < _level_of_gates.size(); gateIdx++) {
     size_t gateLvl = _level_of_gates[gateIdx];
-    _gateIdx_in_each_level[gateLvl].push_back(gateIdx);
+    #pragma omp critical
+    {
+      _gateIdx_in_each_level[gateLvl].push_back(gateIdx);
+    }
   }
+
+  printf("_max_level = %lu, _total_num_levels = %lu\n", 
+          _max_level, _total_num_levels);
 
 
 #ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
-  printf("_sources.size() = %lu\n", _sources.size());
   for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
     printf("gate_%lu, level = %lu\n", i, _level_of_gates[i]);
   }
+
+  for (size_t i = 0; i < _gateIdx_in_each_level.size(); i++) {
+    printf("level_%lu: size() == %lu\n", i, _gateIdx_in_each_level[i].size());
+  }
+
   for (size_t i = 0; i < _gateIdx_in_each_level.size(); i++) {
     printf("level_%lu: ", i);
     for (size_t j = 0; j < _gateIdx_in_each_level[i].size(); j++) {
@@ -236,6 +279,7 @@ omp_set_num_threads(num_threads);
           _max_level, _total_num_levels);
 #endif
 }
+
 
 void CUDAPartitioner::_CPU_partition(std::vector<std::vector<size_t>> &adj,
                       std::vector<std::vector<std::vector<size_t>>> &cones) {
@@ -407,6 +451,8 @@ void CUDAPartitioner::_CPU_find_all_cones(const size_t startLevel,
 
   for (int level = startLevel; level > stopLevel; level--) {
     size_t coneWidth = 0;
+    
+    
     for (size_t g = 0; g < _gateIdx_in_each_level[level].size(); g++) {
       size_t gateIdx = _gateIdx_in_each_level[level][g];
       bool hasCone = _gateHasCone(gateBelongsToWhichCones, gateIdx);
