@@ -11,15 +11,40 @@
 #include <cublas_v2.h>
 #include <set>
 
-// CPU
+/* CPU */
 #include <fsim/fsim.hpp>
 
 
-// Forward declaration
-class CUDASimulator;
+// Define the enum class
+enum class gpuGateType : int {
+  INV = 0,
+  AND = 1,
+  OR = 2,
+  XOR = 3,
+  NAND = 4,
+  NOR = 5,
+  XNOR = 6,
+  MUX = 7,
+  CLKBUF = 8,
+  PI = 9,
+  PO = 10,
+  MAX_GATE_TYPE = 11
+};
 
-// // constexpr
-// constexpr auto SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
+/* GPU functions */
+__device__ const char* gpuGateTypeToString(gpuGateType type);
+__global__ void _print_malloc_transfer_devc_memory(const size_t _sum_pi_gates_pos, 
+                                                  size_t *_gate_input_order_table_devc, 
+                                                  gpuGateType* _gate_type_devc);
+
+
+
+
+
+
+
+/* Forward declaration */
+class CUDASimulator;
 
 class CUDAPartitioner {
   
@@ -29,36 +54,52 @@ class CUDAPartitioner {
 public:
   enum class Mode { PARALLEL_CUDA = 0, CONES_PARALLEL_CUDA };
 
-  // // accessor
-  // void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
-  // void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
-  // void run(Mode mode, const size_t num_threads);
+  // accessor
+  void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
+  void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
+  void run(Mode mode);
 
 private:
-  // // Basic private members 
-  // size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires;
-  // size_t _sum_pi_gates_pos;
-  // std::vector<PI> _PIs;
-  // std::vector<Gate> _gates;
-  // std::vector<PO> _POs;
-  // size_t *_gate_input_order_table;
+  // Basic private members 
+  size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires;
+  size_t _sum_pi_gates_pos;
   
-  // // Fault and Pattern 
-  // size_t _num_fault; // for read file
-  // std::vector<Fault> _faults;
+  // Host memory 
+  // Read Graph 
+  size_t *_gate_input_order_table;
+  std::vector<GateType> _gate_type;
+  
+  // Faults and Patterns 
+  size_t _num_fault; // for read file
+  std::vector<Fault> _faults;
 
-  // size_t _num_pattern; // total number of patterns that need to be tested
-  // size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
-  // std::vector<Pattern> _patterns;
+  size_t _num_pattern; // total number of patterns that need to be tested
+  size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
+  std::vector<Pattern> _patterns;
 
-  // // For levelization and Find cones
-  // std::vector<size_t> _sources; 
-  // std::vector<size_t> _sinks; 
-  // size_t _max_level;
-  // size_t _total_num_levels;
-  // std::vector<size_t> _level_of_gates;
-  // std::vector<std::vector<size_t>> _gateIdx_in_each_level;
-  // std::vector<std::vector<std::vector<size_t>>> _cones;
+  // For levelization and Find cones
+  size_t _max_level;
+  size_t _total_num_levels;
+  std::vector<size_t> _level_of_gates;
+  std::vector<std::vector<size_t>> _gateIdx_in_each_level;
+  std::vector<std::vector<std::vector<size_t>>> _cones;
+
+
+  // Device memory 
+  size_t *_gate_input_order_table_devc; 
+  gpuGateType* _gate_type_devc;
+
+
+
+
+
+
+
+
+
+
+
+
 
   // // Simulation
   // std::vector<size_t> _g_pi_results;
@@ -71,11 +112,50 @@ private:
   // size_t _pi_idx_accum, _po_idx_accum, _gate_idx_accum;
 
 
-  // void _GPU_partition();
-  // void _GPU_memory();
-  // void _GPU_BFS_find_cones();
-  // void _GPU_construct_duplication_table();
-  // void _GPU_merge();
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /* Read files - CPU function */
+  void _read_graph(std::istream &ckt);
+  void _read_pattern(std::istream &ptn);
+  void _read_fault(std::istream &flst);
+
+
+  /* GPU function */
+  void _malloc_transfer_devc_memory();
+  void _free_devc_memory();
+  gpuGateType convertGateTypeToGpu(GateType gate_type);
+
+
+  // void _free_devc_memory();
+  // void _levelization();
+  // void _partition(); 
+  // void _find_all_cones();
+
+
+
+
+
+
+
+
+  // --------------------------------------------------------------------------
+
+  // Print for check 
+  std::string gateTypeToString(GateType type) const;
+  void print_patterns(const std::vector<Pattern> &patterns, const size_t round,
+                      const size_t num_PIs) const;
+  void print_bits_stack(const size_t size, const void *const ptr) const;
 
 };
 

@@ -14,7 +14,7 @@ namespace fsim {
 class Simulator;
 }
 
-// TOOD: ElementType
+// TODO: ElementType
 enum class GateType { 
   INV = 0, 
   AND, // 1 
