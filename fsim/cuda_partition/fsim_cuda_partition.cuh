@@ -1,3 +1,4 @@
 #pragma once
 
-#include "./partition.cuh"
+#include "./cpu_partition.cuh"
+#include "./cuda_partition.cuh"

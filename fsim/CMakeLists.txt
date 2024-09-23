@@ -25,7 +25,8 @@ add_library(fsim_cuda_graph
 )
 
 add_library(fsim_cuda_partition
-  ./cuda_partition/partition.cu ./cuda_partition/partition.cuh
+  ./cuda_partition/cpu_partition.cu  ./cuda_partition/cpu_partition.cuh
+  ./cuda_partition/cuda_partition.cu ./cuda_partition/cuda_partition.cuh
   # CPU:
   fault.cpp fault.hpp
   pattern.cpp pattern.hpp

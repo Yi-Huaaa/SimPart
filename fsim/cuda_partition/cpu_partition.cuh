@@ -1,5 +1,5 @@
-#ifndef CUDA_PARTITION_H
-#define CUDA_PARTITION_H
+#ifndef CPU_PARTITION_H
+#define CPU_PARTITION_H
 
 #include <climits>
 #include <fstream>
@@ -21,13 +21,13 @@ class CUDASimulator;
 // constexpr
 constexpr auto SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 
-class CUDAPartitioner {
+class CPUPartitioner {
   
   // Declare friend class 
   friend class CUDASimulator;
 
 public:
-  enum class Mode { SEQUENTIAL = 0, PARALLEL_OMP };
+  enum class Mode { SEQUENTIAL = 0, PARALLEL_OMP, CONES_SEQUENTIAL, CONES_PARALLEL_OMP };
 
   // accessor
   void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
@@ -60,6 +60,7 @@ private:
   size_t _total_num_levels;
   std::vector<size_t> _level_of_gates;
   std::vector<std::vector<size_t>> _gateIdx_in_each_level;
+  std::vector<std::vector<std::vector<size_t>>> _cones;
 
   // Simulation
   std::vector<size_t> _g_pi_results;
@@ -79,12 +80,11 @@ private:
   void _read_graph(std::istream &ckt, 
                   std::vector<std::vector<size_t>> &adj,
                   std::vector<std::vector<size_t>> &invAdj);                  
-  void _CPU_levelization(std::vector<std::vector<size_t>> &adj);
+  void _levelization(std::vector<std::vector<size_t>> &adj);
   
 
-  void _CPU_partition(std::vector<std::vector<size_t>> &adj,
-                      std::vector<std::vector<std::vector<size_t>>> &cones);
-  void _CPU_show_cones_size(std::vector<std::vector<std::vector<size_t>>> &cones);
+  void _partition(std::vector<std::vector<size_t>> &adj);
+  void _show_cones_size();
   bool _gateHasCone(std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                     const size_t gateIdx);
   bool _gateHasPostGates(std::vector<std::vector<size_t>> &adj, 
@@ -97,22 +97,20 @@ private:
                           std::vector<size_t> &coneIdxToSinkGateIdx);
   void _update_cones(bool newCone, const size_t gateIdx, 
                     const size_t startLevel, 
-                    std::vector<std::vector<std::vector<size_t>>> &cones,
                     std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                     size_t &coneWidth);
-  void _CPU_find_all_cones(const size_t startLevel, 
+  void _find_all_cones(const size_t startLevel, 
                           std::vector<std::vector<size_t>> &adj, 
-                          std::vector<std::vector<std::vector<size_t>>> &cones,
                           std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                           std::vector<size_t> &coneIdxToSinkGateIdx,
                           int &stopLevel);
-void _CPU_construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
+void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                       std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                       std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
                       const size_t startLevel, const int stopLevel, 
                       const size_t numLevels);
 
-  void _CPU_merge_cones(std::vector<std::vector<std::vector<size_t>>> &cones,
+  void _merge_cones(std::vector<std::vector<std::vector<size_t>>> &cones,
                       std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
                       std::vector<std::vector<std::vector<size_t>>> &outputCones);
   
@@ -152,20 +150,6 @@ void _CPU_construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   void print_simulation_results(const std::vector<size_t> &pi_results,
                                 const std::vector<size_t> &gate_results,
                                 const std::vector<size_t> &po_results) const;
-
-
-
-
-
-
-
-
-  void _GPU_partition();
-  void _GPU_memory();
-  void _GPU_BFS_find_cones();
-  void _GPU_construct_duplication_table();
-  void _GPU_merge();
-
 };
 
 #endif

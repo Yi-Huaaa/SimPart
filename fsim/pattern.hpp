@@ -13,6 +13,7 @@ class CUDAPartitioner;
 class Pattern {
 
   friend class fsim::Simulator;
+  friend class CPUPartitioner;
   friend class CUDAPartitioner;
 
 public:

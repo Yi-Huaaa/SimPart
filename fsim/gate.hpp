@@ -33,7 +33,9 @@ class Gate : public ElementBase {
   friend class fsim::Simulator;
   friend class PI;
   friend class PO; 
-
+  friend class CPUPartitioner;
+  friend class CUDAPartitioner;
+  
 public:
 
   // // // accessor

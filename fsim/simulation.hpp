@@ -33,6 +33,7 @@ constexpr auto SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 
 class Simulator {
 
+  friend class CPUPartitioner;
   friend class CUDAPartitioner;
 
 public:
