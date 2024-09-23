@@ -34,6 +34,7 @@ enum class GateType {
 class ElementBase {
 
   friend class fsim::Simulator;
+  friend class CUDAPartitioner;
 
 public:
   // accessor

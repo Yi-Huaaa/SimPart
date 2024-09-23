@@ -96,7 +96,6 @@ class CUDASimulator {
   const size_t NULL_gate_idx = SIZE_T_MAX;
 
   friend class CUDAPartitioner;
-  friend class CUDAPartitioner;
 
 public:
   // cuda simulator functions 

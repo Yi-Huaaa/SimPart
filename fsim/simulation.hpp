@@ -33,6 +33,8 @@ constexpr auto SIZE_T_BITS = sizeof(size_t) * CHAR_BIT;
 
 class Simulator {
 
+  friend class CUDAPartitioner;
+
 public:
   enum class Mode { SEQUENTIAL = 0, PARALLEL_TF, PARALLEL_OMP };
 
