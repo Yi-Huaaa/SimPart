@@ -115,12 +115,24 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   void _construct_graph(std::istream &ckt);
   void _read_pattern(std::istream &ptn);
   void _read_fault(std::istream &flst);
+  void _ask_simulation_memory();
+  void _write_to_array(std::vector<size_t> &pi_output, 
+                      std::vector<size_t> &gate_output,
+                      std::vector<size_t> &po_output,
+                      const size_t bits);
 
-  // Simulation - sequentail and parallel 
-  void _run_gates(const size_t num_threads);
+  // Simulation - sequentail and parallel (without partitioning to cones)
+  void _run_fsim(const size_t num_threads);
   void _run_good_case(const Pattern pattern, const size_t bits, const size_t num_threads);
   void _run_bad_case(const Fault &fault, const Pattern pattern, 
                       const size_t bits, const size_t num_threads);
+  
+  // Simulation - sequentail and parallel (with partitioning to cones)
+  void _run_cones_gates(const size_t num_threads);
+  void _run_cones_good_case(const Pattern pattern, const size_t bits, const size_t num_threads);
+  void _run_cones_bad_case(const Fault &fault, const Pattern pattern, 
+                      const size_t bits, const size_t num_threads);
+
 
   void _apply_INV(ElementBase &gate);
   void _apply_AND(ElementBase &gate);

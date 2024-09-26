@@ -3,19 +3,24 @@
 
 #include <fsim/cuda_partition/fsim_cuda_partition.cuh>
 
-// #define CPU_PARTITIONER_VERSION
+#define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
-
-  // #define SEQUENTAIL_VERSION
-  #ifdef SEQUENTAIL_VERSION
-    #define NUM_THREADS 1 // define by user
-  #else 
-    #define PARALLEL_OMP_VERSION
-    #define NUM_THREADS 8 // define by user
-  #endif // #ifdef SEQUENTAIL_VERSION
-  #endif   // #define CPU_PARTITIONER_VERSION
-
-
+    #define VERSION 0 // VERSION can be 0, 1, 2, or 3
+    #if VERSION == 0
+        #define MODE 0
+        #define NUM_THREADS 1
+    #elif VERSION == 1
+        #define MODE 1
+        #define NUM_THREADS 8
+    #elif VERSION == 2
+        #define MODE 2
+        #define NUM_THREADS 1
+    #else // VERSION == 3
+        #define MODE 3
+        #define NUM_THREADS 8
+    #endif
+  #endif
+  
 #ifndef CPU_PARTITIONER_VERSION
   #define GPU_PARTITIONER_VERSION
 #endif   // #ifndef CPU_PARTITIONER_VERSION
@@ -58,19 +63,10 @@ int main(int argc, char *argv[]) {
   duration_read_data = end - start;
   
     // Run Simulator
-  #ifdef SEQUENTAIL_VERSION
-    printf("RUN SEQUENTAIL_VERSION\n");
-  #else
-    printf("RUN PARALLEL_OMP_VERSION, with NUM_THREADS = %d\n", NUM_THREADS);
-  #endif   // SEQUENTAIL_VERSION
+    printf("RUN MODE = %d, with NUM_THREADS = %d\n", MODE, NUM_THREADS);
     for (size_t t = 0; t < TIMES; t++) {
       start = std::chrono::steady_clock::now();
-  #ifdef SEQUENTAIL_VERSION
-      size_t mode = 0;
-  #else
-      size_t mode = 1;
-  #endif   // SEQUENTAIL_VERSION  
-        cpuPartitioner.run(CPUPartitioner::Mode(static_cast<size_t>(mode)), NUM_THREADS);
+        cpuPartitioner.run(CPUPartitioner::Mode(static_cast<size_t>(MODE)), NUM_THREADS);
       end = std::chrono::steady_clock::now();
       duration_Partition += (end - start);
     }
@@ -89,14 +85,14 @@ int main(int argc, char *argv[]) {
   auto end = std::chrono::steady_clock::now();
   duration_read_data = end - start;
   
-  // Run Simulator
-  for (size_t t = 0; t < TIMES; t++) {
-    start = std::chrono::steady_clock::now();
-    size_t mode = 0;
-    cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(mode)));
-    end = std::chrono::steady_clock::now();
-    duration_Partition += (end - start);
-  }
+  // // Run Simulator
+  // for (size_t t = 0; t < TIMES; t++) {
+  //   start = std::chrono::steady_clock::now();
+  //   size_t MODE = 0;
+  //   cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(MODE)));
+  //   end = std::chrono::steady_clock::now();
+  //   duration_Partition += (end - start);
+  // }
 #endif  // GPU_PARTITIONER_VERSION
 
     

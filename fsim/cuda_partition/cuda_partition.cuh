@@ -33,13 +33,25 @@ enum class gpuGateType : int {
 
 /* GPU functions */
 __device__ const char* gpuGateTypeToString(gpuGateType type);
+// For  levelization                                                   
+__device__ void enqueue(int *queue, int *tail, int element, 
+                        const int capacity);
+__device__ int dequeue(int *queue, int *head, int tail, 
+                      const int capacity);                                                  
+__global__ void bfs_queue_levelize(const size_t _num_PIs, const size_t _sum_pi_gates_pos, 
+                                  int *_max_level_devc, int *_total_num_levels_devc,
+                                  int *_level_of_gates_devc,
+                                  int *_gate_output_order_table_devc,
+                                  int *_gate_output_order_table_index_devc);
+
+
+// For print                                 
 __global__ void _print_malloc_transfer_devc_memory(const size_t _sum_pi_gates_pos, 
-                                                  size_t *_gate_input_order_table_devc, 
-                                                  gpuGateType* _gate_type_devc);
-
-
-
-
+                                                  const int *_gate_input_order_table_devc, 
+                                                  const gpuGateType *_gate_type_devc);
+__global__ void _print_levelization(int *_max_level_devc, int *_total_num_levels_devc,
+                                    const size_t _sum_pi_gates_pos, 
+                                    int *_level_of_gates_devc);
 
 
 
@@ -66,7 +78,10 @@ private:
   
   // Host memory 
   // Read Graph 
-  size_t *_gate_input_order_table;
+  size_t _szOfAdj; // size of _gate_output_order_table
+  int *_gate_output_order_table; // fromGate -> toGate
+  int *_gate_output_order_table_index; 
+  int *_gate_input_order_table;  // toGate -> fromGate
   std::vector<GateType> _gate_type;
   
   // Faults and Patterns 
@@ -86,9 +101,13 @@ private:
 
 
   // Device memory 
-  size_t *_gate_input_order_table_devc; 
+  int *_max_level_devc, *_total_num_levels_devc;
+  int *_gate_output_order_table_devc; // fromGate -> toGate
+  int *_gate_output_order_table_index_devc; 
+  int *_gate_input_order_table_devc; 
   gpuGateType* _gate_type_devc;
-
+  int *_level_of_gates_devc;
+  int *_gateIdx_in_each_level_devc;
 
 
 
@@ -129,7 +148,7 @@ private:
   void _read_graph(std::istream &ckt);
   void _read_pattern(std::istream &ptn);
   void _read_fault(std::istream &flst);
-
+  void _levelization();
 
   /* GPU function */
   void _malloc_transfer_devc_memory();
