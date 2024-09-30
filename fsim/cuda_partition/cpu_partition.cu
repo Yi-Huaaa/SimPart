@@ -942,8 +942,6 @@ void CPUPartitioner::_compute_vertex_weight(std::vector<double> &tmp_vectices_we
       sumOfYita /= double(vertex_include_which_hyperedges[vertexIdx].size());
     }
 
-    // printf("BIBI vertexIdx = %lu, sumOfYita = %.2lf\n", vertexIdx, sumOfYita);
-
     sumOfYita += _clusters[clusterIdx].size();
     tmp_vectices_weight[vertexIdx] = sumOfYita;
   }
