@@ -317,6 +317,7 @@ __device__ int dequeue(int *queue, int *head, int tail,
   }
 }
 
+// NOTE: here ERROR -> WA for
 __global__ void bfs_queue_levelize(const size_t _num_PIs, const size_t _sum_pi_gates_pos, 
                                 int *_max_level_devc, int *_total_num_levels_devc,
                                 int *_level_of_gates_devc,

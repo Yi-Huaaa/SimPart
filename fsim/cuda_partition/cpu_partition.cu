@@ -35,6 +35,8 @@
 // #define PART_DEBUG_PRINT_PATTERNS
 // #define PART_DEBUG_PRINT_FAULT_TABLE
 // #define PART_DEBUG_PRINT_SIMULATION
+// #define PART_DEBUG_REPCUT_PRINT_FIND_CLUSTERS
+// #define PART_DEBUG_REPCUT_PRINT_KAHYPAR_RESULTS
 
 // Implement your own remove_if function
 template <typename ForwardIterator, typename UnaryPredicate>
@@ -51,7 +53,7 @@ ForwardIterator remove_if(ForwardIterator first, ForwardIterator last, UnaryPred
 }
 
 // CPUPartitioner fucntions
-void CPUPartitioner::read(const std::string &ckt_path, const std::string &flst_path, const std::string &ptn_path) {
+void CPUPartitioner::read(Mode mode, const std::string &ckt_path, const std::string &flst_path, const std::string &ptn_path) {
   // printf("Get inside CPUPartitioner::read first\n");
 
   using std::string_literals::operator""s;
@@ -65,30 +67,53 @@ void CPUPartitioner::read(const std::string &ckt_path, const std::string &flst_p
   if (!ptn)
     throw std::runtime_error("cannot open pattern file "s + ptn_path);
 
-  read(ckt, flst, ptn);
+  read(mode, ckt, flst, ptn);
 }
 
-void CPUPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &ptn) {
-  // printf("Get inside CPUPartitioner::read second\n");
-
+void CPUPartitioner::read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn) {
   // Read gate 
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
-  // printf("_num_PIs = %lu, _num_POs = %lu, _num_inner_gates = %lu, _num_wires = %lu\n", 
-  //         _num_PIs, _num_POs, _num_inner_gates, _num_wires);
   std::vector<std::vector<size_t>> adj;
   std::vector<std::vector<size_t>> invAdj;
   _read_graph(ckt, adj, invAdj);
-
-  /* Partitioning */
+  
+  // levelization
   _levelization(adj);
-  _partition(adj);
+
+  // whether partitioning
+  switch (mode) {
+    case Mode::SEQUENTIAL:
+      break;
+    case Mode::PARALLEL_OMP:
+      break;
+    case Mode::CONES_SEQUENTIAL:
+      /* Partitioning */
+      _partition(adj);
+      break;
+    case Mode::CONES_PARALLEL_OMP:
+      /* Partitioning */
+      _partition(adj);
+      break;
+    case Mode::REPCUT_SEQUENTIAL:
+      /* Partitioning */
+      _partition(adj);
+      _RepCut();
+      break;
+    case Mode::REPCUT_PARALLEL_OMP:
+      /* Partitioning */
+      _partition(adj);
+      _RepCut();
+      break;      
+    default:
+      printf("read: No SUCH CASES\n");
+      return; 
+  }
 
   /* Construct circuit, Read Pattern, Read Fault */
   _construct_graph(ckt);
   _read_fault(flst);
   _read_pattern(ptn);
   _ask_simulation_memory();
-
 }
 
 
@@ -125,7 +150,6 @@ void CPUPartitioner::_read_pattern(std::istream &ptn) {
   print_patterns(_patterns, _num_rounds, _num_PIs);
 #endif 
 }
-
 
 void CPUPartitioner::_ask_simulation_memory() {
   _g_pi_results.resize(_num_PIs);
@@ -417,7 +441,6 @@ void CPUPartitioner::_levelization(std::vector<std::vector<size_t>> &adj) {
 }
 
 void CPUPartitioner::_partition(std::vector<std::vector<size_t>> &adj) {
-  
   // printf("start _partition\n");
   
   bool stop = false; 
@@ -431,9 +454,9 @@ void CPUPartitioner::_partition(std::vector<std::vector<size_t>> &adj) {
 
     int stopLevel = -1;
     _find_all_cones(startLevel, adj, 
-                        gateBelongsToWhichCones, 
-                        coneIdxToSinkGateIdx, 
-                        stopLevel);
+                    gateBelongsToWhichCones, 
+                    coneIdxToSinkGateIdx, 
+                    stopLevel);
     // // Construct  
     // const size_t numLevels = startLevel - stopLevel;
     // _construct_duplication_table(coneIdxToSinkGateIdx, 
@@ -443,40 +466,15 @@ void CPUPartitioner::_partition(std::vector<std::vector<size_t>> &adj) {
     //                                 numLevels);
     
     // // Merge _cones 
-    // _merge_cones(_cones, duplicationTable, outputCones);
+    // _merge_cones(duplicationTable, outputCones);
 
 
     // Update startLevel & conti 
     stop = (stopLevel == -1) ? (true) : (false);
     startLevel = stopLevel;
   }
-  _show_cones_size();
 }
 
-void CPUPartitioner::_show_cones_size() {
-  // printf("_cones.size() = %lu\n", _cones.size());
-  size_t maxWidth = 0, conWithMaxWidth = 0;
-  for (size_t c = 0; c < _cones.size(); c++) {
-    for (size_t lvl = 0; lvl < _cones[c].size(); lvl++) {
-      bool update = _cones[c][lvl].size() > maxWidth;
-      maxWidth = (update) 
-                ? (_cones[c][lvl].size()) : (maxWidth);
-      conWithMaxWidth = (update) ? (c) : (conWithMaxWidth);
-    }
-  }
-  // printf("cone_%lu, maxWidth = %lu\n", conWithMaxWidth, maxWidth);
-
-  // for (size_t c = 0; c < _cones.size(); c++) {
-  //   size_t maxWidth = 0;
-  //   for (size_t level = 0; level < _cones[c].size(); level++) {
-  //     printf("\tlevel_%lu: ", level);
-  //     for (size_t g = 0; g < _cones[c][level].size(); g++) {
-  //       printf("%lu, ", _cones[c][level][g]);
-  //     } 
-  //     printf("\n");
-  //   }
-  // }  
-}
 
 bool CPUPartitioner::_gateHasCone(std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                                   const size_t gateIdx) {
@@ -706,8 +704,7 @@ void CPUPartitioner::_construct_duplication_table(std::vector<size_t> &coneIdxTo
 #endif 
 }
 
-void CPUPartitioner::_merge_cones(std::vector<std::vector<std::vector<size_t>>> &_cones,
-                              std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
+void CPUPartitioner::_merge_cones(std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
                               std::vector<std::vector<std::vector<size_t>>> &outputCones) {
   printf("Get _merge_cones\n");
   // std::vector<bool> canMerge;
@@ -736,6 +733,307 @@ void CPUPartitioner::_merge_cones(std::vector<std::vector<std::vector<size_t>>> 
 
 }
 
+
+void CPUPartitioner::_RepCut() {
+  _find_clusters();
+  _construct_hyperGraph();
+  std::vector<size_t> vertex_to_partition;
+  _run_KaHyPar(vertex_to_partition);
+
+  _get_KHP_partitioning_res(vertex_to_partition);
+}
+
+/* For those gates who belong to the same cones belong to the same cluster */
+void CPUPartitioner::_find_clusters() {
+  _gate_to_cones.resize(_sum_pi_gates_pos);
+
+  // Get _gate_to_cones
+  for (size_t c = 0; c < _cones.size(); c++) {
+    for (size_t level = 0; level < _cones[c].size(); level++) {
+      for (size_t g = 0; g < _cones[c][level].size(); g++) {
+        size_t gateIdx = _cones[c][level][g];
+        _gate_to_cones[gateIdx].push_back(c);
+      } 
+    }
+  }  
+
+  std::vector<bool> get_cluster;  // tmp 
+  get_cluster.resize(_sum_pi_gates_pos, false);
+  _gate_to_cluster.resize(_sum_pi_gates_pos);
+
+  // Get _gate_to_cluster
+  for (size_t gate0_Idx = 0; gate0_Idx < _sum_pi_gates_pos; gate0_Idx++) {
+    if (!get_cluster[gate0_Idx]) {
+      std::vector<size_t> tmp;
+      tmp.push_back(gate0_Idx);
+      _clusters.push_back(tmp);
+      _gate_to_cluster[gate0_Idx] = _clusters.size()-1;
+      get_cluster[gate0_Idx] = true;
+    }
+
+    size_t cluster_0_idx = _gate_to_cluster[gate0_Idx];
+
+    for (size_t gate1_Idx = 0; gate1_Idx < _sum_pi_gates_pos; gate1_Idx++) {
+      if (!get_cluster[gate1_Idx] && (_gate_to_cones[gate0_Idx] == _gate_to_cones[gate1_Idx])) {
+        _clusters[cluster_0_idx].push_back(gate1_Idx);
+        _gate_to_cluster[gate1_Idx] = cluster_0_idx;
+        get_cluster[gate1_Idx] = true;        
+      }
+    }
+  }
+
+  // Get _is_sink_clusters, _KaHyPar_num_hyperedges, and _KaHyPar_num_vertices
+  _is_sink_clusters.resize(_clusters.size(), false);
+
+  for (size_t c = 0; c < _cones.size(); c++) {
+    size_t lvl = 0;
+    size_t sz = _cones[c][lvl].size();
+
+    while (sz == 0) {
+      lvl++;
+      sz = _cones[c][lvl].size();
+    }
+
+    size_t sinkIdx = _cones[c][lvl][0];
+    if (!_is_sink_clusters[_gate_to_cluster[sinkIdx]]) {
+      _is_sink_clusters[_gate_to_cluster[sinkIdx]] = true;
+      _KaHyPar_num_vertices++;
+    }
+  }
+
+  _KaHyPar_num_hyperedges = _clusters.size() - _KaHyPar_num_vertices;
+
+  // Get _to_hypergraph_vertex_idx, _is_sink_clusters_idx, _non_sink_clusters_idx
+  for (size_t i = 0; i < _clusters.size(); i++) {
+    if (_is_sink_clusters[i]) {
+      _to_hypergraph_vertex_idx.push_back(_is_sink_clusters_idx.size());
+      _is_sink_clusters_idx.push_back(i); // vertex
+    } else {
+      _to_hypergraph_vertex_idx.push_back(_non_sink_clusters_idx.size());
+      _non_sink_clusters_idx.push_back(i); // hyperedge
+    }
+  }
+
+#ifdef PART_DEBUG_REPCUT_PRINT_FIND_CLUSTERS
+  _show_cones_size();
+  _print_find_clusters();
+#endif
+}
+
+
+void CPUPartitioner::_construct_hyperGraph() {
+  _construct_hyperedge_vertices();
+
+  assert(_vectices_weight.size() == _KaHyPar_num_vertices && 
+        "_vectices_weight.size() == _KaHyPar_num_vertices ERROR");
+  assert(_hyperedges_weight.size() == _KaHyPar_num_hyperedges && 
+        "_hyperedges_weight.size() == _KaHyPar_num_hyperedges ERROR");
+  assert(_hyperedges_eptr.size() == (_KaHyPar_num_hyperedges+1) && "_hyperedges_eptr ERROR");
+}
+
+void CPUPartitioner::_construct_hyperedge_vertices() {
+  /* To know for each hyperedge, it connects to which vertices */
+
+  _vertexIdx_to_sinkGateIdx.resize(_is_sink_clusters_idx.size()); 
+
+  // Get hyperedge_include_which_vertices
+  std::vector<std::set<size_t>> hyperedge_include_which_vertices;
+  hyperedge_include_which_vertices.resize(_non_sink_clusters_idx.size()); 
+  _hyperedges_weight.resize(_non_sink_clusters_idx.size());
+
+  for (size_t c = 0; c < _cones.size(); c++) {
+    size_t level = 0;
+    size_t sz = _cones[c][level].size();
+
+    while (sz == 0) {
+      level++;
+      sz = _cones[c][level].size();
+    }
+
+    size_t sinkIdx = _cones[c][level][0];
+    size_t conSymbolCluster = _gate_to_cluster[sinkIdx];
+    size_t vertexIdx = _to_hypergraph_vertex_idx[conSymbolCluster];
+    _vertexIdx_to_sinkGateIdx[vertexIdx] = sinkIdx;
+
+    for (size_t lvl = 0; lvl < _cones[c].size(); lvl++) {
+      for (size_t g = 0; g < _cones[c][lvl].size(); g++) {
+        size_t gateIdx = _cones[c][lvl][g];
+        size_t clusterIdx = _gate_to_cluster[gateIdx];
+        if (!_is_sink_clusters[clusterIdx]) { // is hyperegde
+          size_t hyperedgeIdx = _to_hypergraph_vertex_idx[clusterIdx];
+          hyperedge_include_which_vertices[hyperedgeIdx].insert(vertexIdx);
+          
+          // Update _hyperedges_weight
+          _hyperedges_weight[hyperedgeIdx] = _clusters[clusterIdx].size();
+        } 
+      }
+    }
+  }
+  
+  /* Get _hyperedges_weight, _hyperedges_eind, _hyperedges_eptr */
+  for (size_t hyperedge = 0; hyperedge < hyperedge_include_which_vertices.size(); hyperedge++) {
+    // Update _hyperedges_eptr
+    _hyperedges_eptr.push_back(_hyperedges_eind.size());
+    for (const auto& vertexIdx : hyperedge_include_which_vertices[hyperedge]) {
+      // Update _hyperedges_eind
+      _hyperedges_eind.push_back(vertexIdx);
+    }
+  } 
+  // Update _hyperedges_eptr
+  _hyperedges_eptr.push_back(_hyperedges_eind.size()); // final one 
+  
+
+  // Get vertex_include_which_hyperedges
+  std::vector<std::set<size_t>> vertex_include_which_hyperedges;
+  vertex_include_which_hyperedges.resize(_is_sink_clusters_idx.size());
+
+  for (size_t hyperedgeIdx = 0; hyperedgeIdx < hyperedge_include_which_vertices.size(); hyperedgeIdx++) {
+    for (const auto& vertexIdx : hyperedge_include_which_vertices[hyperedgeIdx]) {
+      vertex_include_which_hyperedges[vertexIdx].insert(hyperedgeIdx);
+    }
+  }  
+
+  /* Get _vectices_weight */
+  std::vector<double> tmp_vectices_weight;
+  _compute_vertex_weight(tmp_vectices_weight, 
+                        vertex_include_which_hyperedges);
+
+  /* Normalize double to size_t*/
+  _multiple_100(tmp_vectices_weight);
+  
+#ifdef PART_DEBUG_REPCUT_PRINT_FIND_CLUSTERS
+  print_hyperedge_vertices_details(hyperedge_include_which_vertices, 
+                                  vertex_include_which_hyperedges);
+#endif 
+}
+
+void CPUPartitioner::_compute_vertex_weight(std::vector<double> &tmp_vectices_weight, 
+                      std::vector<std::set<size_t>> &vertex_include_which_hyperedges) {
+
+  tmp_vectices_weight.resize(_is_sink_clusters_idx.size());
+  for (size_t cl = 0; cl < _is_sink_clusters_idx.size(); cl++) {
+    size_t clusterIdx = _is_sink_clusters_idx[cl];
+    size_t vertexIdx = _to_hypergraph_vertex_idx[clusterIdx];
+    double sumOfYita = 0.0;
+
+    for (const auto& hyperedgeIdx : vertex_include_which_hyperedges[vertexIdx]) {
+      sumOfYita += _hyperedges_weight[hyperedgeIdx];
+    }
+
+    sumOfYita /= double(vertex_include_which_hyperedges[vertexIdx].size());
+    sumOfYita += _clusters[clusterIdx].size();
+    tmp_vectices_weight[vertexIdx] = sumOfYita;
+  }
+}
+
+void CPUPartitioner::_multiple_100(std::vector<double> &tmp_vectices_weight) {
+  for (size_t i = 0; i < tmp_vectices_weight.size(); i++) {
+    _vectices_weight.push_back(static_cast<size_t>(std::round(tmp_vectices_weight[i] * 100)));
+  }
+
+  for (size_t i = 0; i < _hyperedges_weight.size(); i++) {
+    _hyperedges_weight[i] *= 100;
+  }
+}
+
+void CPUPartitioner::_run_KaHyPar(std::vector<size_t> &vertex_to_partition) {
+  // printf("_run_KaHyPar\n");
+
+  kahypar_context_t* context = kahypar_context_new();
+  kahypar_configure_context_from_file(context, "/home/ychung79/kahypar/config/repcut.ini");
+  
+  kahypar_set_seed(context, -1);
+
+  /* Settings of #V and #he of H */
+  const kahypar_hypernode_id_t num_vertices = _KaHyPar_num_vertices;
+  const kahypar_hyperedge_id_t num_hyperedges = _KaHyPar_num_hyperedges;
+  
+  assert(_vectices_weight.size() == _KaHyPar_num_vertices 
+        && "_vectices_weight.size() == _KaHyPar_num_vertices ERROR"); 
+  assert(_hyperedges_weight.size() == _KaHyPar_num_hyperedges 
+        && "_hyperedges_weight.size() == _KaHyPar_num_hyperedges ERROR"); 
+
+  /* Inputs of vertex weights - bibi */
+  std::unique_ptr<kahypar_hypernode_weight_t[]> vertex_weights = 
+              std::make_unique<kahypar_hypernode_weight_t[]>(_vectices_weight.size());
+  for (size_t i = 0; i < (_vectices_weight.size()); i++) {
+    vertex_weights[i] = _vectices_weight[i];
+  }
+
+  /* Input of hyperedges */
+  std::unique_ptr<kahypar_hyperedge_weight_t[]> hyperedge_weights = 
+        std::make_unique<kahypar_hyperedge_weight_t[]>(num_hyperedges);
+  for (size_t i = 0; i < (num_hyperedges); i++) {
+    hyperedge_weights[i] = _hyperedges_weight[i];
+  }
+
+  // eptr
+  std::unique_ptr<size_t[]> hyperedge_indices = 
+        std::make_unique<size_t[]>(_hyperedges_eptr.size());
+  for (size_t i = 0; i < _hyperedges_eptr.size(); i++) {
+    hyperedge_indices[i] = _hyperedges_eptr[i];
+  }
+  
+  // eind
+  std::unique_ptr<kahypar_hyperedge_id_t[]> hyperedges = 
+          std::make_unique<kahypar_hyperedge_id_t[]>(_hyperedges_eind.size());
+  for (size_t i = 0; i < _hyperedges_eind.size(); i++) {
+    hyperedges[i] = _hyperedges_eind[i];
+  }
+
+  // write back 
+  kahypar_hyperedge_weight_t objective = 0;
+
+  std::vector<kahypar_partition_id_t> partition(num_vertices, -1);
+
+  kahypar_partition(num_vertices, num_hyperedges,
+       	            _imbalance, _k,
+               	    vertex_weights.get(), hyperedge_weights.get(),
+               	    hyperedge_indices.get(), hyperedges.get(),
+       	            &objective, context, partition.data());
+
+  for(size_t i = 0; i < num_vertices; i++) {
+    vertex_to_partition.push_back(size_t(partition[i]));
+  }
+
+  kahypar_context_free(context);
+
+#ifdef PART_DEBUG_REPCUT_PRINT_KAHYPAR_RESULTS
+  for(size_t i = 0; i < vertex_to_partition.size(); i++) {
+    std::cout << i << ":" << vertex_to_partition[i] << std::endl;
+  }  
+#endif
+}
+
+void CPUPartitioner::_get_KHP_partitioning_res(std::vector<size_t> &vertex_to_partition) {
+  _RepCut_output_cones.resize(_k);
+  for (size_t i = 0; i < _k_sizet; i++) {
+    _RepCut_output_cones[i].resize(_total_num_levels);
+  }
+
+  for (size_t i = 0; i < _is_sink_clusters_idx.size(); i++) {
+    size_t clusterIdx = _is_sink_clusters_idx[i];
+    size_t vertexIdx = _to_hypergraph_vertex_idx[clusterIdx];
+    size_t partitionIdx = vertex_to_partition[vertexIdx];
+    size_t sinkIdx = _vertexIdx_to_sinkGateIdx[vertexIdx];
+
+    // traverse the cone of the sinkGate
+    for (size_t c = 0; c < _gate_to_cones[sinkIdx].size(); c++) {
+      size_t coneIdx = _gate_to_cones[sinkIdx][c];
+      for (size_t lvl = 0; lvl < _cones[coneIdx].size(); lvl++) {
+        for (size_t g = 0; g < _cones[coneIdx][lvl].size(); g++) {
+          size_t gateIdx = _cones[coneIdx][lvl][g];
+          _RepCut_output_cones[partitionIdx][lvl].insert(gateIdx);
+        }
+      }
+    }
+  }
+
+#ifdef PART_DEBUG_REPCUT_PRINT_KAHYPAR_RESULTS
+  _print_RepCut_output_cones();
+#endif
+}
+
 // --------------------------------------------------------------------------------------
 
 // Run the simulation 
@@ -743,7 +1041,7 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
   switch (mode) {
     case Mode::SEQUENTIAL:
       std::cout << "run SEQUENTIAL\n";
-      assert(num_threads == 1 && "RUN SEQUENTIAL num_threads setting ERROR");
+      assert(num_threads == 1 && "RUN SEQUENTIAL num_threads num_threads > 1");
       _run_fsim(num_threads);
       break;
     case Mode::PARALLEL_OMP:
@@ -752,11 +1050,21 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
       break;
     case Mode::CONES_SEQUENTIAL:
       std::cout << "run CONES_SEQUENTIAL\n";
+      assert(num_threads == 1 && "RUN CONES_SEQUENTIAL num_threads num_threads > 1");
       _run_cones_gates(num_threads);
       break;
     case Mode::CONES_PARALLEL_OMP:
       std::cout << "run CONES_PARALLEL_OMP\n";
       _run_cones_gates(num_threads);
+      break;
+    case Mode::REPCUT_SEQUENTIAL:
+      std::cout << "run REPCUT_SEQUENTIAL\n";
+      assert(num_threads == 1 && "RUN REPCUT_SEQUENTIAL num_threads > 1");
+      // _run_cones_gates(num_threads);
+      break;
+    case Mode::REPCUT_PARALLEL_OMP:
+      std::cout << "run REPCUT_PARALLEL_OMP\n";
+      // _run_cones_gates(num_threads);
       break;      
     default:
       printf("No SUCH CASES\n");
@@ -999,6 +1307,14 @@ void CPUPartitioner::_run_cones_bad_case(const Fault &fault, const Pattern patte
   print_simulation_results(_b_pi_results, _b_gate_results, _b_po_results);
 #endif
 }
+
+
+
+
+
+
+
+
 
 void CPUPartitioner::_write_to_array(std::vector<size_t> &pi_output, 
                                     std::vector<size_t> &gate_output,
@@ -1297,4 +1613,229 @@ std::string CPUPartitioner::gateTypeToString(GateType type) const {
   default:
     return "UNKNOWN"; // 11
   }
+}
+
+void CPUPartitioner::_show_cones_size() {
+  // printf("_cones.size() = %lu\n", _cones.size());
+  size_t maxWidth = 0, conWithMaxWidth = 0;
+  for (size_t c = 0; c < _cones.size(); c++) {
+    for (size_t lvl = 0; lvl < _cones[c].size(); lvl++) {
+      bool update = _cones[c][lvl].size() > maxWidth;
+      maxWidth = (update) 
+                ? (_cones[c][lvl].size()) : (maxWidth);
+      conWithMaxWidth = (update) ? (c) : (conWithMaxWidth);
+    }
+  }
+  printf("cone_%lu, maxWidth = %lu\n", conWithMaxWidth, maxWidth);
+
+  for (size_t c = 0; c < _cones.size(); c++) {
+    printf("Cones_%lu:\n", c);
+    for (size_t level = 0; level < _cones[c].size(); level++) {
+      printf("\tlevel_%lu: ", level);
+      for (size_t g = 0; g < _cones[c][level].size(); g++) {
+        printf("%lu, ", _cones[c][level][g]);
+      } 
+      printf("\n");
+    }
+    printf("\n");
+  }  
+  printf("\n");
+}
+
+void CPUPartitioner::_print_find_clusters() const {
+
+  printf("Check find_clusters\n");
+  printf("_gate_to_cones:\n");
+  for (size_t g = 0; g < _sum_pi_gates_pos; g++) {
+    printf("Gate[%lu] belongs to cones: ", g);
+    for (size_t c = 0; c < _gate_to_cones[g].size(); c++) {
+      printf("%lu, ", _gate_to_cones[g][c]);
+    }
+    printf("\n");
+  }
+  printf("\n");
+
+  printf("_gate_to_cluster:\n");
+  for (size_t g = 0; g < _sum_pi_gates_pos; g++) {
+    printf("Gate[%lu] belongs to cluster: %lu\n", g, _gate_to_cluster[g]);
+  }
+  printf("\n");
+
+  printf("_clusters (sz = %lu)\n", _clusters.size());
+  for (size_t cl = 0; cl < _clusters.size(); cl++) {
+      printf("Cluster %lu: ", cl);
+      for (size_t g = 0; g < _clusters[cl].size(); g++) {
+      printf("%lu, ", _clusters[cl][g]);
+    }
+    printf("\n");
+  }
+  printf("\n");
+
+  printf("_is_sink_clusters:\n");
+  for (size_t i = 0; i < _is_sink_clusters.size(); i ++) {
+    if (_is_sink_clusters[i]) {
+      printf("cluster %lu: true\n", i);
+    } else {
+      printf("cluster %lu: false\n", i);
+    }
+  }
+  printf("\n");
+
+  
+  printf("_KaHyPar_num_hyperedges = %lu, _KaHyPar_num_vertices = %lu\n", 
+          _KaHyPar_num_hyperedges, _KaHyPar_num_vertices);
+
+  printf("_is_sink_clusters_idx: ");
+  for (size_t i = 0; i < _is_sink_clusters_idx.size(); i++) {
+    printf("%lu, ", _is_sink_clusters_idx[i]);
+  }        
+  printf("\n");  
+
+  printf("_non_sink_clusters_idx: ");
+  for (size_t i = 0; i < _non_sink_clusters_idx.size(); i++) {
+    printf("%lu, ", _non_sink_clusters_idx[i]);
+  }        
+  printf("\n");
+
+  for (size_t i = 0; i < _clusters.size(); i++) {
+    if (_is_sink_clusters[i]) {
+      printf("cluster %lu, is vertex on HG, with vertex index = %lu\n", i,  _to_hypergraph_vertex_idx[i]);
+    } else {
+      printf("cluster %lu, is hyperegde on HG, with hyperegde index = %lu\n", i,  _to_hypergraph_vertex_idx[i]);
+    }
+  }
+  printf("\n");
+}
+
+
+void CPUPartitioner::print_hyperedge_vertices_details(
+                    const std::vector<std::set<size_t>> &hyperedge_include_which_vertices,
+                    const std::vector<std::set<size_t>> &vertex_include_which_hyperedges) const {
+
+  printf("hyperedge_include_which_vertices:\n");
+  for (size_t hyperedge = 0; hyperedge < hyperedge_include_which_vertices.size(); hyperedge++) {
+    printf("hyperedge %lu includes vertex indices: ", hyperedge);
+    for (const auto& vertexIdx : hyperedge_include_which_vertices[hyperedge]) {
+      printf("%lu, ", vertexIdx);
+    }
+    printf("\n");
+  }
+  printf("\n");
+
+
+  printf("vertex_include_which_hyperedges:\n");
+  for (size_t vertexIdx = 0; vertexIdx < vertex_include_which_hyperedges.size(); vertexIdx++) {
+    printf("vertexIdx %lu includes vertex indices: ", vertexIdx);
+    for (const auto& hyperedge : vertex_include_which_hyperedges[vertexIdx]) {
+      printf("%lu, ", hyperedge);
+    }
+    printf("\n");
+  }
+  printf("\n");
+
+  printf("_hyperedges_weight: \n");
+  for (size_t i = 0; i < _hyperedges_weight.size(); i++) {
+    printf("hyperedge %lu, weight = %lu\n", i, _hyperedges_weight[i]);
+  }
+  printf("\n");
+
+  printf("_hyperedges_eptr: = [ ");
+  for (size_t i = 0; i < _hyperedges_eptr.size(); i++) {
+    printf("%lu, ", _hyperedges_eptr[i]);
+  } printf("]\n\n");
+
+  printf("_hyperedges_eind = [ ");
+  for (size_t i = 0; i < _hyperedges_eind.size(); i++) {
+    printf("%lu, ", _hyperedges_eind[i]);
+  } printf("]\n\n");
+
+  printf("_vectices_weight\n");
+  for (size_t i = 0; i < _vectices_weight.size(); i++) {
+    printf("vertex %lu, with weight = %lu\n", i, _vectices_weight[i]);
+  } 
+  printf("\n");
+
+}
+
+void CPUPartitioner::_print_RepCut_output_cones() {
+  _show_cones_size();
+  printf("_RepCut_output_cones:\n\n");
+  for (size_t i = 0; i < _RepCut_output_cones.size(); ++i) {
+    printf("_RepCut_output_cones %lu\n", i);
+    for (size_t lvl = 0; lvl < _RepCut_output_cones[i].size(); ++lvl) {
+      printf("\tlvl = %lu, gates: ", lvl);
+      for (const auto& element : _RepCut_output_cones[i][lvl]) {
+        printf("%lu, ", element);
+      }
+      printf("\n");
+    }
+    printf("\n");
+  }
+  printf("\n");
+}
+
+
+/* 
+  This is the example code revised from KaHypar. 
+  The hypergraph is the graph from RepCut
+*/
+void CPUPartitioner::KaHyParExample() {
+  kahypar_context_t* context = kahypar_context_new();
+  kahypar_configure_context_from_file(context, "/home/ychung79/kahypar/config/repcut.ini");
+  
+  kahypar_set_seed(context, -1);
+
+  /* Settings of #V and #he of H */
+  const kahypar_hypernode_id_t num_vertices = 5;
+  const kahypar_hyperedge_id_t num_hyperedges = 5;
+
+  /* Inputs of vertex weights - bibi */
+  std::unique_ptr<kahypar_hypernode_weight_t[]> vertex_weights = 
+              std::make_unique<kahypar_hypernode_weight_t[]>(num_vertices);
+  double tmp0 [num_vertices] = {2.50, 2.67, 4.33, 2.50, 2.50, };
+  for (size_t i = 0; i < (num_vertices); i++) {
+    vertex_weights[i] = tmp0[i];
+  }
+
+  /* Input of hyperedges */
+  std::unique_ptr<kahypar_hyperedge_weight_t[]> hyperedge_weights = 
+        std::make_unique<kahypar_hyperedge_weight_t[]>(num_hyperedges);
+  size_t tmp1 [num_hyperedges] = {2, 1, 2, 1, 2};
+  for (size_t i = 0; i < (num_hyperedges); i++) {
+    hyperedge_weights[i] = tmp1[i];
+  }
+
+  // eptr
+  std::unique_ptr<size_t[]> hyperedge_indices = 
+        std::make_unique<size_t[]>(num_hyperedges+1);
+  size_t tmp2 [num_hyperedges+1] = {0, 2, 5, 7, 10, 12};
+  for (size_t i = 0; i < (num_hyperedges+1); i++) {
+    hyperedge_indices[i] = tmp2[i];
+  }
+  
+  // eind
+  size_t tmp3Sz = 12; 
+  std::unique_ptr<kahypar_hyperedge_id_t[]> hyperedges = 
+          std::make_unique<kahypar_hyperedge_id_t[]>(tmp3Sz);
+  size_t tmp3 [tmp3Sz] = {0, 1, 0, 1, 2, 1, 2, 2, 3, 4, 3, 4, };
+  for (size_t i = 0; i < tmp3Sz; i++) {
+    hyperedges[i] = tmp3[i];
+  }
+
+  // write back 
+  kahypar_hyperedge_weight_t objective = 0;
+
+  std::vector<kahypar_partition_id_t> partition(num_vertices, -1);
+
+  kahypar_partition(num_vertices, num_hyperedges,
+       	            _imbalance, _k,
+               	    vertex_weights.get(), hyperedge_weights.get(),
+               	    hyperedge_indices.get(), hyperedges.get(),
+       	            &objective, context, partition.data());
+
+  for(int i = 0; i != num_vertices; ++i) {
+    std::cout << i << ":" << partition[i] << std::endl;
+  }
+
+  kahypar_context_free(context);
 }

@@ -3,9 +3,13 @@
 
 #include <fsim/cuda_partition/fsim_cuda_partition.cuh>
 
+#include <memory>
+#include <vector>
+#include <iostream>
+
 #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
-    #define VERSION 0 // VERSION can be 0, 1, 2, or 3
+    #define VERSION 4 // VERSION can be 0, 1, 2, 3, 4, 5
     #if VERSION == 0
         #define MODE 0
         #define NUM_THREADS 1
@@ -15,9 +19,15 @@
     #elif VERSION == 2
         #define MODE 2
         #define NUM_THREADS 1
-    #else // VERSION == 3
+    #elif VERSION == 3
         #define MODE 3
         #define NUM_THREADS 8
+    #elif VERSION == 4
+        #define MODE 4
+        #define NUM_THREADS 1
+    #else // VERSION == 5
+        #define MODE 5
+        #define NUM_THREADS 8    
     #endif
   #endif
   
@@ -55,45 +65,46 @@ int main(int argc, char *argv[]) {
 #ifdef CPU_PARTITIONER_VERSION
   // user perspective
   CPUPartitioner cpuPartitioner;
+  printf("RUN MODE = %d, with NUM_THREADS = %d\n", MODE, NUM_THREADS);
 
   // Read data and Run cpuPartitioner
   auto start = std::chrono::steady_clock::now();
-    cpuPartitioner.read(ckt_path, flst_path, ptn_path);
+    cpuPartitioner.read(CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
+                        ckt_path, flst_path, ptn_path);
   auto end = std::chrono::steady_clock::now();
   duration_read_data = end - start;
   
-    // Run Simulator
-    printf("RUN MODE = %d, with NUM_THREADS = %d\n", MODE, NUM_THREADS);
-    for (size_t t = 0; t < TIMES; t++) {
-      start = std::chrono::steady_clock::now();
-        cpuPartitioner.run(CPUPartitioner::Mode(static_cast<size_t>(MODE)), NUM_THREADS);
-      end = std::chrono::steady_clock::now();
-      duration_Partition += (end - start);
-    }
+    // // Run Simulator
+    // for (size_t t = 0; t < TIMES; t++) {
+    //   start = std::chrono::steady_clock::now();
+    //     cpuPartitioner.run(CPUPartitioner::Mode(static_cast<size_t>(MODE)), NUM_THREADS);
+    //   end = std::chrono::steady_clock::now();
+    //   duration_Partition += (end - start);
+    // }
 #endif  // CPU_PARTITIONER_VERSION
 
 
-#ifdef GPU_PARTITIONER_VERSION
-  printf("GPU_PARTITIONER_VERSION\n");
+// #ifdef GPU_PARTITIONER_VERSION
+//   printf("GPU_PARTITIONER_VERSION\n");
   
-  // user perspective
-  CUDAPartitioner cudaPartitioner;
+//   // user perspective
+//   CUDAPartitioner cudaPartitioner;
 
-  // Read data and Run cudaPartitioner
-  auto start = std::chrono::steady_clock::now();
-    cudaPartitioner.read(ckt_path, flst_path, ptn_path);
-  auto end = std::chrono::steady_clock::now();
-  duration_read_data = end - start;
+//   // Read data and Run cudaPartitioner
+//   auto start = std::chrono::steady_clock::now();
+//     cudaPartitioner.read(ckt_path, flst_path, ptn_path);
+//   auto end = std::chrono::steady_clock::now();
+//   duration_read_data = end - start;
   
-  // // Run Simulator
-  // for (size_t t = 0; t < TIMES; t++) {
-  //   start = std::chrono::steady_clock::now();
-  //   size_t MODE = 0;
-  //   cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(MODE)));
-  //   end = std::chrono::steady_clock::now();
-  //   duration_Partition += (end - start);
-  // }
-#endif  // GPU_PARTITIONER_VERSION
+//   // Run Simulator
+//   for (size_t t = 0; t < TIMES; t++) {
+//     start = std::chrono::steady_clock::now();
+//     size_t MODE = 0;
+//     cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(MODE)));
+//     end = std::chrono::steady_clock::now();
+//     duration_Partition += (end - start);
+//   }
+// #endif  // GPU_PARTITIONER_VERSION
 
     
 // #ifdef OUTPUT_VISUALIZATION_GRAPH_TO_FILE
@@ -110,6 +121,9 @@ int main(int argc, char *argv[]) {
   std::cout << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
   std::cout << round_to((duration_Partition.count())*1000, 0.001) << " ms\n";
 #endif  // SHOW_ALL_TIME
+
+
+  // cpuPartitioner.KaHyParExample();
 
   return 0;
 }

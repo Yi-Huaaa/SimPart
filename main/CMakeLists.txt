@@ -16,6 +16,7 @@ target_link_libraries(simple_cuda_graph PRIVATE ${CUBLAS_LIBRARIES})
 # Include cuBLAS include directories
 target_include_directories(simple_cuda_graph PRIVATE ${CUBLAS_INCLUDE_DIRS})
 
+
 # Set compiler flags for the "main" target
 target_compile_options(simple PRIVATE
   -Wall

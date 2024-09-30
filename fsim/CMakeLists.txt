@@ -38,15 +38,34 @@ add_library(fsim_cuda_partition
 )
 
 
+# -----------------------------------------------------------------------------
 # Link OpenMP for CUDA partition (needed for OpenMP support in CUDA code)
+# -----------------------------------------------------------------------------
 target_link_libraries(fsim_cuda_partition PRIVATE OpenMP::OpenMP_CXX)
 
 
+# -----------------------------------------------------------------------------
 # Add cuBLAS library if necessary
+# -----------------------------------------------------------------------------
 if (FSIM_BUILD_CUDA)
   target_link_libraries(${PROJECT_NAME} INTERFACE ${CUBLAS_LIBRARIES})
   target_include_directories(${PROJECT_NAME} INTERFACE ${CUBLAS_INCLUDE_DIRS})
 endif()
+
+
+# -----------------------------------------------------------------------------
+# KAHYPAR_LIB 
+# -----------------------------------------------------------------------------
+find_library(KAHYPAR_LIB kahypar PATHS /usr/local/lib)
+
+# Add include directories for libkahypar headers
+include_directories(/usr/local/include)
+
+# Link the library with the target fsim_cuda_partition
+target_link_libraries(fsim_cuda_partition PRIVATE ${KAHYPAR_LIB})
+message(STATUS "KAHYPAR_LIB: ${KAHYPAR_LIB}")
+
+
 
 # Set compiler flags for the "fsim" library
 target_compile_options(fsim PRIVATE
@@ -54,6 +73,7 @@ target_compile_options(fsim PRIVATE
   -Wextra
   -Wfatal-errors
   -Wshadow
+  -O3  
 )
 
 target_compile_options(fsim_cuda PRIVATE
@@ -62,6 +82,7 @@ target_compile_options(fsim_cuda PRIVATE
   -Wfatal-errors
   -Wshadow
   -lineinfo
+  -O3  
 )
 
 target_compile_options(fsim_cuda_graph PRIVATE
@@ -69,6 +90,7 @@ target_compile_options(fsim_cuda_graph PRIVATE
   -Wextra
   -Wfatal-errors
   -Wshadow
+  -O3  
 )
 
 target_compile_options(fsim_cuda_partition PRIVATE
@@ -77,4 +99,6 @@ target_compile_options(fsim_cuda_partition PRIVATE
   -Wfatal-errors
   -Wshadow
   -lineinfo
+  -O3
+  -DNDEBUG
 )

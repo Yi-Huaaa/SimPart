@@ -13,6 +13,7 @@
 
 // CPU
 #include <fsim/fsim.hpp>
+#include <libkahypar.h>
 
 
 // Forward declaration
@@ -25,17 +26,23 @@ class CPUPartitioner {
   friend class CUDASimulator;
 
 public:
-  enum class Mode { SEQUENTIAL = 0, PARALLEL_OMP, CONES_SEQUENTIAL, CONES_PARALLEL_OMP };
+  enum class Mode { SEQUENTIAL = 0, 
+                    PARALLEL_OMP, 
+                    CONES_SEQUENTIAL, 
+                    CONES_PARALLEL_OMP, 
+                    REPCUT_SEQUENTIAL, 
+                    REPCUT_PARALLEL_OMP, 
+                  };
 
   // accessor
-  void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
-  void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
+  void read(Mode mode, const std::string &ckt, const std::string &flst, const std::string &ptn);
+  void read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn);
   void run(Mode mode, const size_t num_threads);
   void visualization_graph(const std::string &outputFile);
-  
+  void KaHyParExample();
 
 private:
-  // Basic private members 
+  /* Private members */
   size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   size_t _sum_pi_gates_pos;
   std::vector<PI> _PIs;
@@ -74,6 +81,36 @@ private:
   // const size_t _merge_threshold = 11; // adjustable  
   // const size_t _merge_bound = 2;
 
+
+  // For repCut
+  // TODO: lots of things have no need to be private members -> move back to local 
+  std::vector<std::vector<size_t>> _clusters; 
+  std::vector<size_t> _to_hypergraph_vertex_idx; // cluster index to (1) vectex index and (2) hyperedge index 
+  std::vector<std::vector<size_t>> _gate_to_cones; 
+  std::vector<size_t> _gate_to_cluster; 
+  std::vector<size_t> _is_sink_clusters_idx; 
+  std::vector<size_t> _non_sink_clusters_idx;
+  std::vector<bool> _is_sink_clusters; // bool is sink cluster or now
+  std::vector<size_t> _vertexIdx_to_sinkGateIdx; 
+  std::vector<std::vector<std::set<size_t>>> _RepCut_output_cones;
+
+  // For KaHyPar
+  std::vector<size_t> _vectices_weight;
+  std::vector<size_t> _hyperedges_weight;
+  std::vector<size_t> _hyperedges_eind;
+  std::vector<size_t> _hyperedges_eptr;
+  const double _imbalance = 0.015;
+  const kahypar_partition_id_t _k = 2; // number of partitions 
+  const size_t _k_sizet = 2; 
+  size_t _KaHyPar_num_vertices; // number of sinks
+  size_t _KaHyPar_num_hyperedges;
+
+
+
+
+
+
+  /* Functions */
   // Construct
   void _read_graph(std::istream &ckt, 
                   std::vector<std::vector<size_t>> &adj,
@@ -108,10 +145,22 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                       const size_t startLevel, const int stopLevel, 
                       const size_t numLevels);
 
-  void _merge_cones(std::vector<std::vector<std::vector<size_t>>> &cones,
-                      std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
-                      std::vector<std::vector<std::vector<size_t>>> &outputCones);
-  
+  void _merge_cones(std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
+                    std::vector<std::vector<std::vector<size_t>>> &outputCones);
+
+  // RepCut
+  void _RepCut();
+  void _find_clusters();
+  void _construct_hyperGraph();
+  void _construct_hyperedge_vertices();
+  void _compute_vertex_weight(std::vector<double> &tmp_vectices_weight,
+        std::vector<std::set<size_t>> &vertex_include_which_hyperedges);
+  void _multiple_100(std::vector<double> &tmp_vectices_weight);        
+  void _run_KaHyPar(std::vector<size_t> &vertex_to_partition);
+  void _get_KHP_partitioning_res(std::vector<size_t> &vertex_to_partition);
+
+
+  // FSIM
   void _construct_graph(std::istream &ckt);
   void _read_pattern(std::istream &ptn);
   void _read_fault(std::istream &flst);
@@ -160,6 +209,11 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   void print_simulation_results(const std::vector<size_t> &pi_results,
                                 const std::vector<size_t> &gate_results,
                                 const std::vector<size_t> &po_results) const;
+  void _print_find_clusters() const;
+  void print_hyperedge_vertices_details(const std::vector<std::set<size_t>> &hyperedge_include_which_vertices,
+                                        const std::vector<std::set<size_t>> &vertex_include_which_hyperedges) const;
+  void _print_RepCut_output_cones();
+
 };
 
 #endif
