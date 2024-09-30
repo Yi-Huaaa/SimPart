@@ -92,7 +92,8 @@ private:
   std::vector<size_t> _non_sink_clusters_idx;
   std::vector<bool> _is_sink_clusters; // bool is sink cluster or now
   std::vector<size_t> _vertexIdx_to_sinkGateIdx; 
-  std::vector<std::vector<std::set<size_t>>> _RepCut_output_cones;
+  std::vector<std::vector<std::set<size_t>>> _RepCut_output_cones_set;
+  std::vector<std::vector<std::vector<size_t>>> _RepCut_output_cones;
 
   // For KaHyPar
   std::vector<size_t> _vectices_weight;
@@ -174,13 +175,22 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   void _run_fsim(const size_t num_threads);
   void _run_good_case(const Pattern pattern, const size_t bits, const size_t num_threads);
   void _run_bad_case(const Fault &fault, const Pattern pattern, 
-                      const size_t bits, const size_t num_threads);
+                    const size_t bits, const size_t num_threads);
   
   // Simulation - sequentail and parallel (with partitioning to cones)
   void _run_cones_gates(const size_t num_threads);
   void _run_cones_good_case(const Pattern pattern, const size_t bits, const size_t num_threads);
   void _run_cones_bad_case(const Fault &fault, const Pattern pattern, 
-                      const size_t bits, const size_t num_threads);
+                          const size_t bits, const size_t num_threads);
+  
+  // Simulation - sequentail and parallel (with partitioning to RepCut's output cones)
+  void _run_RepCut_cones_gates(const size_t num_threads);
+  void _run_RepCut_cones_good_case(const Pattern pattern, 
+                                  const size_t bits, 
+                                  const size_t num_threads);
+  void _run_RepCut_cones_bad_case(const Fault &fault, const Pattern pattern, 
+                                  const size_t bits, const size_t num_threads);
+
 
 
   void _apply_INV(ElementBase &gate);

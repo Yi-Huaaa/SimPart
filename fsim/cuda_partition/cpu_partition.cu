@@ -1006,8 +1006,10 @@ void CPUPartitioner::_run_KaHyPar(std::vector<size_t> &vertex_to_partition) {
 }
 
 void CPUPartitioner::_get_KHP_partitioning_res(std::vector<size_t> &vertex_to_partition) {
+  _RepCut_output_cones_set.resize(_k);
   _RepCut_output_cones.resize(_k);
   for (size_t i = 0; i < _k_sizet; i++) {
+    _RepCut_output_cones_set[i].resize(_total_num_levels);
     _RepCut_output_cones[i].resize(_total_num_levels);
   }
 
@@ -1023,8 +1025,16 @@ void CPUPartitioner::_get_KHP_partitioning_res(std::vector<size_t> &vertex_to_pa
       for (size_t lvl = 0; lvl < _cones[coneIdx].size(); lvl++) {
         for (size_t g = 0; g < _cones[coneIdx][lvl].size(); g++) {
           size_t gateIdx = _cones[coneIdx][lvl][g];
-          _RepCut_output_cones[partitionIdx][lvl].insert(gateIdx);
+          _RepCut_output_cones_set[partitionIdx][lvl].insert(gateIdx);
         }
+      }
+    }
+  }
+
+  for (size_t i = 0; i < _RepCut_output_cones_set.size(); ++i) {
+    for (size_t lvl = 0; lvl < _RepCut_output_cones_set[i].size(); ++lvl) {
+      for (const auto& element : _RepCut_output_cones_set[i][lvl]) {
+        _RepCut_output_cones[i][lvl].push_back(element);
       }
     }
   }
@@ -1060,11 +1070,11 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
     case Mode::REPCUT_SEQUENTIAL:
       std::cout << "run REPCUT_SEQUENTIAL\n";
       assert(num_threads == 1 && "RUN REPCUT_SEQUENTIAL num_threads > 1");
-      // _run_cones_gates(num_threads);
+      _run_RepCut_cones_gates(num_threads);
       break;
     case Mode::REPCUT_PARALLEL_OMP:
       std::cout << "run REPCUT_PARALLEL_OMP\n";
-      // _run_cones_gates(num_threads);
+      _run_RepCut_cones_gates(num_threads);
       break;      
     default:
       printf("No SUCH CASES\n");
@@ -1308,13 +1318,123 @@ void CPUPartitioner::_run_cones_bad_case(const Fault &fault, const Pattern patte
 #endif
 }
 
+void CPUPartitioner::_run_RepCut_cones_gates(const size_t num_threads) {
+#ifdef PART_DEBUG_PRINT_SIMULATION
+  std::cout << "execute simulation._run_RepCut_cones_gates();\n";
+#endif
+
+  // Simulation
+  for (size_t rd = 0; rd < _num_rounds; rd++) {
+    size_t num_testcases_this_round =
+        ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
+            ? (SIZE_T_BITS)
+            : (_num_pattern % SIZE_T_BITS);
+#ifdef PART_DEBUG_PRINT_SIMULATION
+    std::cout << "Run Good case with threads = " << num_threads << std::endl;
+#endif
+    _run_RepCut_cones_good_case(_patterns[rd], num_testcases_this_round, num_threads);
+    
+    // bad simulation (fault simulation)
+    for (size_t j = 0; j < _faults.size(); j++) {
+      _run_RepCut_cones_bad_case(_faults[j], _patterns[rd], 
+                          num_testcases_this_round, num_threads);
+
+      size_t found_fault = 0;
+      for (size_t i = 0; i < _num_POs; i++) {
+        if (_g_po_results[i] != _b_po_results[i]) {
+          found_fault = 1;
+          break;
+        }
+      }
+      // Record whether fault can be found
+      _found_fault_to_pattern[2 * j] = found_fault;
+      // Record which pattern found the fault
+      _found_fault_to_pattern[2 * j + 1] = rd;
+    }
+#ifdef PART_DEBUG_PRINT_SIMULATION
+  if (rd == 0) {
+    std::cout << "GOOD resutls ans:" << std::endl;
+    print_simulation_results(_g_pi_results, _g_gate_results, _g_po_results);        
+  }
+#endif
+  }
+}
+
+void CPUPartitioner::_run_RepCut_cones_good_case(const Pattern pattern, 
+                                          const size_t bits, 
+                                          const size_t num_threads) {
+
+  omp_set_num_threads(num_threads);  // Set the number of threads for OpenMP
+
+  // Parallelize across cones (c)
+  #pragma omp parallel for
+  for (size_t c = 0; c < _RepCut_output_cones.size(); c++) {
+    for (int lvl = _RepCut_output_cones[c].size()-1; lvl > -1; lvl--) {
+      // Parallelize across gates within the same cone and level
+      #pragma omp parallel for
+      for (const auto& gateIdx : _RepCut_output_cones[c][lvl]) {
+        
+        // Select the correct element (PI, PO, or gate)
+        ElementBase &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase&>(_PIs[gateIdx - _pi_idx_accum]) :
+                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase&>(_gates[gateIdx - _gate_idx_accum]) :
+                            static_cast<ElementBase&>(_POs[gateIdx - _po_idx_accum]);
+
+        // Execute the gate operation
+        _run_gate(tmp, pattern, gateIdx, 0, 0);
+      }
+    }
+  }
+  
+  // Duplicated the answer of good_case into a new memory
+  _write_to_array(_g_pi_results, _g_gate_results, _g_po_results, bits);
+
+#ifdef PART_DEBUG_PRINT_SIMULATION
+  std::cout << "CONES: GOOD resutls ans:\n";
+  print_simulation_results(_g_pi_results, _g_gate_results, _g_po_results);
+#endif
+}
 
 
+void CPUPartitioner::_run_RepCut_cones_bad_case(const Fault &fault, const Pattern pattern,
+                                    const size_t bits, const size_t num_threads) {
+  // printf("Getting inside _run_RepCut_cones_bad_case\n");
+  omp_set_num_threads(num_threads);  // Set the number of threads for OpenMP
 
+  size_t wrong_gate = fault._gate_with_fault;
+  size_t fault_val = fault._gate_SA_fault_val;
 
+  // Parallelize across cones (c)
+  #pragma omp parallel for
+  for (size_t c = 0; c < _RepCut_output_cones.size(); c++) {
+    for (int lvl = _RepCut_output_cones[c].size()-1; lvl > -1; lvl--) {
+      // Parallelize across gates within the same cone and level
+      #pragma omp parallel for
+      for (const auto& gateIdx : _RepCut_output_cones[c][lvl]) {
 
+        // Calculate SA_fault using a ternary operator (avoiding if-else)
+        size_t SA_fault = (gateIdx < _num_PIs) ? ((gateIdx + _pi_idx_accum) == wrong_gate) :
+                          (gateIdx >= (_num_PIs + _num_POs)) ? ((gateIdx + _gate_idx_accum) == wrong_gate) :
+                                                              ((gateIdx + _po_idx_accum) == wrong_gate);
 
+        // Select the correct element (PI, PO, or gate)
+        ElementBase &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase&>(_PIs[gateIdx - _pi_idx_accum]) :
+                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase&>(_gates[gateIdx - _gate_idx_accum]) :
+                            static_cast<ElementBase&>(_POs[gateIdx - _po_idx_accum]);
 
+        // Execute the gate operation
+        _run_gate(tmp, pattern, gateIdx, SA_fault, fault_val);
+      }
+    }
+  }
+
+  // Duplicated the answer of good_case into a new memory
+  _write_to_array(_b_pi_results, _b_gate_results, _b_po_results, bits);
+
+#ifdef PART_DEBUG_PRINT_SIMULATION
+  std::cout << "CONES: BAD resutls ans:\n";
+  print_simulation_results(_b_pi_results, _b_gate_results, _b_po_results);
+#endif
+}
 
 void CPUPartitioner::_write_to_array(std::vector<size_t> &pi_output, 
                                     std::vector<size_t> &gate_output,
