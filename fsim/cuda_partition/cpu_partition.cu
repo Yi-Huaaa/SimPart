@@ -736,11 +736,15 @@ void CPUPartitioner::_merge_cones(std::vector<std::vector<std::vector<size_t>>> 
 
 void CPUPartitioner::_RepCut() {
   _find_clusters();
-  _construct_hyperGraph();
-  std::vector<size_t> vertex_to_partition;
-  _run_KaHyPar(vertex_to_partition);
 
-  _get_KHP_partitioning_res(vertex_to_partition);
+  if (_can_run_kahypar) {
+    _construct_hyperGraph();
+    std::vector<size_t> vertex_to_partition;
+    _run_KaHyPar(vertex_to_partition);
+    _get_KHP_partitioning_res(vertex_to_partition);
+  } else {
+    _RepCut_output_cones = _cones;
+  }
 }
 
 /* For those gates who belong to the same cones belong to the same cluster */
@@ -801,17 +805,30 @@ void CPUPartitioner::_find_clusters() {
     }
   }
 
-  _KaHyPar_num_hyperedges = _clusters.size() - _KaHyPar_num_vertices;
+  
+  if (_clusters.size() != 1) {
+    _KaHyPar_num_hyperedges = _clusters.size() - _KaHyPar_num_vertices;
 
-  // Get _to_hypergraph_vertex_idx, _is_sink_clusters_idx, _non_sink_clusters_idx
-  for (size_t i = 0; i < _clusters.size(); i++) {
-    if (_is_sink_clusters[i]) {
-      _to_hypergraph_vertex_idx.push_back(_is_sink_clusters_idx.size());
-      _is_sink_clusters_idx.push_back(i); // vertex
-    } else {
-      _to_hypergraph_vertex_idx.push_back(_non_sink_clusters_idx.size());
-      _non_sink_clusters_idx.push_back(i); // hyperedge
+    // Get _to_hypergraph_vertex_idx, _is_sink_clusters_idx, _non_sink_clusters_idx
+    for (size_t i = 0; i < _clusters.size(); i++) {
+      if (_is_sink_clusters[i]) {
+        _to_hypergraph_vertex_idx.push_back(_is_sink_clusters_idx.size());
+        _is_sink_clusters_idx.push_back(i); // vertex
+      } else {
+        _to_hypergraph_vertex_idx.push_back(_non_sink_clusters_idx.size());
+        _non_sink_clusters_idx.push_back(i); // hyperedge
+      }
     }
+  }
+
+  if (_clusters.size() == 1 || _KaHyPar_num_vertices == 0 || _KaHyPar_num_hyperedges == 0) {
+    _can_run_kahypar = false;
+    // // DEBUG 
+    // int a0 = (_clusters.size() == 1) ? (1) : (0);
+    // int a1 = (_KaHyPar_num_vertices == 0) ? (1) : (0);
+    // int a2 = (_KaHyPar_num_hyperedges == 0) ? (1) : (0);
+    // printf("_can_run_kahypar is false since %d %d %d\n", a0, a1, a2);
+    // // DEBUG 
   }
 
 #ifdef PART_DEBUG_REPCUT_PRINT_FIND_CLUSTERS
@@ -918,9 +935,15 @@ void CPUPartitioner::_compute_vertex_weight(std::vector<double> &tmp_vectices_we
 
     for (const auto& hyperedgeIdx : vertex_include_which_hyperedges[vertexIdx]) {
       sumOfYita += _hyperedges_weight[hyperedgeIdx];
+      // printf("sumOfYita = %.3lf\n", sumOfYita);
     }
 
-    sumOfYita /= double(vertex_include_which_hyperedges[vertexIdx].size());
+    if (vertex_include_which_hyperedges[vertexIdx].size() != 0) {
+      sumOfYita /= double(vertex_include_which_hyperedges[vertexIdx].size());
+    }
+
+    // printf("BIBI vertexIdx = %lu, sumOfYita = %.2lf\n", vertexIdx, sumOfYita);
+
     sumOfYita += _clusters[clusterIdx].size();
     tmp_vectices_weight[vertexIdx] = sumOfYita;
   }
@@ -1069,11 +1092,21 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
       break;
     case Mode::REPCUT_SEQUENTIAL:
       std::cout << "run REPCUT_SEQUENTIAL\n";
+      if (_can_run_kahypar) {
+        printf("_can_run_kahypar TRUE\n");
+      } else {
+        printf("_can_run_kahypar FALSE\n");
+      }
       assert(num_threads == 1 && "RUN REPCUT_SEQUENTIAL num_threads > 1");
       _run_RepCut_cones_gates(num_threads);
       break;
     case Mode::REPCUT_PARALLEL_OMP:
       std::cout << "run REPCUT_PARALLEL_OMP\n";
+      if (_can_run_kahypar) {
+        printf("_can_run_kahypar TRUE\n");
+      } else {
+        printf("_can_run_kahypar FALSE\n");
+      }
       _run_RepCut_cones_gates(num_threads);
       break;      
     default:
@@ -1791,40 +1824,43 @@ void CPUPartitioner::_print_find_clusters() const {
   }
   printf("\n");
 
-  printf("_is_sink_clusters:\n");
-  for (size_t i = 0; i < _is_sink_clusters.size(); i ++) {
-    if (_is_sink_clusters[i]) {
-      printf("cluster %lu: true\n", i);
-    } else {
-      printf("cluster %lu: false\n", i);
-    }
-  }
-  printf("\n");
 
+  if (_can_run_kahypar) {
+    printf("_is_sink_clusters:\n");
+    for (size_t i = 0; i < _is_sink_clusters.size(); i ++) {
+      if (_is_sink_clusters[i]) {
+        printf("cluster %lu: true\n", i);
+      } else {
+        printf("cluster %lu: false\n", i);
+      }
+    }
+    printf("\n");
   
-  printf("_KaHyPar_num_hyperedges = %lu, _KaHyPar_num_vertices = %lu\n", 
-          _KaHyPar_num_hyperedges, _KaHyPar_num_vertices);
-
-  printf("_is_sink_clusters_idx: ");
-  for (size_t i = 0; i < _is_sink_clusters_idx.size(); i++) {
-    printf("%lu, ", _is_sink_clusters_idx[i]);
-  }        
-  printf("\n");  
-
-  printf("_non_sink_clusters_idx: ");
-  for (size_t i = 0; i < _non_sink_clusters_idx.size(); i++) {
-    printf("%lu, ", _non_sink_clusters_idx[i]);
-  }        
-  printf("\n");
-
-  for (size_t i = 0; i < _clusters.size(); i++) {
-    if (_is_sink_clusters[i]) {
-      printf("cluster %lu, is vertex on HG, with vertex index = %lu\n", i,  _to_hypergraph_vertex_idx[i]);
-    } else {
-      printf("cluster %lu, is hyperegde on HG, with hyperegde index = %lu\n", i,  _to_hypergraph_vertex_idx[i]);
+    
+    printf("_KaHyPar_num_hyperedges = %lu, _KaHyPar_num_vertices = %lu\n", 
+            _KaHyPar_num_hyperedges, _KaHyPar_num_vertices);
+  
+    printf("_is_sink_clusters_idx: ");
+    for (size_t i = 0; i < _is_sink_clusters_idx.size(); i++) {
+      printf("%lu, ", _is_sink_clusters_idx[i]);
+    }        
+    printf("\n");  
+  
+    printf("_non_sink_clusters_idx: ");
+    for (size_t i = 0; i < _non_sink_clusters_idx.size(); i++) {
+      printf("%lu, ", _non_sink_clusters_idx[i]);
+    }        
+    printf("\n");
+  
+    for (size_t i = 0; i < _clusters.size(); i++) {
+      if (_is_sink_clusters[i]) {
+        printf("cluster %lu, is vertex on HG, with vertex index = %lu\n", i,  _to_hypergraph_vertex_idx[i]);
+      } else {
+        printf("cluster %lu, is hyperegde on HG, with hyperegde index = %lu\n", i,  _to_hypergraph_vertex_idx[i]);
+      }
     }
+    printf("\n");
   }
-  printf("\n");
 }
 
 

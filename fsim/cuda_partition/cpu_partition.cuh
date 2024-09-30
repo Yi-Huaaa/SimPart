@@ -84,6 +84,7 @@ private:
 
   // For repCut
   // TODO: lots of things have no need to be private members -> move back to local 
+  bool _can_run_kahypar = true;
   std::vector<std::vector<size_t>> _clusters; 
   std::vector<size_t> _to_hypergraph_vertex_idx; // cluster index to (1) vectex index and (2) hyperedge index 
   std::vector<std::vector<size_t>> _gate_to_cones; 
@@ -103,8 +104,8 @@ private:
   const double _imbalance = 0.015;
   const kahypar_partition_id_t _k = 2; // number of partitions 
   const size_t _k_sizet = 2; 
-  size_t _KaHyPar_num_vertices; // number of sinks
-  size_t _KaHyPar_num_hyperedges;
+  size_t _KaHyPar_num_vertices = 0; // number of sinks
+  size_t _KaHyPar_num_hyperedges = 0;
 
 
 
