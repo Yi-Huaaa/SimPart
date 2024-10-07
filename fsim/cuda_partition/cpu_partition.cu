@@ -71,6 +71,11 @@ void CPUPartitioner::read(Mode mode, const std::string &ckt_path, const std::str
 }
 
 void CPUPartitioner::read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn) {
+  auto start = std::chrono::steady_clock::now();
+  std::chrono::duration<double> duration_0;
+  std::chrono::duration<double> duration_1;
+
+
   // Read gate 
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
   std::vector<std::vector<size_t>> adj;
@@ -97,23 +102,36 @@ void CPUPartitioner::read(Mode mode, std::istream &ckt, std::istream &flst, std:
     case Mode::REPCUT_SEQUENTIAL:
       /* Partitioning */
       _partition(adj);
-      _RepCut();
+      _RepCut(duration_0, duration_1);
       break;
     case Mode::REPCUT_PARALLEL_OMP:
       /* Partitioning */
       _partition(adj);
-      _RepCut();
+      _RepCut(duration_0, duration_1);
       break;      
     default:
       printf("read: No SUCH CASES\n");
       return; 
   }
 
+
+
   /* Construct circuit, Read Pattern, Read Fault */
   _construct_graph(ckt);
   _read_fault(flst);
   _read_pattern(ptn);
   _ask_simulation_memory();
+
+  auto end = std::chrono::steady_clock::now();
+  std::chrono::duration<double> duration_read_data = end - start;
+  std::cout << "Inside read_data: " << _round_to((duration_0.count())*1000, 0.001) << " ms\n";
+  std::cout << "Inside read_data: " << _round_to((duration_1.count())*1000, 0.001) << " ms\n";
+  std::cout << "Inside read_data: " << _round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
+  
+
+
+  _print_num_PIs_Gates_POs(mode);
+
 }
 
 
@@ -200,38 +218,35 @@ void CPUPartitioner::_read_graph(std::istream &ckt,
   }
   assert(_sources.size() == _num_PIs && "_sources.size() != _num_PIs");
   
-  // printf("_sources.size() = %lu\n", _sources.size());
-  // for (size_t i = 0; i < _num_PIs; i++) {
-  //   if (adj[i].size() == 0) {
-  //     printf("adj[%lu].size() = %lu;;; gates = ", i, adj[i].size());
-  //     for (size_t j = 0; j < adj[i].size(); j++) {
-  //       printf("%lu, ", adj[i][j]);
-  //     }
-  //     printf("\n");
-  //   }
-  // }
-  // printf("\n");
-
-  // for (size_t i = 0; i < _num_PIs; i++) {
-  //   printf("invAdj[%lu].size() = %lu;;; gates = ", i, invAdj[i].size());
-  //   for (size_t j = 0; j < invAdj[i].size(); j++) {
-  //     printf("%lu, ", invAdj[i][j]);
-  //   }
-  //   printf("\n");
-  // }
-  // printf("\n");
-
-
-
-
 #ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
+
+  printf("_sources.size() = %lu\n", _sources.size());
+  for (size_t i = 0; i < _num_PIs; i++) {
+    if (adj[i].size() == 0) {
+      printf("adj[%lu].size() = %lu;;; gates = ", i, adj[i].size());
+      for (size_t j = 0; j < adj[i].size(); j++) {
+        printf("%lu, ", adj[i][j]);
+      }
+      printf("\n");
+    }
+  }
+  printf("\n");
+
+  for (size_t i = 0; i < _num_PIs; i++) {
+    printf("invAdj[%lu].size() = %lu;;; gates = ", i, invAdj[i].size());
+    for (size_t j = 0; j < invAdj[i].size(); j++) {
+      printf("%lu, ", invAdj[i][j]);
+    }
+    printf("\n");
+  }
+  printf("\n");
+
   printf("Check _gate_input_order_table\n");
   for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
     printf("_gate_input_order_table[%lu] = ", i);
     for (size_t j = 0; j < 5; j++) {
       printf("%lu, ", _gate_input_order_table[i*5+j]);
     }
-    printf("\n");
   }
 #endif 
 }
@@ -457,17 +472,6 @@ void CPUPartitioner::_partition(std::vector<std::vector<size_t>> &adj) {
                     gateBelongsToWhichCones, 
                     coneIdxToSinkGateIdx, 
                     stopLevel);
-    // // Construct  
-    // const size_t numLevels = startLevel - stopLevel;
-    // _construct_duplication_table(coneIdxToSinkGateIdx, 
-    //                                 gateBelongsToWhichCones, 
-    //                                 duplicationTable, 
-    //                                 startLevel, stopLevel,  
-    //                                 numLevels);
-    
-    // // Merge _cones 
-    // _merge_cones(duplicationTable, outputCones);
-
 
     // Update startLevel & conti 
     stop = (stopLevel == -1) ? (true) : (false);
@@ -734,14 +738,23 @@ void CPUPartitioner::_merge_cones(std::vector<std::vector<std::vector<size_t>>> 
 }
 
 
-void CPUPartitioner::_RepCut() {
+void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1) {
+  auto start = std::chrono::steady_clock::now();
+  auto end0 = std::chrono::steady_clock::now();
+  auto end1 = std::chrono::steady_clock::now();
+
+
   _find_clusters();
 
   if (_can_run_kahypar) {
     _construct_hyperGraph();
+end0 = std::chrono::steady_clock::now();
+duration_0 = end0 - start;    
     std::vector<size_t> vertex_to_partition;
     _run_KaHyPar(vertex_to_partition);
     _get_KHP_partitioning_res(vertex_to_partition);
+end1 = std::chrono::steady_clock::now();
+duration_1 = end1 - start;        
   } else {
     _RepCut_output_cones = _cones;
   }
@@ -1070,25 +1083,29 @@ void CPUPartitioner::_get_KHP_partitioning_res(std::vector<size_t> &vertex_to_pa
 // Run the simulation 
 void CPUPartitioner::run(Mode mode, const size_t num_threads) {
   switch (mode) {
-    case Mode::SEQUENTIAL:
+    case Mode::SEQUENTIAL: {
       std::cout << "run SEQUENTIAL\n";
       assert(num_threads == 1 && "RUN SEQUENTIAL num_threads num_threads > 1");
       _run_fsim(num_threads);
       break;
-    case Mode::PARALLEL_OMP:
+    }
+    case Mode::PARALLEL_OMP: {
       std::cout << "run PARALLEL_OMP\n";
       _run_fsim(num_threads);
       break;
-    case Mode::CONES_SEQUENTIAL:
+    }
+    case Mode::CONES_SEQUENTIAL: {
       std::cout << "run CONES_SEQUENTIAL\n";
       assert(num_threads == 1 && "RUN CONES_SEQUENTIAL num_threads num_threads > 1");
       _run_cones_gates(num_threads);
       break;
-    case Mode::CONES_PARALLEL_OMP:
+    }
+    case Mode::CONES_PARALLEL_OMP: {
       std::cout << "run CONES_PARALLEL_OMP\n";
       _run_cones_gates(num_threads);
       break;
-    case Mode::REPCUT_SEQUENTIAL:
+    }
+    case Mode::REPCUT_SEQUENTIAL: {
       std::cout << "run REPCUT_SEQUENTIAL\n";
       if (_can_run_kahypar) {
         printf("_can_run_kahypar TRUE\n");
@@ -1096,9 +1113,22 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
         printf("_can_run_kahypar FALSE\n");
       }
       assert(num_threads == 1 && "RUN REPCUT_SEQUENTIAL num_threads > 1");
+      auto start = std::chrono::steady_clock::now();      
       _run_RepCut_cones_gates(num_threads);
+      auto end = std::chrono::steady_clock::now();      
+      std::chrono::duration<double> duration_0 = end - start;
+
+      start = std::chrono::steady_clock::now();      
+      const size_t new_num_threads = 8;
+      _run_RepCut_cones_gates(new_num_threads);
+      end = std::chrono::steady_clock::now();      
+      std::chrono::duration<double> duration_1 = end - start;
+      
+      std::cout << "BIBI run_CUDA SEQ: " << _round_to((duration_0.count())*1000, 0.001) << " ms\n";
+      std::cout << "BIBI run_CUDA OMP: " << _round_to((duration_1.count())*1000, 0.001) << " ms\n";
       break;
-    case Mode::REPCUT_PARALLEL_OMP:
+    }
+    case Mode::REPCUT_PARALLEL_OMP: {
       std::cout << "run REPCUT_PARALLEL_OMP\n";
       if (_can_run_kahypar) {
         printf("_can_run_kahypar TRUE\n");
@@ -1107,6 +1137,7 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
       }
       _run_RepCut_cones_gates(num_threads);
       break;      
+    }
     default:
       printf("No SUCH CASES\n");
       return; 
@@ -1132,23 +1163,23 @@ void CPUPartitioner::_run_fsim(const size_t num_threads) {
 #endif
     _run_good_case(_patterns[rd], num_testcases_this_round, num_threads);
     
-    // bad simulation (fault simulation)
-    for (size_t j = 0; j < _faults.size(); j++) {
-      _run_bad_case(_faults[j], _patterns[rd], 
-                    num_testcases_this_round, num_threads);
+    // // bad simulation (fault simulation)
+    // for (size_t j = 0; j < _faults.size(); j++) {
+    //   _run_bad_case(_faults[j], _patterns[rd], 
+    //                 num_testcases_this_round, num_threads);
 
-      size_t found_fault = 0;
-      for (size_t i = 0; i < _num_POs; i++) {
-        if (_g_po_results[i] != _b_po_results[i]) {
-          found_fault = 1;
-          break;
-        }
-      }
-      // Record whether fault can be found
-      _found_fault_to_pattern[2 * j] = found_fault;
-      // Record which pattern found the fault
-      _found_fault_to_pattern[2 * j + 1] = rd;
-    }
+    //   size_t found_fault = 0;
+    //   for (size_t i = 0; i < _num_POs; i++) {
+    //     if (_g_po_results[i] != _b_po_results[i]) {
+    //       found_fault = 1;
+    //       break;
+    //     }
+    //   }
+    //   // Record whether fault can be found
+    //   _found_fault_to_pattern[2 * j] = found_fault;
+    //   // Record which pattern found the fault
+    //   _found_fault_to_pattern[2 * j + 1] = rd;
+    // }
 #ifdef PART_DEBUG_PRINT_SIMULATION
   if (rd == 0) {
     std::cout << "GOOD resutls ans:" << std::endl;
@@ -1243,23 +1274,23 @@ void CPUPartitioner::_run_cones_gates(const size_t num_threads) {
 #endif
     _run_cones_good_case(_patterns[rd], num_testcases_this_round, num_threads);
     
-    // bad simulation (fault simulation)
-    for (size_t j = 0; j < _faults.size(); j++) {
-      _run_cones_bad_case(_faults[j], _patterns[rd], 
-                          num_testcases_this_round, num_threads);
+    // // bad simulation (fault simulation)
+    // for (size_t j = 0; j < _faults.size(); j++) {
+    //   _run_cones_bad_case(_faults[j], _patterns[rd], 
+    //                       num_testcases_this_round, num_threads);
 
-      size_t found_fault = 0;
-      for (size_t i = 0; i < _num_POs; i++) {
-        if (_g_po_results[i] != _b_po_results[i]) {
-          found_fault = 1;
-          break;
-        }
-      }
-      // Record whether fault can be found
-      _found_fault_to_pattern[2 * j] = found_fault;
-      // Record which pattern found the fault
-      _found_fault_to_pattern[2 * j + 1] = rd;
-    }
+    //   size_t found_fault = 0;
+    //   for (size_t i = 0; i < _num_POs; i++) {
+    //     if (_g_po_results[i] != _b_po_results[i]) {
+    //       found_fault = 1;
+    //       break;
+    //     }
+    //   }
+    //   // Record whether fault can be found
+    //   _found_fault_to_pattern[2 * j] = found_fault;
+    //   // Record which pattern found the fault
+    //   _found_fault_to_pattern[2 * j + 1] = rd;
+    // }
 #ifdef PART_DEBUG_PRINT_SIMULATION
   if (rd == 0) {
     std::cout << "GOOD resutls ans:" << std::endl;
@@ -1365,23 +1396,23 @@ void CPUPartitioner::_run_RepCut_cones_gates(const size_t num_threads) {
 #endif
     _run_RepCut_cones_good_case(_patterns[rd], num_testcases_this_round, num_threads);
     
-    // bad simulation (fault simulation)
-    for (size_t j = 0; j < _faults.size(); j++) {
-      _run_RepCut_cones_bad_case(_faults[j], _patterns[rd], 
-                          num_testcases_this_round, num_threads);
+    // // bad simulation (fault simulation)
+    // for (size_t j = 0; j < _faults.size(); j++) {
+    //   _run_RepCut_cones_bad_case(_faults[j], _patterns[rd], 
+    //                       num_testcases_this_round, num_threads);
 
-      size_t found_fault = 0;
-      for (size_t i = 0; i < _num_POs; i++) {
-        if (_g_po_results[i] != _b_po_results[i]) {
-          found_fault = 1;
-          break;
-        }
-      }
-      // Record whether fault can be found
-      _found_fault_to_pattern[2 * j] = found_fault;
-      // Record which pattern found the fault
-      _found_fault_to_pattern[2 * j + 1] = rd;
-    }
+    //   size_t found_fault = 0;
+    //   for (size_t i = 0; i < _num_POs; i++) {
+    //     if (_g_po_results[i] != _b_po_results[i]) {
+    //       found_fault = 1;
+    //       break;
+    //     }
+    //   }
+    //   // Record whether fault can be found
+    //   _found_fault_to_pattern[2 * j] = found_fault;
+    //   // Record which pattern found the fault
+    //   _found_fault_to_pattern[2 * j + 1] = rd;
+    // }
 #ifdef PART_DEBUG_PRINT_SIMULATION
   if (rd == 0) {
     std::cout << "GOOD resutls ans:" << std::endl;
@@ -1929,6 +1960,70 @@ void CPUPartitioner::_print_RepCut_output_cones() {
 }
 
 
+void CPUPartitioner::_print_num_PIs_Gates_POs(Mode mode) {
+  std::vector<size_t> ret;
+  _traverse_cones_for_print(mode, ret);
+
+  printf("new_num_PIs = %lu, new_num_inner_gates = %lu, new_num_POs = %lu\n", 
+          ret[0], ret[1], ret[2]);
+}
+
+void CPUPartitioner::_traverse_cones_for_print(Mode mode, std::vector<size_t> &ret) {
+  ret.resize(3, 0);
+  // const size_t b0 = 0;
+  const size_t b1 = _num_PIs;
+  const size_t b2 = _num_PIs + _num_POs;
+  const size_t b3 = _sum_pi_gates_pos;
+
+  if (mode == Mode::SEQUENTIAL || mode == Mode::PARALLEL_OMP) {
+    ret[0] = _num_PIs;
+    ret[2] = _num_POs;
+    ret[1] = _num_inner_gates;
+  } else if (mode == Mode::CONES_SEQUENTIAL || mode == Mode::CONES_PARALLEL_OMP) {
+    for (size_t c = 0; c < _cones.size(); c++) {
+      for (size_t lvl = 0; lvl < _cones[c].size(); lvl++) {
+        for (size_t g = 0; g < _cones[c][lvl].size(); g++) {
+          size_t gateIdx = _cones[c][lvl][g];
+          if (gateIdx < b1) { // PIs
+            ret[0]++;
+          } else if (gateIdx >= b1 && gateIdx < b2) { // POs
+            ret[2]++;
+          } else if (gateIdx >= b2 && gateIdx < b3) {
+            ret[1]++;
+          } else {
+            printf("_traverse_cones_for_print (mode 3, 4): Gate Index: No SUCH CASES\n");
+            exit(1);
+          }
+        }
+      }
+    }
+  } else if (mode == Mode::REPCUT_SEQUENTIAL || mode == Mode::REPCUT_PARALLEL_OMP) {
+    for (size_t c = 0; c < _RepCut_output_cones.size(); c++) {
+      for (size_t lvl = 0; lvl < _RepCut_output_cones[c].size(); lvl++) {
+        for (size_t g = 0; g < _RepCut_output_cones[c][lvl].size(); g++) {
+          size_t gateIdx = _RepCut_output_cones[c][lvl][g];
+          if (gateIdx < b1) { // PIs
+            ret[0]++;
+          } else if (gateIdx >= b1 && gateIdx < b2) { // POs
+            ret[2]++;
+          } else if (gateIdx >= b2 && gateIdx < b3) {
+            ret[1]++;
+          } else {
+            printf("_traverse_cones_for_print (mode 4, 5): Gate Index: No SUCH CASES\n");
+            exit(1);
+          }
+        }
+      }
+    }    
+  } else {
+    printf("read: No SUCH CASES\n");
+    exit(1);
+  }
+}
+
+
+
+
 /* 
   This is the example code revised from KaHypar. 
   The hypergraph is the graph from RepCut
@@ -1993,3 +2088,5 @@ void CPUPartitioner::KaHyParExample() {
 
   kahypar_context_free(context);
 }
+
+

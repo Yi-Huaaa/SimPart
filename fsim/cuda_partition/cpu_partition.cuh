@@ -41,6 +41,8 @@ public:
   void visualization_graph(const std::string &outputFile);
   void KaHyParExample();
 
+
+
 private:
   /* Private members */
   size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires;
@@ -102,8 +104,8 @@ private:
   std::vector<size_t> _hyperedges_eind;
   std::vector<size_t> _hyperedges_eptr;
   const double _imbalance = 0.015;
-  const kahypar_partition_id_t _k = 2; // number of partitions 
-  const size_t _k_sizet = 2; 
+  const kahypar_partition_id_t _k = 4; // number of partitions 
+  const size_t _k_sizet = 4; 
   size_t _KaHyPar_num_vertices = 0; // number of sinks
   size_t _KaHyPar_num_hyperedges = 0;
 
@@ -151,7 +153,7 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                     std::vector<std::vector<std::vector<size_t>>> &outputCones);
 
   // RepCut
-  void _RepCut();
+  void _RepCut(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1);
   void _find_clusters();
   void _construct_hyperGraph();
   void _construct_hyperedge_vertices();
@@ -192,8 +194,6 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   void _run_RepCut_cones_bad_case(const Fault &fault, const Pattern pattern, 
                                   const size_t bits, const size_t num_threads);
 
-
-
   void _apply_INV(ElementBase &gate);
   void _apply_AND(ElementBase &gate);
   void _apply_OR(ElementBase &gate);
@@ -225,6 +225,13 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                                         const std::vector<std::set<size_t>> &vertex_include_which_hyperedges) const;
   void _print_RepCut_output_cones();
 
+  // Check 
+  void _print_num_PIs_Gates_POs(Mode mode);
+  void _traverse_cones_for_print(Mode mode, std::vector<size_t> &ret);
+
+  double _round_to(double value, double precision = 1.0){
+    return std::round(value / precision) * precision;
+  }
 };
 
 #endif

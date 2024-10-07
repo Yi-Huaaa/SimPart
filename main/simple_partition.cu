@@ -7,7 +7,7 @@
 #include <vector>
 #include <iostream>
 
-#define CPU_PARTITIONER_VERSION
+// #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
     #define VERSION 4 // VERSION can be 0, 1, 2, 3, 4, 5
     #if VERSION == 0
@@ -84,27 +84,27 @@ int main(int argc, char *argv[]) {
 #endif  // CPU_PARTITIONER_VERSION
 
 
-// #ifdef GPU_PARTITIONER_VERSION
-//   printf("GPU_PARTITIONER_VERSION\n");
+#ifdef GPU_PARTITIONER_VERSION
+  printf("GPU_PARTITIONER_VERSION\n");
   
-//   // user perspective
-//   CUDAPartitioner cudaPartitioner;
+  // user perspective
+  CUDAPartitioner cudaPartitioner;
 
-//   // Read data and Run cudaPartitioner
-//   auto start = std::chrono::steady_clock::now();
-//     cudaPartitioner.read(ckt_path, flst_path, ptn_path);
-//   auto end = std::chrono::steady_clock::now();
-//   duration_read_data = end - start;
+  // Read data and Run cudaPartitioner
+  auto start = std::chrono::steady_clock::now();
+    cudaPartitioner.read(ckt_path, flst_path, ptn_path);
+  auto end = std::chrono::steady_clock::now();
+  duration_read_data = end - start;
   
-//   // Run Simulator
-//   for (size_t t = 0; t < TIMES; t++) {
-//     start = std::chrono::steady_clock::now();
-//     size_t MODE = 0;
-//     cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(MODE)));
-//     end = std::chrono::steady_clock::now();
-//     duration_Partition += (end - start);
-//   }
-// #endif  // GPU_PARTITIONER_VERSION
+  // Run Simulator
+  for (size_t t = 0; t < TIMES; t++) {
+    start = std::chrono::steady_clock::now();
+    size_t MODE = 0;
+    cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(MODE)));
+    end = std::chrono::steady_clock::now();
+    duration_Partition += (end - start);
+  }
+#endif  // GPU_PARTITIONER_VERSION
 
     
 // #ifdef OUTPUT_VISUALIZATION_GRAPH_TO_FILE
