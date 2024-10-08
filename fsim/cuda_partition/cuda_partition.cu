@@ -27,6 +27,10 @@
 #include "cuda_partition.cuh"
 
 // #define CPU_GPU_READ_GRAPH_PRINT_FOR_CHECK
+#define CPU_COPY_TS_RESULTS_BACK_TO_HOST
+#define CPU_PRINT_LEVELIZED
+#define CPU_PRINT_CONSTRUCT_GROUPS
+
 
 // error checking macro
 #define cudaCheckErrors(msg) \
@@ -69,6 +73,7 @@ void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &
   /* Partitioning */
   _ask_gpu_memory();
   _call_gpu_partitioner();
+  _construct_partitioned_groups();
 }
 
 void CUDAPartitioner::_read_graph(std::istream &ckt) {
@@ -168,27 +173,27 @@ void CUDAPartitioner::_read_graph(std::istream &ckt) {
 }
 
 void CUDAPartitioner::_check_graph_connection_CPU() {
-  std::vector<bool> _visited_cpu;
-  _visited_cpu.resize(_sum_pi_gates_pos, false);
+  std::vector<bool> visited_cpu;
+  visited_cpu.resize(_sum_pi_gates_pos, false);
 
-  std::vector<int> _sources;
+  std::vector<int> sources;
   for (int i = 0; i < _num_PIs; i++) {
-    _sources.push_back(i);
+    sources.push_back(i);
   }
-  std::vector<int> _level_of_gates;
-  _level_of_gates.resize(_sum_pi_gates_pos, 0);
+  std::vector<int> level_of_gates;
+  level_of_gates.resize(_sum_pi_gates_pos, 0);
   
-  for (size_t fromGate = 0; fromGate < _sources.size(); fromGate++) {
-    int sourceIdx = _sources[fromGate];
+  for (size_t fromGate = 0; fromGate < sources.size(); fromGate++) {
+    int sourceIdx = sources[fromGate];
     std::queue<int> postGates; 
     postGates.push(sourceIdx);
-    _visited_cpu[sourceIdx] = true; 
-    _level_of_gates[sourceIdx] = 0;
+    visited_cpu[sourceIdx] = true; 
+    level_of_gates[sourceIdx] = 0;
 
     while (!postGates.empty()) {
       int startGateIdx = postGates.front(); 
       postGates.pop();
-      _visited_cpu[startGateIdx] = true; 
+      visited_cpu[startGateIdx] = true; 
       // printf("\tstartGateIdx = %d %d (tid = %d)\n", startGateIdx, adj[startGateIdx].size(), tid);
 
       for (int j = _adj_index_table[2*startGateIdx+0]; 
@@ -196,10 +201,10 @@ void CUDAPartitioner::_check_graph_connection_CPU() {
           j++) {
         // for (int j = 0; j < _adj[startGateIdx].size(); j++) {
         int postGateIdx = _adj[j];
-        bool update = (_level_of_gates[startGateIdx] >= _level_of_gates[postGateIdx]);
-        _level_of_gates[postGateIdx] = (update)  
-                                        ? (_level_of_gates[startGateIdx]+1) 
-                                        : (_level_of_gates[postGateIdx]);
+        bool update = (level_of_gates[startGateIdx] >= level_of_gates[postGateIdx]);
+        level_of_gates[postGateIdx] = (update)  
+                                        ? (level_of_gates[startGateIdx]+1) 
+                                        : (level_of_gates[postGateIdx]);
 
         if (update) {
           postGates.push(postGateIdx);
@@ -209,8 +214,8 @@ void CUDAPartitioner::_check_graph_connection_CPU() {
   }
 
   int accum = 0;
-  for (size_t i = 0; i < _visited_cpu.size(); i++) {
-    if (!_visited_cpu[i]) {
+  for (size_t i = 0; i < visited_cpu.size(); i++) {
+    if (!visited_cpu[i]) {
       accum++;
     }
   }
@@ -322,7 +327,6 @@ __device__ int _dequeue(int *_queue_data, int *_queue_head) {
   int gateIdx = _queue_data[pos];
   return gateIdx; 
 }
-
 
 __device__ bool _canFirstLevelEnqueue(const int _num_PIs,
                                       const int g_idx, 
@@ -443,20 +447,21 @@ __global__ void _GPU_partitioner(int *_queue_data, int *_queue_head, int *_queue
     for (int fmGate = _invAdj_index_table_gpu[2*g_idx+0]; 
         fmGate < _invAdj_index_table_gpu[2*g_idx+1]; fmGate++) {
       int fmGateIdx = _invAdj_gpu[fmGate];
-      int fmGateMod = fmGateIdx%_k;
-      groupIdxAccum[fmGateMod]++;
-      bool upd = groupIdxAccum[fmGateMod] > maxGroupAccum;
+      int fmGateGroup = _partitionIndex[fmGateIdx];
+
+      groupIdxAccum[fmGateGroup]++;
+      bool upd = groupIdxAccum[fmGateGroup] > maxGroupAccum;
       maxGroupIdx = (upd) ? 
-                    (fmGateMod) : 
+                    (fmGateGroup) : 
                     (maxGroupIdx);
       maxGroupAccum = (upd) ? 
-                      (groupIdxAccum[fmGateMod]) : 
+                      (groupIdxAccum[fmGateGroup]) : 
                       (maxGroupAccum);
     }
 
     // Update _partitionIndex
     _partitionIndex[g_idx] = maxGroupIdx;
-    // printf("\tt_idx = %d g_idx = %d, _partitionIndex[%d] %d\n", t_idx, g_idx, g_idx, _partitionIndex[g_idx]);
+    printf("\tt_idx = %d g_idx = %d, _partitionIndex[%d] %d\n", t_idx, g_idx, g_idx, _partitionIndex[g_idx]);
 
     
     // Update queue
@@ -559,14 +564,156 @@ void CUDAPartitioner::_call_gpu_partitioner() {
   cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
 
 
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
-  _print_GPU_partitioner <<< 1, 1 >>> (_sum_pi_gates_pos, _partitionIndex);
-  cudaCheckErrors("CUDA: _print_GPU_partitioner - Failure");    
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
+  // cudaDeviceSynchronize();
+  // cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
+  // _print_GPU_partitioner <<< 1, 1 >>> (_sum_pi_gates_pos, _partitionIndex);
+  // cudaCheckErrors("CUDA: _print_GPU_partitioner - Failure");    
+  // cudaDeviceSynchronize();
+  // cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
 
 }
+
+
+void CUDAPartitioner::_construct_partitioned_groups() {
+  // Topological sort on CPU:
+    // Copy topological sort results from GPU to CPU
+    // Using topological sort results from GPU to levelize 
+  _get_topological_sort_resutls();  
+
+  // construct group and show constructed group 
+  _construct_groups();
+
+}
+
+
+void CUDAPartitioner::_copy_TS_resutls_to_Host() {
+  _queue_data_cpu.resize(28*_szOfAdj);
+  _partitionIndex_cpu.resize(_sum_pi_gates_pos); 
+  _queue_tail_cpu = 0;
+
+  cudaMemcpyAsync(_queue_data_cpu.data(), _queue_data, 
+                  28*_szOfAdj*sizeof(int), cudaMemcpyDeviceToHost);
+  cudaMemcpyAsync(_partitionIndex_cpu.data(), _partitionIndex, 
+                  _sum_pi_gates_pos*sizeof(int), cudaMemcpyDeviceToHost);
+  cudaMemcpyAsync(&_queue_tail_cpu, _queue_tail, 
+                  1*sizeof(int), cudaMemcpyDeviceToHost);
+
+#ifdef CPU_COPY_TS_RESULTS_BACK_TO_HOST
+  _print_copy_TS_resutls_to_Host();
+#endif 
+}
+
+void CUDAPartitioner::_levelized() {
+  _level_of_gates.resize(_sum_pi_gates_pos, 0);
+  _max_level = 0;
+  
+  for (int i = 0; i < _queue_tail_cpu; i++) {
+    int gateIdx = _queue_data_cpu[i];
+    // travverse its inputs 
+    for (int fmGate = _invAdj_index_table[2*gateIdx+0]; 
+        fmGate < _invAdj_index_table[2*gateIdx+1];
+        fmGate++) {
+      int fmGateIdx = _invAdj[fmGate];
+      int new_level = _level_of_gates[fmGateIdx]+1;
+      
+      // Update _level_of_gates[gateIdx]
+      _level_of_gates[gateIdx] = (new_level > _level_of_gates[gateIdx]) ? 
+                                (new_level) : 
+                                (_level_of_gates[gateIdx]);
+      _max_level = (_level_of_gates[gateIdx] > _max_level) ? 
+                  (_level_of_gates[gateIdx]) : 
+                  (_max_level);
+    }
+  } 
+  _total_num_levels = _max_level + 1;
+
+#ifdef CPU_PRINT_LEVELIZED
+  _print_levelized();
+#endif 
+}
+
+
+void CUDAPartitioner::_get_topological_sort_resutls() {
+  _copy_TS_resutls_to_Host();  
+  _levelized();
+}
+
+void CUDAPartitioner::_construct_cones(std::vector<int> &sources,
+                                       std::vector<std::set<int>> &_cones_set_g) {
+
+  for (size_t fromGate = 0; fromGate < sources.size(); fromGate++) {
+    int sourceIdx = sources[fromGate];
+    std::queue<int> preGates; 
+    preGates.push(sourceIdx);
+    int sourceLevel = _level_of_gates[sourceIdx];
+    _cones_set_g[sourceLevel].insert(sourceIdx);
+
+    while (!preGates.empty()) {
+      int startGateIdx = preGates.front(); 
+      preGates.pop();
+
+      for (int j = _invAdj_index_table[2*startGateIdx+0]; 
+          j < _invAdj_index_table[2*startGateIdx+1]; 
+          j++) {
+        int preGateIdx = _invAdj[j];
+        int preGateLevel = _level_of_gates[preGateIdx];
+        _cones_set_g[preGateLevel].insert(preGateIdx);
+        preGates.push(preGateIdx);
+      }
+    }
+  }
+}
+
+void CUDAPartitioner::_construct_groups(){
+  // Get the group of sinks 
+  std::vector<std::vector<int>> sinks_groups;
+  sinks_groups.resize(_k);
+
+  for (int sinkIdx = 0; sinkIdx < _sum_pi_gates_pos; sinkIdx++) {
+    int outputSize = _adj_index_table[2*sinkIdx+1] - _adj_index_table[2*sinkIdx+0];
+    if (outputSize == 0) {
+      int sinkGroup = _partitionIndex_cpu[sinkIdx];
+      sinks_groups[sinkGroup].push_back(sinkIdx);
+    }
+  }
+
+  // Construct cones 
+  _cones_set.resize(_k);
+  _cones_partitioned.resize(_k);
+  for (size_t g = 0; g < sinks_groups.size(); g++) {
+    // Push in NULL cone
+    _cones_set[g].resize(_total_num_levels);
+    _cones_partitioned[g].resize(_total_num_levels);
+    _construct_cones(sinks_groups[g], _cones_set[g]);
+  }
+
+  // Construct _cones_partitioned
+  for (size_t i = 0; i < _cones_set.size(); ++i) {
+    for (size_t lvl = 0; lvl < _cones_set[i].size(); ++lvl) {
+      for (const auto& element : _cones_set[i][lvl]) {
+        _cones_partitioned[i][lvl].push_back(element);
+      }
+    }
+  }  
+
+#ifdef CPU_PRINT_CONSTRUCT_GROUPS
+  _print_construct_groups(sinks_groups);
+#endif
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -754,7 +901,6 @@ void CUDAPartitioner::_print_read_graph(int *gate_input_order_table_readIn) cons
   }
   printf("\n");  
   printf("===============================\n");
-  
 }
 
 __global__ void _gpu_print_read_graph(const int _sum_pi_gates_pos, 
@@ -863,3 +1009,59 @@ __global__ void _check_visited(const int sz, const int *_visited, const int mode
     }
   }  
 }
+
+void CUDAPartitioner::_print_copy_TS_resutls_to_Host() {
+  printf("_queue_tail_cpu = %d\n", _queue_tail_cpu);
+  
+  printf("_queue_data_cpu: [");
+  for (int i = 0; i < _queue_tail_cpu; i++) {
+    printf("%d, ", _queue_data_cpu[i]);
+  } printf("]\n");
+
+  printf("_partitionIndex_cpu:\n");
+  for (int i = 0; i < _sum_pi_gates_pos; i++) {
+    printf("gate_%i, group = %d\n", i, _partitionIndex_cpu[i]);
+  } printf("\n");
+  printf("\n");
+}
+
+void CUDAPartitioner::_print_levelized(){
+  printf("_level_of_gates:\n");
+  for (size_t i = 0; i < _level_of_gates.size(); i++) {
+    printf("_level_of_gates[%lu] = %d\n", i, _level_of_gates[i]);
+  }
+  printf("\n");
+}
+
+void CUDAPartitioner::_print_construct_groups(const std::vector<std::vector<int>> &sinks_groups) {
+  for (size_t i = 0; i < sinks_groups.size(); i++) {
+    printf("Group Idx = %lu with sinkIdx: ", i);
+    for (size_t j = 0; j < sinks_groups[i].size(); j++) {
+      printf("%d, ", sinks_groups[i][j]);
+    } printf("\n");
+  } printf("\n");
+  printf("\n");
+
+  printf("_cones_partitioned:\n\n");
+  for (size_t i = 0; i < _cones_partitioned.size(); i++) {
+    printf("_cones_partitioned %lu\n", i);
+    for (size_t lvl = 0; lvl < _cones_partitioned[i].size(); lvl++) {
+      printf("\tlvl = %lu, gates: ", lvl);
+      for (const auto& element : _cones_partitioned[i][lvl]) {
+        printf("%d, ", element);
+      }
+      printf("\n");
+    }
+    printf("\n");
+  }
+  printf("\n");
+}
+
+
+
+
+
+
+
+
+

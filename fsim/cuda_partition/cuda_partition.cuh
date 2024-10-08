@@ -29,7 +29,7 @@
 
 
 // constexpr
-constexpr int _k = 5; // based on the kernel concurrency
+constexpr int _k = 2; // based on the kernel concurrency
 constexpr int QUEUE_SIZE = 1024; // 
 
 // Define the enum class
@@ -138,8 +138,19 @@ private:
   std::vector<Pattern> _patterns;
 
   // For levelization and Find cones
+  std::vector<int> _queue_data_cpu; 
+  std::vector<int> _partitionIndex_cpu;
+  int _queue_tail_cpu;
+
+  std::vector<int> _sources;
+  std::vector<int> _sinks; 
   int _max_level;
   int _total_num_levels;
+  std::vector<int> _level_of_gates;
+  std::vector<std::vector<std::set<int>>> _cones_set;
+  std::vector<std::vector<std::vector<int>>> _cones_partitioned;
+  
+
 
 
   // GPU memory 
@@ -168,14 +179,16 @@ private:
   void _call_gpu_partitioner();
   int _get_queue_size();
 
+  /* Construct cones */
+  void _construct_partitioned_groups();
+  void _get_topological_sort_resutls();
+  void _copy_TS_resutls_to_Host();
+  void _levelized();
+  void _construct_groups();
+  void _construct_cones(std::vector<int> &sources,
+                      std::vector<std::set<int>> &_cones_set_g);
 
-
-
-  // void _free_devc_memory();
-  // void _levelization();
-  // void _partition(); 
-  // void _find_all_cones();
-
+  // TODO: free memory 
 
 
 
@@ -193,7 +206,9 @@ private:
   gpuGateType convertGateTypeToGpu(GateType gate_type);
   void _print_read_graph(int *gate_input_order_table_readIn) const;
   void _check_graph_connection_CPU();
-
+  void _print_copy_TS_resutls_to_Host();
+  void _print_levelized();
+  void _print_construct_groups(const std::vector<std::vector<int>> &sinks_groups);
 };
 
 #endif
