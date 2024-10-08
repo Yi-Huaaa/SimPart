@@ -461,7 +461,7 @@ __global__ void _GPU_partitioner(int *_queue_data, int *_queue_head, int *_queue
 
     // Update _partitionIndex
     _partitionIndex[g_idx] = maxGroupIdx;
-    printf("\tt_idx = %d g_idx = %d, _partitionIndex[%d] %d\n", t_idx, g_idx, g_idx, _partitionIndex[g_idx]);
+    // printf("\tt_idx = %d g_idx = %d, _partitionIndex[%d] %d\n", t_idx, g_idx, g_idx, _partitionIndex[g_idx]);
 
     
     // Update queue
