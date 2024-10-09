@@ -38,6 +38,7 @@ add_library(fsim_cuda_partition
 )
 
 
+
 # -----------------------------------------------------------------------------
 # Link OpenMP for CUDA partition (needed for OpenMP support in CUDA code)
 # -----------------------------------------------------------------------------

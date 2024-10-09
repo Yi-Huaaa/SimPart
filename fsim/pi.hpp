@@ -14,7 +14,7 @@ namespace fsim {
 class Simulator;
 }
 
-class PI : public ElementBase {
+class PI : public ElementBase<> {
 
   friend class fsim::Simulator;
   friend class CPUPartitioner;

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <queue>
 #include <string>
+#include <variant>
 #include <vector>
 
 #define default_level 0
@@ -30,7 +31,7 @@ enum class GateType {
   MAX_GATE_TYPE
 };
 
-
+template<typename IndexType = size_t, typename LevelType = size_t, typename OutputValueType = size_t>
 class ElementBase {
 
   friend class fsim::Simulator;
@@ -39,19 +40,17 @@ class ElementBase {
 
 public:
   // accessor
-  // plain old data type can simply be returned as a copy
-  size_t idx() const { return _idx; }
-  size_t level() const { return _level; }
-  size_t output_value() const { return _output_value; }
+  IndexType idx() const { return _idx; }
+  LevelType level() const { return _level; }
+  OutputValueType output_value() const { return _output_value; }
 
 private:
   GateType _type;
   std::vector<ElementBase *> _inputs;
 
-  size_t _idx;
-  size_t _level;
-  size_t _output_value;
-  
+  IndexType _idx;
+  LevelType _level;
+  OutputValueType _output_value;
 
   // TODO: std::optional
   //       std::variant<int, float, std::string> storage

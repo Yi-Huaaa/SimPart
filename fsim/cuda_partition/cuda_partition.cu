@@ -27,9 +27,13 @@
 #include "cuda_partition.cuh"
 
 // #define CPU_GPU_READ_GRAPH_PRINT_FOR_CHECK
-#define CPU_COPY_TS_RESULTS_BACK_TO_HOST
-#define CPU_PRINT_LEVELIZED
-#define CPU_PRINT_CONSTRUCT_GROUPS
+// #define CPU_COPY_TS_RESULTS_BACK_TO_HOST
+// #define CPU_PRINT_LEVELIZED
+// #define CPU_PRINT_CONSTRUCT_GROUPS
+
+// #define CHECK_CONSTRUCT_PARTITIONS_DUPLICATIONS
+// #define CPU_PART_DEBUG_PRINT_SIMULATION
+// #define CPU_PART_DEBUG_PRINT_GRAPH
 
 
 // error checking macro
@@ -66,7 +70,14 @@ void CUDAPartitioner::read(const std::string &ckt_path, const std::string &flst_
 void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &ptn) {
   // Read gate 
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
-  _read_graph(ckt);
+  _sum_pi_gates_pos = _num_PIs + _num_inner_gates + _num_POs;
+  
+  int *gate_input_order_table_readIn;
+  gate_input_order_table_readIn = 
+      (int*)malloc(5*_sum_pi_gates_pos*sizeof(int));
+  memset(gate_input_order_table_readIn, 0, 5*_sum_pi_gates_pos*sizeof(int));
+
+  _read_graph(ckt, gate_input_order_table_readIn);
   _read_fault(flst);
   _read_pattern(ptn);
 
@@ -74,20 +85,18 @@ void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &
   _ask_gpu_memory();
   _call_gpu_partitioner();
   _construct_partitioned_groups();
+  _construct_graph(gate_input_order_table_readIn);
 }
 
-void CUDAPartitioner::_read_graph(std::istream &ckt) {
-  _sum_pi_gates_pos = _num_PIs + _num_inner_gates + _num_POs;
+void CUDAPartitioner::_read_graph(std::istream &ckt, int*gate_input_order_table_readIn) {
 
   // Map table for recording gate input _order
   // Record for each to_gate, its from_gates's are which _order (#_inputs, A/A1, B/A2, A3/S, A4)
-  int *gate_input_order_table_readIn = 
-      (int*)malloc(5*_sum_pi_gates_pos*sizeof(int));
-  memset(gate_input_order_table_readIn, 0, 5*_sum_pi_gates_pos*sizeof(int));
-
   _szOfAdj = 0;
   std::vector<std::vector<int>> adj;
+  std::vector<std::vector<int>> invAdj;
   adj.resize(_sum_pi_gates_pos);
+  invAdj.resize(_sum_pi_gates_pos);
 
   // Construct adjacent list
   for (int i = 0; i < _num_wires; i++) {
@@ -99,6 +108,7 @@ void CUDAPartitioner::_read_graph(std::istream &ckt) {
       ckt >> gate_tmp >> pin_tmp;
       pin_tmp = (pin_tmp == 5) ? (3) : (pin_tmp);
       adj[gate_0].push_back(gate_tmp); 
+      invAdj[gate_tmp].push_back(gate_0); 
       _szOfAdj++;
 
       gate_input_order_table_readIn[gate_tmp*5+pin_tmp] = gate_0;
@@ -120,8 +130,7 @@ void CUDAPartitioner::_read_graph(std::istream &ckt) {
     _gate_type[i] = static_cast<GateType>(type);
   }
 
-  // Construct _adj
-  // printf("_szOfAdj = %d\n", _szOfAdj);
+  // Construct _adj and _invAdj
   _adj = (int*)malloc(_szOfAdj*sizeof(int));
   _adj_index_table = (int*)malloc(2*_sum_pi_gates_pos*sizeof(int));
   memset(_adj, 0, _szOfAdj*sizeof(int));
@@ -150,21 +159,22 @@ void CUDAPartitioner::_read_graph(std::istream &ckt) {
   }
 
   accum = 0;
-  for (int toGate = 0; toGate < _sum_pi_gates_pos; toGate++) {
+  for (size_t toGate = 0; toGate < invAdj.size(); toGate++) {
     // Update _invAdj_index_table
     _invAdj_index_table[2*toGate+0] = accum;
-    
-    for (int i = 0; i < gate_input_order_table_readIn[toGate*5+0]; i++) {
-      int fromGateIdx = gate_input_order_table_readIn[toGate*5+i+1];
 
-      // Update 
-      _invAdj[accum] = fromGateIdx;
+    for (size_t fromGate = 0; fromGate < invAdj[toGate].size(); fromGate++) {
+      int toGateIdx = invAdj[toGate][fromGate];
+      
+      // Update _invAdj
+      _invAdj[accum] = toGateIdx;
       accum++;
     }
     // Update _invAdj_index_table
     _invAdj_index_table[2*toGate+1] = accum;
   }
 
+  
   // _check_graph_connection_CPU(); 
 
 #ifdef CPU_GPU_READ_GRAPH_PRINT_FOR_CHECK
@@ -172,56 +182,97 @@ void CUDAPartitioner::_read_graph(std::istream &ckt) {
 #endif 
 }
 
-void CUDAPartitioner::_check_graph_connection_CPU() {
-  std::vector<bool> visited_cpu;
-  visited_cpu.resize(_sum_pi_gates_pos, false);
+void CUDAPartitioner::_construct_graph(int *gate_input_order_table_readIn) {
+  _pi_idx_accum = 0; 
+  _po_idx_accum = _num_PIs;
+  _gate_idx_accum = (_num_PIs + _num_POs);
 
-  std::vector<int> sources;
+  // PIs are stored in the order specified by the `order` array
+  _PIs.resize(_num_PIs);
   for (int i = 0; i < _num_PIs; i++) {
-    sources.push_back(i);
+    int gate_id = i;
+    _PIs[i]._idx = gate_id;
+    _PIs[i]._type = _gate_type[gate_id];
+    _PIs[i]._level = _level_of_gates[i];
+    _PIs[i]._output_value = 0;
   }
-  std::vector<int> level_of_gates;
-  level_of_gates.resize(_sum_pi_gates_pos, 0);
-  
-  for (size_t fromGate = 0; fromGate < sources.size(); fromGate++) {
-    int sourceIdx = sources[fromGate];
-    std::queue<int> postGates; 
-    postGates.push(sourceIdx);
-    visited_cpu[sourceIdx] = true; 
-    level_of_gates[sourceIdx] = 0;
 
-    while (!postGates.empty()) {
-      int startGateIdx = postGates.front(); 
-      postGates.pop();
-      visited_cpu[startGateIdx] = true; 
-      // printf("\tstartGateIdx = %d %d (tid = %d)\n", startGateIdx, adj[startGateIdx].size(), tid);
+  // gates are stored in the order specified by the `order` array
+  _gates.resize(_num_inner_gates);
+  for (int i = 0; i < _num_inner_gates; i++) {
+    int gate_id = i + _gate_idx_accum;
+    _gates[i]._idx = gate_id;
+    _gates[i]._type = _gate_type[gate_id];
+    _gates[i]._level = _level_of_gates[i];
+    _gates[i]._output_value = 0;
+  }
 
-      for (int j = _adj_index_table[2*startGateIdx+0]; 
-          j < _adj_index_table[2*startGateIdx+1]; 
-          j++) {
-        // for (int j = 0; j < _adj[startGateIdx].size(); j++) {
-        int postGateIdx = _adj[j];
-        bool update = (level_of_gates[startGateIdx] >= level_of_gates[postGateIdx]);
-        level_of_gates[postGateIdx] = (update)  
-                                        ? (level_of_gates[startGateIdx]+1) 
-                                        : (level_of_gates[postGateIdx]);
+  // POs are stored in the order specified by the `order` array
+  _POs.resize(_num_POs);
+  for (int i = 0; i < _num_POs; i++) {
+    int gate_id = i+_po_idx_accum;
+    _POs[i]._idx = gate_id;
+    _POs[i]._type = _gate_type[gate_id];
+    _POs[i]._level = _level_of_gates[i];
+    _POs[i]._output_value = 0;
+  }
 
-        if (update) {
-          postGates.push(postGateIdx);
-        }
+  // Give the input gates number
+  for (int gateIdx = _num_PIs; gateIdx < _sum_pi_gates_pos; gateIdx++) {
+    for (int j = 1; j < (gate_input_order_table_readIn[gateIdx*5] + 1); j++) { // how many inputs for this gate
+      int from_gate_id = gate_input_order_table_readIn[gateIdx*5+j];
+      int to_gate_id = gateIdx;
+
+      if (from_gate_id < _num_PIs) { // PI -> gate
+        PI &from_gate =
+            _PIs[from_gate_id - _pi_idx_accum];
+        Gate &to_gate =
+            _gates[to_gate_id - _gate_idx_accum];
+        to_gate._inputs.push_back(&from_gate);
+        to_gate._level = _level_of_gates[to_gate_id];
+        // printf("PI_%lu (%lu) -> Gate_%lu (%lu)\n", from_gate_id - _pi_idx_accum, from_gate_id, to_gate_id - _gate_idx_accum, to_gate_id);
+      } else if ((to_gate_id >= (_num_PIs)) &&
+                 (to_gate_id < (_num_PIs + _num_POs))) { // gate -> PO
+        Gate &from_gate =
+            _gates[from_gate_id - _gate_idx_accum];
+        PO &to_gate =
+            _POs[to_gate_id - _po_idx_accum];
+        to_gate._inputs.push_back(&from_gate);
+        to_gate._level = _level_of_gates[to_gate_id];
+        // printf("Gate_%lu (%lu) -> PO_%lu (%lu)\n", from_gate_id - _gate_idx_accum, from_gate_id, to_gate_id - _po_idx_accum, to_gate_id);
+      } else { // gate -> gate
+        Gate &from_gate =
+            _gates[from_gate_id - _gate_idx_accum];
+        Gate &to_gate =
+            _gates[to_gate_id - _gate_idx_accum];
+        // printf("Gate_%lu (%lu) -> Gate_%lu (%lu)\n", from_gate_id - _gate_idx_accum, from_gate_id, to_gate_id - _gate_idx_accum, to_gate_id);
+        to_gate._inputs.push_back(&from_gate);
+        to_gate._level = _level_of_gates[to_gate_id];
       }
     }
   }
-
-  int accum = 0;
-  for (size_t i = 0; i < visited_cpu.size(); i++) {
-    if (!visited_cpu[i]) {
-      accum++;
-    }
+#ifdef CPU_PART_DEBUG_PRINT_GRAPH
+  std::cout << "\n_PIs = [\n";
+  for (size_t i = 0; i < _num_PIs; i++) {
+    print_ppg(_PIs[i]);
   }
+  std::cout << "]\n";
 
-  printf("BIBI, accum = %d\n", accum);
+  std::cout << "\n_gates = [\n";
+  for (size_t i = 0; i < _num_inner_gates; i++) {
+    print_ppg(_gates[i]);
+  }
+  std::cout << "]\n";
+
+  std::cout << "\n_POs = [\n";
+  for (size_t i = 0; i < _num_POs; i++) {
+    print_ppg(_POs[i]);
+  }
+  std::cout << "]\n";
+#endif  
+
 }
+
 
 void CUDAPartitioner::_read_fault(std::istream &flst) {
   flst >> _num_fault;
@@ -243,7 +294,7 @@ void CUDAPartitioner::_read_pattern(std::istream &ptn) {
   _num_rounds = (_num_pattern + SIZE_T_BITS - 1) / SIZE_T_BITS; // ceiling
 
   _patterns.resize(_num_rounds);
-  for (int i = 0; i < _num_rounds; i++) {
+  for (size_t i = 0; i < _num_rounds; i++) {
     _patterns[i]._value.resize(_num_PIs);
     for (int pi = 0; pi < _num_PIs; pi++) {
       int idx = i;
@@ -284,9 +335,6 @@ void CUDAPartitioner::_ask_gpu_memory() {
   cudaMemcpyAsync(_invAdj_index_table_gpu, _invAdj_index_table, 
                   2*_sum_pi_gates_pos*sizeof(int), cudaMemcpyHostToDevice);
 
-  // TODO: 
-  // 3. construct new cones
-  // 4. connect with simulator 
 
   // Init queue                
   cudaMemset(_queue_data, 0, _szOfAdj*sizeof(int)); 
@@ -583,6 +631,9 @@ void CUDAPartitioner::_construct_partitioned_groups() {
   // construct group and show constructed group 
   _construct_groups();
 
+#ifdef CHECK_CONSTRUCT_PARTITIONS_DUPLICATIONS
+  _count_duplications();
+#endif 
 }
 
 
@@ -638,19 +689,27 @@ void CUDAPartitioner::_get_topological_sort_resutls() {
   _levelized();
 }
 
-void CUDAPartitioner::_construct_cones(std::vector<int> &sources,
-                                       std::vector<std::set<int>> &_cones_set_g) {
+void CUDAPartitioner::_construct_cones(std::vector<int> &sinks,
+                                       std::vector<std::set<int>> &_cones_set_g,
+                                       std::vector<bool> &visited_cpu) {
 
-  for (size_t fromGate = 0; fromGate < sources.size(); fromGate++) {
-    int sourceIdx = sources[fromGate];
+  printf("sinks.size() = %lu\n", sinks.size());
+  for (size_t sink = 0; sink < sinks.size(); sink++) {
+    int sinkIdx = sinks[sink];
     std::queue<int> preGates; 
-    preGates.push(sourceIdx);
-    int sourceLevel = _level_of_gates[sourceIdx];
-    _cones_set_g[sourceLevel].insert(sourceIdx);
+    preGates.push(sinkIdx);
+    // used to check the correctness 
+    visited_cpu[sinkIdx] = true;
+    // used to check the correctness 
+
+    int sourceLevel = _level_of_gates[sinkIdx];
+    _cones_set_g[sourceLevel].insert(sinkIdx);
+
 
     while (!preGates.empty()) {
       int startGateIdx = preGates.front(); 
       preGates.pop();
+      visited_cpu[startGateIdx] = true;
 
       for (int j = _invAdj_index_table[2*startGateIdx+0]; 
           j < _invAdj_index_table[2*startGateIdx+1]; 
@@ -659,6 +718,8 @@ void CUDAPartitioner::_construct_cones(std::vector<int> &sources,
         int preGateLevel = _level_of_gates[preGateIdx];
         _cones_set_g[preGateLevel].insert(preGateIdx);
         preGates.push(preGateIdx);
+        // used to check the correctness 
+        // used to check the correctness 
       }
     }
   }
@@ -677,6 +738,11 @@ void CUDAPartitioner::_construct_groups(){
     }
   }
 
+  // used to check the correctness 
+  std::vector<bool> visited_cpu;
+  visited_cpu.resize(_sum_pi_gates_pos, false);
+  // used to check the correctness 
+
   // Construct cones 
   _cones_set.resize(_k);
   _cones_partitioned.resize(_k);
@@ -684,7 +750,7 @@ void CUDAPartitioner::_construct_groups(){
     // Push in NULL cone
     _cones_set[g].resize(_total_num_levels);
     _cones_partitioned[g].resize(_total_num_levels);
-    _construct_cones(sinks_groups[g], _cones_set[g]);
+    _construct_cones(sinks_groups[g], _cones_set[g], visited_cpu);
   }
 
   // Construct _cones_partitioned
@@ -696,45 +762,346 @@ void CUDAPartitioner::_construct_groups(){
     }
   }  
 
+
+  int accum = 0;
+  for (size_t i = 0; i < visited_cpu.size(); i++) {
+    if (!visited_cpu[i]) {
+      accum++;
+    }
+  }
+  printf("BIBI2: visited_cpu: accum = %d\n\n", accum);
+
+
 #ifdef CPU_PRINT_CONSTRUCT_GROUPS
   _print_construct_groups(sinks_groups);
 #endif
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Simulation functions 
-void CUDAPartitioner::run(Mode mode) {
+void CUDAPartitioner::run(Mode mode, const size_t num_threads) {
   int m = static_cast<int>(mode);
 
   switch (mode) {
-    case Mode::PARALLEL_CUDA:
-      std::cout << "Mode: " << m << " (run PARALLEL_CUDA)\n";
-      // _run_gates(num_threads);
-      break;
     case Mode::CONES_PARALLEL_CUDA:
       std::cout << "Mode: " << m << " (run CONES_PARALLEL_CUDA)\n";
-      // _run_gates(num_threads);
+      _run_cones_gates(num_threads);
       break;   
     default:
       printf("No SUCH CASES\n");
       return; 
   }
 }
+
+void CUDAPartitioner::_run_cones_gates(const size_t num_threads) {
+  #ifdef CPU_PART_DEBUG_PRINT_SIMULATION
+  std::cout << "execute simulation._run_cones_gates();\n";
+#endif
+
+  // Simulation
+  for (size_t rd = 0; rd < _num_rounds; rd++) {
+    size_t num_testcases_this_round =
+        ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
+            ? (SIZE_T_BITS)
+            : (_num_pattern % SIZE_T_BITS);
+#ifdef CPU_PART_DEBUG_PRINT_SIMULATION
+    std::cout << "Run Good case with threads = " << num_threads << std::endl;
+#endif
+    // _run_cones_good_case(_patterns[rd], num_testcases_this_round, num_threads);
+    
+#ifdef CPU_PART_DEBUG_PRINT_SIMULATION
+  if (rd == 0) {
+    std::cout << "GOOD resutls ans:" << std::endl;
+    print_simulation_results(_g_pi_results, _g_gate_results, _g_po_results);        
+  }
+#endif
+  }
+}
+
+void CUDAPartitioner::_run_cones_good_case(const Pattern pattern, 
+                                          const size_t bits, 
+                                          const size_t num_threads) {
+
+  omp_set_num_threads(num_threads);  // Set the number of threads for OpenMP
+
+  // Parallelize across cones (c)
+  #pragma omp parallel for
+  for (size_t c = 0; c < _cones_partitioned.size(); c++) {
+    for (int lvl = _cones_partitioned[c].size()-1; lvl > -1; lvl--) {
+      // Parallelize across gates within the same cone and level
+      #pragma omp parallel for
+      for (size_t g = 0; g < _cones_partitioned[c][lvl].size(); g++) {
+        int gateIdx = _cones_partitioned[c][lvl][g];
+        // printf("c = %ld, lvl = %d, g = %ld, gateIdx = %ld\n", c, lvl, g, gateIdx);
+        
+        // Select the correct element (PI, PO, or gate)
+        ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
+                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
+                            static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
+
+        // Execute the gate operation
+        // _run_gate(tmp, pattern, gateIdx, 0, 0);
+        _run_gate(tmp, pattern, static_cast<size_t>(gateIdx), static_cast<size_t>(0), static_cast<size_t>(0));
+
+      }
+    }
+  }
+  
+  // Duplicated the answer of good_case into a new memory
+  _write_to_array(_g_pi_results, _g_gate_results, _g_po_results, bits);
+
+#ifdef CPU_PART_DEBUG_PRINT_SIMULATION
+  std::cout << "CONES: GOOD resutls ans:\n";
+  print_simulation_results(_g_pi_results, _g_gate_results, _g_po_results);
+#endif
+}
+
+
+void CUDAPartitioner::_run_cones_bad_case(const Fault<FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+                                          const Pattern pattern,
+                                          const size_t bits, const size_t num_threads) {
+  // printf("Getting inside _run_cones_bad_case\n");
+  omp_set_num_threads(num_threads);  // Set the number of threads for OpenMP
+
+  size_t wrong_gate = fault._gate_with_fault;
+  size_t fault_val = fault._gate_SA_fault_val;
+
+  // Parallelize across cones (c)
+  #pragma omp parallel for
+  for (size_t c = 0; c < _cones_partitioned.size(); c++) {
+    for (int lvl = _cones_partitioned[c].size()-1; lvl > -1; lvl--) {
+      // Parallelize across gates within the same cone and level
+      #pragma omp parallel for
+      for (size_t g = 0; g < _cones_partitioned[c][lvl].size(); g++) {
+        int thread_id = omp_get_thread_num();
+        int gateIdx = _cones_partitioned[c][lvl][g];
+
+        // Calculate SA_fault using a ternary operator (avoiding if-else)
+        size_t SA_fault = (gateIdx < _num_PIs) ? ((gateIdx + _pi_idx_accum) == wrong_gate) :
+                          (gateIdx >= (_num_PIs + _num_POs)) ? ((gateIdx + _gate_idx_accum) == wrong_gate) :
+                                                              ((gateIdx + _po_idx_accum) == wrong_gate);
+
+        // Select the correct element (PI, PO, or gate)
+        ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
+                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
+                            static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
+
+        // Execute the gate operation
+        // _run_gate(tmp, pattern, gateIdx, SA_fault, fault_val);
+        _run_gate(tmp, pattern, static_cast<size_t>(gateIdx), static_cast<size_t>(SA_fault), static_cast<size_t>(fault_val));
+
+      }
+    }
+  }
+
+  // Duplicated the answer of good_case into a new memory
+  _write_to_array(_b_pi_results, _b_gate_results, _b_po_results, bits);
+
+#ifdef CPU_PART_DEBUG_PRINT_SIMULATION
+  std::cout << "CONES: BAD resutls ans:\n";
+  print_simulation_results(_b_pi_results, _b_gate_results, _b_po_results);
+#endif
+}
+
+void CUDAPartitioner::_write_to_array(std::vector<int> &pi_output, 
+                                    std::vector<int> &gate_output,
+                                    std::vector<int> &po_output,
+                                    const size_t bits) {
+  // Duplicated the answer of good_case into a new memory
+  for (int i = 0; i < _num_PIs; i++) {
+    pi_output[i] = _PIs[i]._output_value;
+  }
+  for (int i = 0; i < _num_inner_gates; i++) {
+    gate_output[i] = _gates[i]._output_value;
+  }
+  for (int i = 0; i < _num_POs; i++) {
+    po_output[i] = _POs[i]._output_value;
+  }
+
+  if (bits < SIZE_T_BITS) {
+    _shift_to_correct_answer(pi_output, bits, _num_PIs);
+    _shift_to_correct_answer(gate_output, bits, _num_inner_gates);
+    _shift_to_correct_answer(po_output, bits, _num_POs);
+  }  
+}
+
+// Simulation for gates
+void CUDAPartitioner::_apply_INV(ElementBase<> &gate) {
+  ElementBase<> *pre_gate = gate._inputs[0];
+  size_t ret = pre_gate->_output_value;
+  gate._output_value = ~ret;
+}
+
+void CUDAPartitioner::_apply_AND(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._inputs.size(); i++) {
+    now_gate = gate._inputs[i];
+    ret &= (now_gate)->_output_value;
+  }
+  gate._output_value = ret;
+}
+
+void CUDAPartitioner::_apply_OR(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+  
+  for (size_t i = 1; i < gate._inputs.size(); i++) {
+    now_gate = gate._inputs[i];
+    ret |= (now_gate)->_output_value;
+  }
+  gate._output_value = ret;
+}
+
+void CUDAPartitioner::_apply_XOR(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._inputs.size(); i++) {
+    now_gate = gate._inputs[i];
+    ret ^= (now_gate)->_output_value;
+  }
+  gate._output_value = ret;
+}
+
+void CUDAPartitioner::_apply_NAND(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._inputs.size(); i++) {
+    now_gate = gate._inputs[i];
+    ret &= (now_gate)->_output_value;
+  }
+  gate._output_value = ~(ret);
+}
+
+void CUDAPartitioner::_apply_NOR(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._inputs.size(); i++) {
+    now_gate = gate._inputs[i];
+    ret |= (now_gate)->_output_value;
+  }
+  gate._output_value = ~(ret);
+}
+
+void CUDAPartitioner::_apply_XNOR(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  for (size_t i = 1; i < gate._inputs.size(); i++) {
+    now_gate = gate._inputs[i];
+    ret ^= (now_gate)->_output_value;
+  }
+  gate._output_value = ~(ret);
+}
+
+void CUDAPartitioner::_apply_MUX(ElementBase<> &gate) {
+  size_t a = gate._inputs[0]->_output_value;
+  size_t b = gate._inputs[1]->_output_value;
+  size_t s = gate._inputs[2]->_output_value;
+
+  size_t ret = ((s & b) | (a & (!s)));
+
+  gate._output_value = (ret);
+}
+
+void CUDAPartitioner::_apply_CLKBUF(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
+  size_t ret = (now_gate)->_output_value;
+
+  gate._output_value = ret;
+}
+
+void CUDAPartitioner::_apply_PI(ElementBase<> &gate, const Pattern pattern,
+                                const size_t pi) {
+  gate._output_value = pattern._value[pi];
+}
+
+void CUDAPartitioner::_apply_PO(ElementBase<> &gate) {
+  // It outputs its previous gate's output_value if there is no SA fault
+  ElementBase<> *pre_gate = gate._inputs[0];
+  gate._output_value = pre_gate->_output_value;
+}
+
+
+template <typename IndexType, typename LevelType, typename OutputValueType>
+void CUDAPartitioner::_run_gate(ElementBase<IndexType, LevelType, OutputValueType> &gate, 
+                                const Pattern pattern,
+                                const size_t pi, 
+                                const size_t SA_fault, 
+                                const OutputValueType fault_val) {
+
+  if (SA_fault) {
+    gate._output_value = fault_val;
+    return;
+  }
+
+  // std::cout << "\tgateType = " << gateTypeToString(gate._type) << "\n";
+  // std::cout << "\tgateIdx = " << gate._idx << "\n";
+
+  switch (gate._type) {
+  case GateType::INV:
+    _apply_INV(gate);
+    break;
+  case GateType::AND:
+    _apply_AND(gate);
+    break;
+  case GateType::OR:
+    _apply_OR(gate);
+    break;
+  case GateType::XOR:
+    _apply_XOR(gate);
+    break;
+  case GateType::NAND:
+    _apply_NAND(gate);
+    break;
+  case GateType::NOR:
+    _apply_NOR(gate);
+    break;
+  case GateType::XNOR:
+    _apply_XNOR(gate);
+    break;
+  case GateType::MUX:
+    _apply_MUX(gate);
+    break;
+  case GateType::CLKBUF:
+    _apply_CLKBUF(gate);
+    break;
+  case GateType::PI:
+    _apply_PI(gate, pattern, pi);
+    break;
+  case GateType::PO:
+    _apply_PO(gate);
+    break;
+  case GateType::MAX_GATE_TYPE:
+    break;
+  }
+}
+
+
+void CUDAPartitioner::_shift_to_correct_answer(std::vector<int> &results,
+                                               const size_t bits,
+                                               const size_t num_shift_gates) {
+  for (size_t i = 0; i < num_shift_gates; i++) {
+    results[i] <<= (SIZE_T_BITS - bits);
+    results[i] >>= (SIZE_T_BITS - bits);
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1057,9 +1424,185 @@ void CUDAPartitioner::_print_construct_groups(const std::vector<std::vector<int>
   printf("\n");
 }
 
+void CUDAPartitioner::_count_duplications() {
+  std::vector<bool> visited_cpu;
+  visited_cpu.resize(_sum_pi_gates_pos, false);
+  std::vector<size_t> numGates; 
+  numGates.resize(4, 0);
+
+  for (size_t i = 0; i < _cones_partitioned.size(); i++) {
+    for (size_t lvl = 0; lvl < _cones_partitioned[i].size(); lvl++) {
+      // for (const auto& element : _cones_partitioned[i][lvl]) {
+      for (size_t g = 0; g < _cones_partitioned[i][lvl].size(); g++) {
+        int element = _cones_partitioned[i][lvl][g];
+        visited_cpu[element] = true; 
+        if (element < _num_PIs) { // is PI
+          numGates[0]++;
+        } else if (element >= _num_PIs && element < (_num_PIs+_num_POs)) { // is PO
+          numGates[2]++;
+        } else { // is Gate
+          numGates[1]++;
+        }
+      }
+    }
+  }
+
+  numGates[3] = numGates[0]+numGates[1]+numGates[2];
+
+  int accum = 0;
+  for (size_t i = 0; i < visited_cpu.size(); i++) {
+    if (!visited_cpu[i]) {
+      accum++;
+    }
+  }
+
+  printf("Partitioned:\n");
+  printf("_part_PIs = %lu, %d\n", numGates[0], _num_PIs);
+  printf("_part_Gates = %lu, %d\n", numGates[1], _num_inner_gates);
+  printf("_part_POs = %lu, %d\n", numGates[2], _num_POs);
+  printf("_part_sum_pi_gates_pos = %lu, %d\n", numGates[3], _sum_pi_gates_pos);
+  printf("_part_visited_cpu: accum = %d\n", accum);
+}
 
 
+void CUDAPartitioner::_check_graph_connection_CPU() {
+  std::vector<bool> visited_cpu;
+  visited_cpu.resize(_sum_pi_gates_pos, false);
 
+  std::vector<int> sources;
+  for (int i = 0; i < _num_PIs; i++) {
+    sources.push_back(i);
+  }
+
+  for (size_t fromGate = 0; fromGate < sources.size(); fromGate++) {
+    int sourceIdx = sources[fromGate];
+    std::queue<int> postGates; 
+    postGates.push(sourceIdx);
+    visited_cpu[sourceIdx] = true; 
+
+    while (!postGates.empty()) {
+      int startGateIdx = postGates.front(); 
+      postGates.pop();
+      visited_cpu[startGateIdx] = true; 
+      // printf("\tstartGateIdx = %d %d (tid = %d)\n", startGateIdx, adj[startGateIdx].size(), tid);
+
+      for (int j = _adj_index_table[2*startGateIdx+0]; 
+          j < _adj_index_table[2*startGateIdx+1]; 
+          j++) {
+        int postGateIdx = _adj[j];
+        postGates.push(postGateIdx);
+      }
+    }
+  }
+
+  int accum = 0;
+  for (size_t i = 0; i < visited_cpu.size(); i++) {
+    if (!visited_cpu[i]) {
+      accum++;
+    }
+  }
+
+  printf("BIBI, accum = %d\n", accum);
+
+
+  // REVERSE VERSION
+  std::vector<bool> visited_cpu_back;
+  visited_cpu_back.resize(_sum_pi_gates_pos, false);
+
+  std::vector<int> sinks;
+  for (int s = 0; s < _sum_pi_gates_pos; s++) {
+    int outputSize = _adj_index_table[2*s+1] - _adj_index_table[2*s+0];
+    if (outputSize == 0) {
+      sinks.push_back(s);
+    }
+  }
+
+  for (size_t sink = 0; sink < sinks.size(); sink++) {
+    int sinkIdx = sinks[sink];
+    std::queue<int> preGates; 
+    preGates.push(sinkIdx);
+    visited_cpu_back[sinkIdx] = true; 
+
+    while (!preGates.empty()) {
+      int startGateIdx = preGates.front(); 
+      preGates.pop();
+      visited_cpu_back[startGateIdx] = true; 
+
+      for (int j = _invAdj_index_table[2*startGateIdx+0]; 
+          j < _invAdj_index_table[2*startGateIdx+1]; 
+          j++) {
+        int preGatesIdx = _invAdj[j];
+        preGates.push(preGatesIdx);
+      }
+    }
+  }
+
+  int accum2 = 0;
+  for (size_t i = 0; i < visited_cpu_back.size(); i++) {
+    if (!visited_cpu_back[i]) {
+      accum2++;
+    }
+  }
+
+  printf("BIBI, back: accum2 = %d\n", accum2);
+
+  // Check the correctness of _adj_index_table and _invAdj_index_table
+  for (int g = 0; g < _sum_pi_gates_pos; g++) {
+    int fmGateIdx = g;
+    for (int toGate = _adj_index_table[2*fmGateIdx+0]; 
+      toGate < _adj_index_table[2*fmGateIdx+1]; 
+      toGate++) {
+      int toGateIdx = _adj[toGate];
+      bool found = false;
+
+      for (int fmGate2 = _invAdj_index_table[2*toGateIdx+0]; 
+        fmGate2 < _invAdj_index_table[2*toGateIdx+1]; 
+        fmGate2++) {
+        int fmGate2Idx = _invAdj[fmGate2];
+        if (fmGate2Idx == fmGateIdx) {
+          found = true; 
+          break;
+        }
+      }
+
+      if (!found) {
+        printf("NOT FOUND, with fmGateIdx = %d, toGateIdx = %d\n", fmGateIdx, toGateIdx);
+      }
+    }
+  }
+
+}
+
+void CUDAPartitioner::print_simulation_results(
+                      const std::vector<int> &pi_results,
+                      const std::vector<int> &gate_results,
+                      const std::vector<int> &po_results) const {
+  for (size_t i = 0; i < pi_results.size(); i++) {
+    std::cout << "PI_" << i << ".output = " << pi_results[i] << "\n";
+  }
+  for (size_t i = 0; i < gate_results.size(); i++) {
+    std::cout << "Gate_" << i << ".output = " << gate_results[i] << "\n";
+  }
+  for (size_t i = 0; i < po_results.size(); i++) {
+    std::cout << "PO_" << i << ".output = " << po_results[i] << "\n";
+  }
+  std::cout << "\n\n";
+}
+
+
+void CUDAPartitioner::print_ppg(const ElementBase<> &gate) const {
+  std::cout << "\n=====\n\n";
+  std::cout << "mem_id: " << &gate << "\n";
+  std::cout << "idx: " << gate._idx << "\n";
+  std::cout << "type: " << static_cast<size_t>(gate._type) << "\n";
+  std::cout << "level: " << gate._level << "\n";
+  std::cout << "input_gates: [";
+  for (size_t i = 0; i < gate._inputs.size(); i++) {
+    std::cout << gate._inputs[i] << ", ";
+  }
+  std::cout << "]\n";
+  std::cout << "output_value: " << gate._output_value << "\n";
+}
 
 
 

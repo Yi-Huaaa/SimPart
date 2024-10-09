@@ -14,6 +14,12 @@
 /* CPU */
 #include <fsim/fsim.hpp>
 
+
+#define FAULT_INDEX_TYPE size_t
+#define FAULT_DATA_TYPE  size_t 
+
+
+
 // error checking macro
 #define cudaCheckErrors(msg) \
     do { \
@@ -106,18 +112,21 @@ class CUDAPartitioner {
 
 public:
 
-  enum class Mode { PARALLEL_CUDA = 0, CONES_PARALLEL_CUDA };
+  enum class Mode { CONES_PARALLEL_CUDA = 0, };
 
   // accessor
   void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
-  void run(Mode mode);
+  void run(Mode mode, const size_t num_threads);
 
 private:
   // Basic private members 
   int _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   int _sum_pi_gates_pos;
-  
+  std::vector<PI> _PIs;
+  std::vector<Gate> _gates;
+  std::vector<PO> _POs;
+
   // Host memory 
   // Read Graph 
   std::vector<GateType> _gate_type;
@@ -131,10 +140,10 @@ private:
   
   // Faults and Patterns 
   int _num_fault; // for read file
-  std::vector<Fault> _faults;
+  std::vector<Fault<FAULT_INDEX_TYPE, FAULT_DATA_TYPE>> _faults;
 
   int _num_pattern; // total number of patterns that need to be tested
-  int _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
+  size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
   std::vector<Pattern> _patterns;
 
   // For levelization and Find cones
@@ -150,6 +159,17 @@ private:
   std::vector<std::vector<std::set<int>>> _cones_set;
   std::vector<std::vector<std::vector<int>>> _cones_partitioned;
   
+  // Simulation
+  std::vector<int> _g_pi_results;
+  std::vector<int> _g_gate_results;
+  std::vector<int> _g_po_results;
+  std::vector<int> _b_pi_results;
+  std::vector<int> _b_gate_results;
+  std::vector<int> _b_po_results;
+  std::vector<int> _found_fault_to_pattern;
+  int _pi_idx_accum, _po_idx_accum, _gate_idx_accum;
+
+
 
 
 
@@ -170,7 +190,8 @@ private:
   int *_queue_size;
 
   /* Read files - CPU function */
-  void _read_graph(std::istream &ckt);
+  void _read_graph(std::istream &ckt, int*gate_input_order_table_readIn);
+  void _construct_graph(int *gate_input_order_table_readIn);
   void _read_pattern(std::istream &ptn);
   void _read_fault(std::istream &flst);
 
@@ -185,12 +206,49 @@ private:
   void _copy_TS_resutls_to_Host();
   void _levelized();
   void _construct_groups();
-  void _construct_cones(std::vector<int> &sources,
-                      std::vector<std::set<int>> &_cones_set_g);
+  void _construct_cones(std::vector<int> &sinks,
+                      std::vector<std::set<int>> &_cones_set_g,
+                      std::vector<bool> &visited_cpu);
 
   // TODO: free memory 
 
 
+
+  // CPU Simulation
+  void _run_cones_gates(const size_t num_threads);
+  void _run_cones_good_case(const Pattern pattern, 
+                            const size_t bits, 
+                            const size_t num_threads);
+  void _run_cones_bad_case(const Fault<FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault,
+                          const Pattern pattern,
+                          const size_t bits, const size_t num_threads);
+  void _write_to_array(std::vector<int> &pi_output, 
+                      std::vector<int> &gate_output,
+                      std::vector<int> &po_output,
+                      const size_t bits);
+    void _apply_INV(ElementBase<> &gate);
+    void _apply_AND(ElementBase<> &gate);
+    void _apply_OR(ElementBase<> &gate);
+    void _apply_XOR(ElementBase<> &gate);
+    void _apply_NAND(ElementBase<> &gate);
+    void _apply_NOR(ElementBase<> &gate);
+    void _apply_XNOR(ElementBase<> &gate);
+    void _apply_MUX(ElementBase<> &gate);
+    void _apply_CLKBUF(ElementBase<> &gate);
+    void _apply_PI(ElementBase<> &gate, const Pattern pattern, const size_t pi);
+    void _apply_PO(ElementBase<> &gate);
+    template <typename IndexType, typename LevelType, typename OutputValueType>
+    void _run_gate(ElementBase<IndexType, LevelType, OutputValueType> &gate, 
+                   const Pattern pattern, 
+                   const size_t pi, 
+                   const size_t SA_fault, 
+                   const OutputValueType fault_val);
+    
+    void _shift_to_correct_answer(std::vector<int> &results, const size_t bits,
+                                  const size_t num_shift_gates);
+  
+  
+  
 
 
 
@@ -209,6 +267,13 @@ private:
   void _print_copy_TS_resutls_to_Host();
   void _print_levelized();
   void _print_construct_groups(const std::vector<std::vector<int>> &sinks_groups);
+  void _count_duplications();
+  // Simulation
+  void print_simulation_results(const std::vector<int> &pi_results,
+                                const std::vector<int> &gate_results,
+                                const std::vector<int> &po_results) const;
+  void print_ppg(const ElementBase<> &gate) const;
+
 };
 
 #endif

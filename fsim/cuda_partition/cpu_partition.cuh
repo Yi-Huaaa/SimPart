@@ -15,6 +15,8 @@
 #include <fsim/fsim.hpp>
 #include <libkahypar.h>
 
+#define FAULT_INDEX_TYPE size_t
+#define FAULT_DATA_TYPE  size_t 
 
 // Forward declaration
 class CUDASimulator;
@@ -54,7 +56,7 @@ private:
   
   // Fault and Pattern 
   size_t _num_fault; // for read file
-  std::vector<Fault> _faults;
+  std::vector<Fault<FAULT_INDEX_TYPE, FAULT_DATA_TYPE>> _faults;
 
   size_t _num_pattern; // total number of patterns that need to be tested
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
@@ -149,9 +151,6 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                       const size_t startLevel, const int stopLevel, 
                       const size_t numLevels);
 
-  void _merge_cones(std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
-                    std::vector<std::vector<std::vector<size_t>>> &outputCones);
-
   // RepCut
   void _RepCut(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1);
   void _find_clusters();
@@ -177,13 +176,15 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   // Simulation - sequentail and parallel (without partitioning to cones)
   void _run_fsim(const size_t num_threads);
   void _run_good_case(const Pattern pattern, const size_t bits, const size_t num_threads);
-  void _run_bad_case(const Fault &fault, const Pattern pattern, 
+  void _run_bad_case(const Fault <FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+                    const Pattern pattern, 
                     const size_t bits, const size_t num_threads);
   
   // Simulation - sequentail and parallel (with partitioning to cones)
   void _run_cones_gates(const size_t num_threads);
   void _run_cones_good_case(const Pattern pattern, const size_t bits, const size_t num_threads);
-  void _run_cones_bad_case(const Fault &fault, const Pattern pattern, 
+  void _run_cones_bad_case(const Fault <FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+                          const Pattern pattern, 
                           const size_t bits, const size_t num_threads);
   
   // Simulation - sequentail and parallel (with partitioning to RepCut's output cones)
@@ -191,21 +192,22 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   void _run_RepCut_cones_good_case(const Pattern pattern, 
                                   const size_t bits, 
                                   const size_t num_threads);
-  void _run_RepCut_cones_bad_case(const Fault &fault, const Pattern pattern, 
+  void _run_RepCut_cones_bad_case(const Fault <FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+                                  const Pattern pattern, 
                                   const size_t bits, const size_t num_threads);
 
-  void _apply_INV(ElementBase &gate);
-  void _apply_AND(ElementBase &gate);
-  void _apply_OR(ElementBase &gate);
-  void _apply_XOR(ElementBase &gate);
-  void _apply_NAND(ElementBase &gate);
-  void _apply_NOR(ElementBase &gate);
-  void _apply_XNOR(ElementBase &gate);
-  void _apply_MUX(ElementBase &gate);
-  void _apply_CLKBUF(ElementBase &gate);
-  void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi);
-  void _apply_PO(ElementBase &gate);
-  void _run_gate(ElementBase &gate, const Pattern pattern, const size_t pi,
+  void _apply_INV(ElementBase<> &gate);
+  void _apply_AND(ElementBase<> &gate);
+  void _apply_OR(ElementBase<> &gate);
+  void _apply_XOR(ElementBase<> &gate);
+  void _apply_NAND(ElementBase<> &gate);
+  void _apply_NOR(ElementBase<> &gate);
+  void _apply_XNOR(ElementBase<> &gate);
+  void _apply_MUX(ElementBase<> &gate);
+  void _apply_CLKBUF(ElementBase<> &gate);
+  void _apply_PI(ElementBase<> &gate, const Pattern pattern, const size_t pi);
+  void _apply_PO(ElementBase<> &gate);
+  void _run_gate(ElementBase<> &gate, const Pattern pattern, const size_t pi,
                  const size_t SA_fault, const size_t fault_val);
   void _shift_to_correct_answer(std::vector<size_t> &results, const size_t bits,
                                 const size_t num_shift_gates);
@@ -216,7 +218,7 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   void print_patterns(const std::vector<Pattern> &patterns, const size_t round,
                       const size_t num_PIs) const;
   void print_bits_stack(const size_t size, const void *const ptr) const;
-  void print_ppg(const ElementBase &gate) const;
+  void print_ppg(const ElementBase<> &gate) const;
   void print_simulation_results(const std::vector<size_t> &pi_results,
                                 const std::vector<size_t> &gate_results,
                                 const std::vector<size_t> &po_results) const;

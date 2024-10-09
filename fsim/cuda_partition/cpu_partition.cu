@@ -708,35 +708,6 @@ void CPUPartitioner::_construct_duplication_table(std::vector<size_t> &coneIdxTo
 #endif 
 }
 
-void CPUPartitioner::_merge_cones(std::vector<std::vector<std::vector<size_t>>> &duplicationTable,
-                              std::vector<std::vector<std::vector<size_t>>> &outputCones) {
-  printf("Get _merge_cones\n");
-  // std::vector<bool> canMerge;
-  // canMerge.resize(??);  
-
-  // Steps:
-  // for (size_t mr = 0; mr < _mergedRound; mr++) {
-  //   _updateCanMerge();
-  //   for (m in all possible merge) {
-  //     if (canMerge[m]) {
-  //       update for each cone, which cone it should merge with (); // construct a table to record
-  //     }
-  //   }
-  
-  //   // After merging 
-  //   update duplicationTable();   
-  // }
-
-
-
-  // // After all of the merge steps finished
-  // construct the outputCones();
-  // // note: before finishing deciding all of the _cones should merge with which _cones, 
-  // // do not construct the outputCones
-
-
-}
-
 
 void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1) {
   auto start = std::chrono::steady_clock::now();
@@ -1202,9 +1173,9 @@ void CPUPartitioner::_run_good_case(const Pattern pattern, const size_t bits, co
       // printf("\tthread_id = %d, gateIdx = %lu\n", thread_id, gateIdx);
 
       // Select the correct element (PI, PO, or gate)
-      ElementBase &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase&>(_PIs[gateIdx - _pi_idx_accum]) :
-                          (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase&>(_gates[gateIdx - _gate_idx_accum]) :
-                          static_cast<ElementBase&>(_POs[gateIdx - _po_idx_accum]);
+      ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
+                          (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
+                          static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
 
       // Execute the gate operation
       _run_gate(tmp, pattern, gateIdx, 0, 0);
@@ -1220,7 +1191,8 @@ void CPUPartitioner::_run_good_case(const Pattern pattern, const size_t bits, co
 #endif
 }
 
-void CPUPartitioner::_run_bad_case(const Fault &fault, const Pattern pattern,
+void CPUPartitioner::_run_bad_case(const Fault <FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+                                    const Pattern pattern,
                                     const size_t bits, const size_t num_threads) {
   omp_set_num_threads(num_threads);  // Set the number of threads for OpenMP
 
@@ -1240,9 +1212,9 @@ void CPUPartitioner::_run_bad_case(const Fault &fault, const Pattern pattern,
                                                             ((gateIdx + _po_idx_accum) == wrong_gate);
 
       // Select the correct element (PI, PO, or gate)
-      ElementBase &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase&>(_PIs[gateIdx - _pi_idx_accum]) :
-                          (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase&>(_gates[gateIdx - _gate_idx_accum]) :
-                          static_cast<ElementBase&>(_POs[gateIdx - _po_idx_accum]);
+      ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
+                          (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
+                          static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
 
       // Execute the gate operation
       _run_gate(tmp, pattern, gateIdx, SA_fault, fault_val);
@@ -1317,9 +1289,9 @@ void CPUPartitioner::_run_cones_good_case(const Pattern pattern,
         // printf("c = %ld, lvl = %d, g = %ld, gateIdx = %ld\n", c, lvl, g, gateIdx);
         
         // Select the correct element (PI, PO, or gate)
-        ElementBase &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase&>(_PIs[gateIdx - _pi_idx_accum]) :
-                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase&>(_gates[gateIdx - _gate_idx_accum]) :
-                            static_cast<ElementBase&>(_POs[gateIdx - _po_idx_accum]);
+        ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
+                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
+                            static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
 
         // Execute the gate operation
         _run_gate(tmp, pattern, gateIdx, 0, 0);
@@ -1337,7 +1309,8 @@ void CPUPartitioner::_run_cones_good_case(const Pattern pattern,
 }
 
 
-void CPUPartitioner::_run_cones_bad_case(const Fault &fault, const Pattern pattern,
+void CPUPartitioner::_run_cones_bad_case(const Fault<FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+                                      const Pattern pattern,
                                     const size_t bits, const size_t num_threads) {
   // printf("Getting inside _run_cones_bad_case\n");
   omp_set_num_threads(num_threads);  // Set the number of threads for OpenMP
@@ -1361,9 +1334,9 @@ void CPUPartitioner::_run_cones_bad_case(const Fault &fault, const Pattern patte
                                                               ((gateIdx + _po_idx_accum) == wrong_gate);
 
         // Select the correct element (PI, PO, or gate)
-        ElementBase &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase&>(_PIs[gateIdx - _pi_idx_accum]) :
-                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase&>(_gates[gateIdx - _gate_idx_accum]) :
-                            static_cast<ElementBase&>(_POs[gateIdx - _po_idx_accum]);
+        ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
+                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
+                            static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
 
         // Execute the gate operation
         _run_gate(tmp, pattern, gateIdx, SA_fault, fault_val);
@@ -1437,9 +1410,9 @@ void CPUPartitioner::_run_RepCut_cones_good_case(const Pattern pattern,
       for (const auto& gateIdx : _RepCut_output_cones[c][lvl]) {
         
         // Select the correct element (PI, PO, or gate)
-        ElementBase &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase&>(_PIs[gateIdx - _pi_idx_accum]) :
-                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase&>(_gates[gateIdx - _gate_idx_accum]) :
-                            static_cast<ElementBase&>(_POs[gateIdx - _po_idx_accum]);
+        ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
+                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
+                            static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
 
         // Execute the gate operation
         _run_gate(tmp, pattern, gateIdx, 0, 0);
@@ -1457,8 +1430,9 @@ void CPUPartitioner::_run_RepCut_cones_good_case(const Pattern pattern,
 }
 
 
-void CPUPartitioner::_run_RepCut_cones_bad_case(const Fault &fault, const Pattern pattern,
-                                    const size_t bits, const size_t num_threads) {
+void CPUPartitioner::_run_RepCut_cones_bad_case(const Fault <FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+                                                const Pattern pattern,
+                                                const size_t bits, const size_t num_threads) {
   // printf("Getting inside _run_RepCut_cones_bad_case\n");
   omp_set_num_threads(num_threads);  // Set the number of threads for OpenMP
 
@@ -1479,9 +1453,9 @@ void CPUPartitioner::_run_RepCut_cones_bad_case(const Fault &fault, const Patter
                                                               ((gateIdx + _po_idx_accum) == wrong_gate);
 
         // Select the correct element (PI, PO, or gate)
-        ElementBase &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase&>(_PIs[gateIdx - _pi_idx_accum]) :
-                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase&>(_gates[gateIdx - _gate_idx_accum]) :
-                            static_cast<ElementBase&>(_POs[gateIdx - _po_idx_accum]);
+        ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
+                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
+                            static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
 
         // Execute the gate operation
         _run_gate(tmp, pattern, gateIdx, SA_fault, fault_val);
@@ -1523,14 +1497,14 @@ void CPUPartitioner::_write_to_array(std::vector<size_t> &pi_output,
 
 
 // Simulation for gates
-void CPUPartitioner::_apply_INV(ElementBase &gate) {
-  ElementBase *pre_gate = gate._inputs[0];
+void CPUPartitioner::_apply_INV(ElementBase<> &gate) {
+  ElementBase<> *pre_gate = gate._inputs[0];
   size_t ret = pre_gate->_output_value;
   gate._output_value = ~ret;
 }
 
-void CPUPartitioner::_apply_AND(ElementBase &gate) {
-  ElementBase *now_gate = gate._inputs[0];
+void CPUPartitioner::_apply_AND(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1540,8 +1514,8 @@ void CPUPartitioner::_apply_AND(ElementBase &gate) {
   gate._output_value = ret;
 }
 
-void CPUPartitioner::_apply_OR(ElementBase &gate) {
-  ElementBase *now_gate = gate._inputs[0];
+void CPUPartitioner::_apply_OR(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
   
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1551,8 +1525,8 @@ void CPUPartitioner::_apply_OR(ElementBase &gate) {
   gate._output_value = ret;
 }
 
-void CPUPartitioner::_apply_XOR(ElementBase &gate) {
-  ElementBase *now_gate = gate._inputs[0];
+void CPUPartitioner::_apply_XOR(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1562,8 +1536,8 @@ void CPUPartitioner::_apply_XOR(ElementBase &gate) {
   gate._output_value = ret;
 }
 
-void CPUPartitioner::_apply_NAND(ElementBase &gate) {
-  ElementBase *now_gate = gate._inputs[0];
+void CPUPartitioner::_apply_NAND(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1573,8 +1547,8 @@ void CPUPartitioner::_apply_NAND(ElementBase &gate) {
   gate._output_value = ~(ret);
 }
 
-void CPUPartitioner::_apply_NOR(ElementBase &gate) {
-  ElementBase *now_gate = gate._inputs[0];
+void CPUPartitioner::_apply_NOR(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1584,8 +1558,8 @@ void CPUPartitioner::_apply_NOR(ElementBase &gate) {
   gate._output_value = ~(ret);
 }
 
-void CPUPartitioner::_apply_XNOR(ElementBase &gate) {
-  ElementBase *now_gate = gate._inputs[0];
+void CPUPartitioner::_apply_XNOR(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1595,7 +1569,7 @@ void CPUPartitioner::_apply_XNOR(ElementBase &gate) {
   gate._output_value = ~(ret);
 }
 
-void CPUPartitioner::_apply_MUX(ElementBase &gate) {
+void CPUPartitioner::_apply_MUX(ElementBase<> &gate) {
   size_t a = gate._inputs[0]->_output_value;
   size_t b = gate._inputs[1]->_output_value;
   size_t s = gate._inputs[2]->_output_value;
@@ -1605,25 +1579,25 @@ void CPUPartitioner::_apply_MUX(ElementBase &gate) {
   gate._output_value = (ret);
 }
 
-void CPUPartitioner::_apply_CLKBUF(ElementBase &gate) {
-  ElementBase *now_gate = gate._inputs[0];
+void CPUPartitioner::_apply_CLKBUF(ElementBase<> &gate) {
+  ElementBase<> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   gate._output_value = ret;
 }
 
-void CPUPartitioner::_apply_PI(ElementBase &gate, const Pattern pattern,
+void CPUPartitioner::_apply_PI(ElementBase<> &gate, const Pattern pattern,
                                 const size_t pi) {
   gate._output_value = pattern._value[pi];
 }
 
-void CPUPartitioner::_apply_PO(ElementBase &gate) {
+void CPUPartitioner::_apply_PO(ElementBase<> &gate) {
   // It outputs its previous gate's output_value if there is no SA fault
-  ElementBase *pre_gate = gate._inputs[0];
+  ElementBase<> *pre_gate = gate._inputs[0];
   gate._output_value = pre_gate->_output_value;
 }
 
-void CPUPartitioner::_run_gate(ElementBase &gate, const Pattern pattern,
+void CPUPartitioner::_run_gate(ElementBase<> &gate, const Pattern pattern,
                                 const size_t pi, const size_t SA_fault,
                                 const size_t fault_val) {
 
@@ -1708,7 +1682,7 @@ void CPUPartitioner::visualization_graph(const std::string &outputFile) {
   output_file.close();
 }
 
-void CPUPartitioner::print_ppg(const ElementBase &gate) const {
+void CPUPartitioner::print_ppg(const ElementBase<> &gate) const {
   std::cout << "\n=====\n\n";
   std::cout << "mem_id: " << &gate << "\n";
   std::cout << "idx: " << gate._idx << "\n";

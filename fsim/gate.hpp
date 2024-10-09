@@ -28,7 +28,7 @@ class Simulator;
 //   MAX_GATE_TYPE
 // };
 
-class Gate : public ElementBase {
+class Gate : public ElementBase<> {
 
   friend class fsim::Simulator;
   friend class PI;

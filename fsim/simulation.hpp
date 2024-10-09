@@ -61,7 +61,8 @@ public:
   const PO &po(size_t poid) const { return _POs[poid]; }
   // all of them
   const std::vector<Gate> &gates() const { return _gates; }
-  const std::vector<Fault> &faults() const { return _faults; }
+  
+  const std::vector<Fault<>> &faults() const { return _faults; }
   const std::vector<Pattern> &patterns() const { return _patterns; }
 
   // accessor
@@ -97,7 +98,8 @@ private:
   std::vector<PO> _POs;
 
   size_t _num_fault; // for read file
-  std::vector<Fault> _faults;
+  std::vector<Fault<size_t, size_t>> _faults;  // New declaration with template
+  // std::vector<Fault> _faults;
 
   size_t _num_pattern; // total number of patterns that need to be tested
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
@@ -129,7 +131,8 @@ private:
   // sequential
   void _run_sequential();
   void _run_good_case(const Pattern pattern, const size_t bits);
-  void _run_bad_case(const Fault &fault, const Pattern pattern,
+  template <typename IndexType, typename FaultType>
+  void _run_bad_case(const Fault<IndexType, FaultType> &fault, const Pattern pattern,
                      const size_t bits);
   // parallel-tf
   void _run_parallel_tf();
@@ -137,29 +140,30 @@ private:
   // _which_fault_pattern: private indices for TF to emplace work for only 1 time
   std::vector<size_t> _which_fault_pattern; // [0]: which_fault, [1]: which_pattern
   void _emplace_bad_case_tf(tf::Taskflow &taskflow);
-  void _run_bad_case_tf(tf::Taskflow &taskflow, const Fault &fault, const Pattern pattern,
-                        const size_t bits);
+  template <typename IndexType, typename FaultType>
+  void _run_bad_case_tf(tf::Taskflow &taskflow, const size_t bits);
 
   // parallel-omp
   void _run_parallel_omp(const size_t num_threads);
   void _run_good_case_omp(const Pattern pattern, const size_t bits,
                           const size_t num_threads);
-  void _run_bad_case_omp(const Fault &fault, const Pattern pattern,
+  template <typename IndexType, typename FaultType>
+  void _run_bad_case_omp(const Fault<IndexType, FaultType> &fault, const Pattern pattern,
                          const size_t bits, const size_t num_threads);
 
-  void _apply_INV(ElementBase &gate);
-  void _apply_AND(ElementBase &gate);
-  void _apply_OR(ElementBase &gate);
-  void _apply_XOR(ElementBase &gate);
-  void _apply_NAND(ElementBase &gate);
-  void _apply_NOR(ElementBase &gate);
-  void _apply_XNOR(ElementBase &gate);
-  void _apply_MUX(ElementBase &gate);
-  void _apply_CLKBUF(ElementBase &gate);
-  void _apply_PI(ElementBase &gate, const Pattern pattern, const size_t pi);
-  void _apply_PO(ElementBase &gate);
+  void _apply_INV(ElementBase<> &gate);
+  void _apply_AND(ElementBase<> &gate);
+  void _apply_OR(ElementBase<> &gate);
+  void _apply_XOR(ElementBase<> &gate);
+  void _apply_NAND(ElementBase<> &gate);
+  void _apply_NOR(ElementBase<> &gate);
+  void _apply_XNOR(ElementBase<> &gate);
+  void _apply_MUX(ElementBase<> &gate);
+  void _apply_CLKBUF(ElementBase<> &gate);
+  void _apply_PI(ElementBase<> &gate, const Pattern pattern, const size_t pi);
+  void _apply_PO(ElementBase<> &gate);
 
-  void _run_gate(ElementBase &gate, const Pattern pattern, const size_t pi,
+  void _run_gate(ElementBase<> &gate, const Pattern pattern, const size_t pi,
                  const size_t SA_fault, const size_t fault_val);
   void _shift_to_correct_answer(std::vector<size_t> &results, const size_t bits,
                                 const size_t num_shift_gates);
@@ -168,9 +172,10 @@ private:
   void print_topological(const std::vector<std::vector<size_t>> &adj,
                          const std::vector<size_t> &indegree,
                          const std::vector<size_t> &order) const;
-  void print_ppg(const ElementBase &gate) const;
+  void print_ppg(const ElementBase<> &gate) const;
   void print_num_gates_per_level() const;
-  void print_faults(const std::vector<Fault> &faults) const;
+  template <typename IndexType, typename FaultType>
+  void print_faults(const std::vector<Fault<IndexType, FaultType>> &faults) const;
   void print_patterns(const std::vector<Pattern> &patterns, const size_t round,
                       const size_t num_PIs) const;
   void print_bits_stack(const size_t size, const void *const ptr) const;

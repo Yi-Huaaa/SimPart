@@ -7,9 +7,9 @@
 #include <vector>
 #include <iostream>
 
-// #define CPU_PARTITIONER_VERSION
+#define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
-    #define VERSION 4 // VERSION can be 0, 1, 2, 3, 4, 5
+    #define VERSION 0 // VERSION can be 0, 1, 2, 3, 4, 5
     #if VERSION == 0
         #define MODE 0
         #define NUM_THREADS 1
@@ -33,6 +33,7 @@
   
 #ifndef CPU_PARTITIONER_VERSION
   #define GPU_PARTITIONER_VERSION
+  #define NUM_THREADS 8
 #endif   // #ifndef CPU_PARTITIONER_VERSION
 
 
@@ -100,7 +101,7 @@ int main(int argc, char *argv[]) {
   for (size_t t = 0; t < TIMES; t++) {
     start = std::chrono::steady_clock::now();
     size_t MODE = 0;
-    cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(MODE)));
+    cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(MODE)), NUM_THREADS);
     end = std::chrono::steady_clock::now();
     duration_Partition += (end - start);
   }
