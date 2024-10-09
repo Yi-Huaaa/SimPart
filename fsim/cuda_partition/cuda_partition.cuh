@@ -15,6 +15,9 @@
 #include <fsim/fsim.hpp>
 
 
+#define ELEMENT_INDEX_TYPE size_t
+#define ELEMENT_LEVEL_TYPE size_t
+
 #define FAULT_INDEX_TYPE size_t
 #define FAULT_DATA_TYPE  size_t 
 
@@ -140,7 +143,7 @@ private:
   
   // Faults and Patterns 
   int _num_fault; // for read file
-  std::vector<Fault<FAULT_INDEX_TYPE, FAULT_DATA_TYPE>> _faults;
+  std::vector<Fault<FAULT_INDEX_TYPE>> _faults;
 
   int _num_pattern; // total number of patterns that need to be tested
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
@@ -219,7 +222,7 @@ private:
   void _run_cones_good_case(const Pattern pattern, 
                             const size_t bits, 
                             const size_t num_threads);
-  void _run_cones_bad_case(const Fault<FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault,
+  void _run_cones_bad_case(const Fault<FAULT_INDEX_TYPE> &fault,
                           const Pattern pattern,
                           const size_t bits, const size_t num_threads);
   void _write_to_array(std::vector<int> &pi_output, 
@@ -237,12 +240,11 @@ private:
     void _apply_CLKBUF(ElementBase<> &gate);
     void _apply_PI(ElementBase<> &gate, const Pattern pattern, const size_t pi);
     void _apply_PO(ElementBase<> &gate);
-    template <typename IndexType, typename LevelType, typename OutputValueType>
-    void _run_gate(ElementBase<IndexType, LevelType, OutputValueType> &gate, 
+    void _run_gate(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate, 
                    const Pattern pattern, 
                    const size_t pi, 
                    const size_t SA_fault, 
-                   const OutputValueType fault_val);
+                   const size_t fault_val);
     
     void _shift_to_correct_answer(std::vector<int> &results, const size_t bits,
                                   const size_t num_shift_gates);

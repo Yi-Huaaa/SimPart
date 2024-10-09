@@ -1191,7 +1191,7 @@ void CPUPartitioner::_run_good_case(const Pattern pattern, const size_t bits, co
 #endif
 }
 
-void CPUPartitioner::_run_bad_case(const Fault <FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+void CPUPartitioner::_run_bad_case(const Fault <FAULT_INDEX_TYPE> &fault, 
                                     const Pattern pattern,
                                     const size_t bits, const size_t num_threads) {
   omp_set_num_threads(num_threads);  // Set the number of threads for OpenMP
@@ -1309,9 +1309,10 @@ void CPUPartitioner::_run_cones_good_case(const Pattern pattern,
 }
 
 
-void CPUPartitioner::_run_cones_bad_case(const Fault<FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
-                                      const Pattern pattern,
-                                    const size_t bits, const size_t num_threads) {
+void CPUPartitioner::_run_cones_bad_case(const Fault<FAULT_INDEX_TYPE> &fault, 
+                                        const Pattern pattern,
+                                        const size_t bits, 
+                                        const size_t num_threads) {
   // printf("Getting inside _run_cones_bad_case\n");
   omp_set_num_threads(num_threads);  // Set the number of threads for OpenMP
 
@@ -1430,7 +1431,7 @@ void CPUPartitioner::_run_RepCut_cones_good_case(const Pattern pattern,
 }
 
 
-void CPUPartitioner::_run_RepCut_cones_bad_case(const Fault <FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+void CPUPartitioner::_run_RepCut_cones_bad_case(const Fault <FAULT_INDEX_TYPE> &fault, 
                                                 const Pattern pattern,
                                                 const size_t bits, const size_t num_threads) {
   // printf("Getting inside _run_RepCut_cones_bad_case\n");

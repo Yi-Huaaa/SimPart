@@ -129,7 +129,7 @@ void fsim::Simulator::_run_sequential() {
 
     // bad simulation (fault simulation)
     for (size_t j = 0; j < _faults.size(); j++) {
-      _run_bad_case<size_t, size_t>(_faults[j], _patterns[rd], num_testcases_this_round);
+      _run_bad_case(_faults[j], _patterns[rd], num_testcases_this_round);
 
       size_t found_fault = 0;
       for (size_t i = 0; i < _num_POs; i++) {
@@ -183,8 +183,7 @@ void fsim::Simulator::_run_good_case(const Pattern pattern, const size_t bits) {
 #endif
 }
 
-template <typename IndexType, typename FaultType>
-void fsim::Simulator::_run_bad_case(const Fault <IndexType, FaultType> &fault, const Pattern pattern,
+void fsim::Simulator::_run_bad_case(const Fault <FAULT_INDEX_TYPE> &fault, const Pattern pattern,
                                     const size_t bits) {
   size_t wrong_gate = fault._gate_with_fault;
   size_t fault_val = fault._gate_SA_fault_val;
@@ -266,7 +265,7 @@ void fsim::Simulator::_run_parallel_tf() {
       _which_fault_pattern[0] = j;  // _which_fault
       _which_fault_pattern[1] = rd; // _which_pattern
       // run
-      _run_bad_case_tf<size_t, size_t>(taskflow_bad_cases, 
+      _run_bad_case_tf(taskflow_bad_cases, 
                                       num_testcases_this_round);
 
       size_t found_fault = 0;
@@ -463,7 +462,6 @@ void fsim::Simulator::_emplace_bad_case_tf(tf::Taskflow &taskflow) {
 #endif
 }
 
-template <typename IndexType, typename FaultType>
 void fsim::Simulator::_run_bad_case_tf(tf::Taskflow &taskflow,
                                        const size_t bits) {
 
@@ -525,7 +523,7 @@ void fsim::Simulator::_run_parallel_omp(const size_t num_threads) {
 
     // bad simulation (fault simulation)
     for (size_t j = 0; j < _faults.size(); j++) {
-      _run_bad_case_omp<size_t, size_t>(_faults[j], _patterns[rd], num_testcases_this_round,
+      _run_bad_case_omp(_faults[j], _patterns[rd], num_testcases_this_round,
                         num_threads);
 
       size_t found_fault = 0;
@@ -600,8 +598,7 @@ void fsim::Simulator::_run_good_case_omp(const Pattern pattern,
 #endif
 }
 
-template <typename IndexType, typename FaultType>
-void fsim::Simulator::_run_bad_case_omp(const Fault<IndexType, FaultType> &fault,
+void fsim::Simulator::_run_bad_case_omp(const Fault<FAULT_INDEX_TYPE> &fault,
                                         const Pattern pattern,
                                         const size_t bits,
                                         const size_t num_threads) {
@@ -1289,8 +1286,7 @@ void fsim::Simulator::print_num_gates_per_level() const {
 }
 
 
-template <typename IndexType, typename FaultType>
-void fsim::Simulator::print_faults(const std::vector<Fault<IndexType, FaultType>>  &faults) const {
+void fsim::Simulator::print_faults(const std::vector<Fault<FAULT_INDEX_TYPE>>  &faults) const {
   std::cout << "\n=====\n\n"
             << "FSIM_DEBUG_PRINT_FAULTS\n";
   for (size_t i = 0; i < _num_fault; i++) {

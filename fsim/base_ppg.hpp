@@ -31,7 +31,7 @@ enum class GateType {
   MAX_GATE_TYPE
 };
 
-template<typename IndexType = size_t, typename LevelType = size_t, typename OutputValueType = size_t>
+template<typename IndexType = size_t, typename LevelType = size_t>
 class ElementBase {
 
   friend class fsim::Simulator;
@@ -42,7 +42,7 @@ public:
   // accessor
   IndexType idx() const { return _idx; }
   LevelType level() const { return _level; }
-  OutputValueType output_value() const { return _output_value; }
+  size_t output_value() const { return _output_value; }
 
 private:
   GateType _type;
@@ -50,7 +50,7 @@ private:
 
   IndexType _idx;
   LevelType _level;
-  OutputValueType _output_value;
+  size_t _output_value;
 
   // TODO: std::optional
   //       std::variant<int, float, std::string> storage

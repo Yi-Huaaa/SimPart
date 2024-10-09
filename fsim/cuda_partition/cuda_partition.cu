@@ -857,7 +857,7 @@ void CUDAPartitioner::_run_cones_good_case(const Pattern pattern,
 }
 
 
-void CUDAPartitioner::_run_cones_bad_case(const Fault<FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+void CUDAPartitioner::_run_cones_bad_case(const Fault<FAULT_INDEX_TYPE> &fault, 
                                           const Pattern pattern,
                                           const size_t bits, const size_t num_threads) {
   // printf("Getting inside _run_cones_bad_case\n");
@@ -1027,12 +1027,11 @@ void CUDAPartitioner::_apply_PO(ElementBase<> &gate) {
 }
 
 
-template <typename IndexType, typename LevelType, typename OutputValueType>
-void CUDAPartitioner::_run_gate(ElementBase<IndexType, LevelType, OutputValueType> &gate, 
+void CUDAPartitioner::_run_gate(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate, 
                                 const Pattern pattern,
                                 const size_t pi, 
                                 const size_t SA_fault, 
-                                const OutputValueType fault_val) {
+                                const size_t fault_val) {
 
   if (SA_fault) {
     gate._output_value = fault_val;

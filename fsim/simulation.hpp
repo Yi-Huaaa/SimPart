@@ -26,6 +26,8 @@
 // #define FSIM_DEBUG_PRINT_PATTERNS
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
 
+#define FAULT_INDEX_TYPE size_t
+
 
 namespace fsim {
 
@@ -98,8 +100,7 @@ private:
   std::vector<PO> _POs;
 
   size_t _num_fault; // for read file
-  std::vector<Fault<size_t, size_t>> _faults;  // New declaration with template
-  // std::vector<Fault> _faults;
+  std::vector<Fault<FAULT_INDEX_TYPE>> _faults; 
 
   size_t _num_pattern; // total number of patterns that need to be tested
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
@@ -131,8 +132,7 @@ private:
   // sequential
   void _run_sequential();
   void _run_good_case(const Pattern pattern, const size_t bits);
-  template <typename IndexType, typename FaultType>
-  void _run_bad_case(const Fault<IndexType, FaultType> &fault, const Pattern pattern,
+  void _run_bad_case(const Fault<FAULT_INDEX_TYPE> &fault, const Pattern pattern,
                      const size_t bits);
   // parallel-tf
   void _run_parallel_tf();
@@ -140,15 +140,13 @@ private:
   // _which_fault_pattern: private indices for TF to emplace work for only 1 time
   std::vector<size_t> _which_fault_pattern; // [0]: which_fault, [1]: which_pattern
   void _emplace_bad_case_tf(tf::Taskflow &taskflow);
-  template <typename IndexType, typename FaultType>
   void _run_bad_case_tf(tf::Taskflow &taskflow, const size_t bits);
 
   // parallel-omp
   void _run_parallel_omp(const size_t num_threads);
   void _run_good_case_omp(const Pattern pattern, const size_t bits,
                           const size_t num_threads);
-  template <typename IndexType, typename FaultType>
-  void _run_bad_case_omp(const Fault<IndexType, FaultType> &fault, const Pattern pattern,
+  void _run_bad_case_omp(const Fault<FAULT_INDEX_TYPE> &fault, const Pattern pattern,
                          const size_t bits, const size_t num_threads);
 
   void _apply_INV(ElementBase<> &gate);
@@ -174,8 +172,7 @@ private:
                          const std::vector<size_t> &order) const;
   void print_ppg(const ElementBase<> &gate) const;
   void print_num_gates_per_level() const;
-  template <typename IndexType, typename FaultType>
-  void print_faults(const std::vector<Fault<IndexType, FaultType>> &faults) const;
+  void print_faults(const std::vector<Fault<FAULT_INDEX_TYPE>> &faults) const;
   void print_patterns(const std::vector<Pattern> &patterns, const size_t round,
                       const size_t num_PIs) const;
   void print_bits_stack(const size_t size, const void *const ptr) const;

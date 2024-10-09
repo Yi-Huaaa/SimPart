@@ -15,8 +15,11 @@
 #include <fsim/fsim.hpp>
 #include <libkahypar.h>
 
+#define ELEMENT_INDEX_TYPE size_t
+#define ELEMENT_LEVEL_TYPE size_t
 #define FAULT_INDEX_TYPE size_t
-#define FAULT_DATA_TYPE  size_t 
+
+
 
 // Forward declaration
 class CUDASimulator;
@@ -56,7 +59,7 @@ private:
   
   // Fault and Pattern 
   size_t _num_fault; // for read file
-  std::vector<Fault<FAULT_INDEX_TYPE, FAULT_DATA_TYPE>> _faults;
+  std::vector<Fault<FAULT_INDEX_TYPE>> _faults;
 
   size_t _num_pattern; // total number of patterns that need to be tested
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
@@ -176,14 +179,14 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   // Simulation - sequentail and parallel (without partitioning to cones)
   void _run_fsim(const size_t num_threads);
   void _run_good_case(const Pattern pattern, const size_t bits, const size_t num_threads);
-  void _run_bad_case(const Fault <FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+  void _run_bad_case(const Fault <FAULT_INDEX_TYPE> &fault, 
                     const Pattern pattern, 
                     const size_t bits, const size_t num_threads);
   
   // Simulation - sequentail and parallel (with partitioning to cones)
   void _run_cones_gates(const size_t num_threads);
   void _run_cones_good_case(const Pattern pattern, const size_t bits, const size_t num_threads);
-  void _run_cones_bad_case(const Fault <FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+  void _run_cones_bad_case(const Fault <FAULT_INDEX_TYPE> &fault, 
                           const Pattern pattern, 
                           const size_t bits, const size_t num_threads);
   
@@ -192,7 +195,7 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   void _run_RepCut_cones_good_case(const Pattern pattern, 
                                   const size_t bits, 
                                   const size_t num_threads);
-  void _run_RepCut_cones_bad_case(const Fault <FAULT_INDEX_TYPE, FAULT_DATA_TYPE> &fault, 
+  void _run_RepCut_cones_bad_case(const Fault <FAULT_INDEX_TYPE> &fault, 
                                   const Pattern pattern, 
                                   const size_t bits, const size_t num_threads);
 
