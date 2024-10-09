@@ -52,9 +52,9 @@ private:
   /* Private members */
   size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   size_t _sum_pi_gates_pos;
-  std::vector<PI> _PIs;
-  std::vector<Gate> _gates;
-  std::vector<PO> _POs;
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> _PIs;
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> _gates;
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> _POs;
   size_t *_gate_input_order_table;
   
   // Fault and Pattern 

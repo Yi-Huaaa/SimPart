@@ -314,26 +314,26 @@ void CPUPartitioner::_construct_graph(std::istream &ckt) {
       size_t to_gate_id = gateIdx;
 
       if (from_gate_id < _num_PIs) { // PI -> gate
-        PI &from_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &from_gate =
             _PIs[from_gate_id - _pi_idx_accum];
-        Gate &to_gate =
+            ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &to_gate =
             _gates[to_gate_id - _gate_idx_accum];
         to_gate._inputs.push_back(&from_gate);
         to_gate._level = _level_of_gates[to_gate_id];
         // printf("PI_%lu (%lu) -> Gate_%lu (%lu)\n", from_gate_id - _pi_idx_accum, from_gate_id, to_gate_id - _gate_idx_accum, to_gate_id);
       } else if ((to_gate_id >= (_num_PIs)) &&
                  (to_gate_id < (_num_PIs + _num_POs))) { // gate -> PO
-        Gate &from_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &from_gate =
             _gates[from_gate_id - _gate_idx_accum];
-        PO &to_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &to_gate =
             _POs[to_gate_id - _po_idx_accum];
         to_gate._inputs.push_back(&from_gate);
         to_gate._level = _level_of_gates[to_gate_id];
         // printf("Gate_%lu (%lu) -> PO_%lu (%lu)\n", from_gate_id - _gate_idx_accum, from_gate_id, to_gate_id - _po_idx_accum, to_gate_id);
       } else { // gate -> gate
-        Gate &from_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &from_gate =
             _gates[from_gate_id - _gate_idx_accum];
-        Gate &to_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &to_gate =
             _gates[to_gate_id - _gate_idx_accum];
         // printf("Gate_%lu (%lu) -> Gate_%lu (%lu)\n", from_gate_id - _gate_idx_accum, from_gate_id, to_gate_id - _gate_idx_accum, to_gate_id);
         to_gate._inputs.push_back(&from_gate);

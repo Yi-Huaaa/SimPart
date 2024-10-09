@@ -26,6 +26,9 @@
 // #define FSIM_DEBUG_PRINT_PATTERNS
 // #define FSIM_DEBUG_PRINT_FAULT_TABLE
 
+
+#define ELEMENT_INDEX_TYPE size_t
+#define ELEMENT_LEVEL_TYPE size_t
 #define FAULT_INDEX_TYPE size_t
 
 
@@ -58,11 +61,11 @@ public:
 
   // return gates, faults, patterns
   // single
-  const PI &pi(size_t piid) const { return _PIs[piid]; }
-  const Gate &gate(size_t gid) const { return _gates[gid]; }
-  const PO &po(size_t poid) const { return _POs[poid]; }
+  const ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &pi(size_t piid) const { return _PIs[piid]; }
+  const ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate(size_t gid) const { return _gates[gid]; }
+  const ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &po(size_t poid) const { return _POs[poid]; }
   // all of them
-  const std::vector<Gate> &gates() const { return _gates; }
+  const std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> &gates() const { return _gates; }
   
   const std::vector<Fault<>> &faults() const { return _faults; }
   const std::vector<Pattern> &patterns() const { return _patterns; }
@@ -95,9 +98,9 @@ private:
 
   size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   std::vector<size_t> _gate_idx_to_tpg_order_idx;
-  std::vector<PI> _PIs;
-  std::vector<Gate> _gates;
-  std::vector<PO> _POs;
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> _PIs;
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> _gates;
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> _POs;
 
   size_t _num_fault; // for read file
   std::vector<Fault<FAULT_INDEX_TYPE>> _faults; 

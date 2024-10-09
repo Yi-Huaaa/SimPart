@@ -310,7 +310,7 @@ void fsim::Simulator::_run_good_case_tf(const Pattern pattern,
 
   for (size_t i = 0; i < _gates.size(); i++) {              // now_gate
     for (size_t j = 0; j < _gates[i]._inputs.size(); j++) { // pre_gate
-      ElementBase<> *pre_gate =
+      ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *pre_gate =
           _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + gate_idx_accum].succeed(tasks[pre_idx]);
@@ -319,7 +319,7 @@ void fsim::Simulator::_run_good_case_tf(const Pattern pattern,
 
   for (size_t i = 0; i < _POs.size(); i++) {              // now_gate
     for (size_t j = 0; j < _POs[i]._inputs.size(); j++) { // pre_gate
-      ElementBase<> *pre_gate =
+      ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *pre_gate =
           _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + po_idx_accum].succeed(tasks[pre_idx]);
@@ -443,7 +443,7 @@ void fsim::Simulator::_emplace_bad_case_tf(tf::Taskflow &taskflow) {
 
   for (size_t i = 0; i < _gates.size(); i++) {              // now_gate
     for (size_t j = 0; j < _gates[i]._inputs.size(); j++) { // pre_gate
-      ElementBase<> *pre_gate =
+      ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *pre_gate =
           _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + gate_idx_accum].succeed(tasks[pre_idx]);
@@ -452,7 +452,7 @@ void fsim::Simulator::_emplace_bad_case_tf(tf::Taskflow &taskflow) {
 
   for (size_t i = 0; i < _POs.size(); i++) {              // now_gate
     for (size_t j = 0; j < _POs[i]._inputs.size(); j++) { // pre_gate
-      ElementBase<> *pre_gate =
+      ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *pre_gate =
           _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
       size_t pre_idx = pre_gate->_idx;
       tasks[i + po_idx_accum].succeed(tasks[pre_idx]);
@@ -854,22 +854,22 @@ void fsim::Simulator::_read_graph(std::istream &ckt) {
       size_t from_gate_id = gate_input_order_table[i][j];
       size_t to_gate_id = i;
       if (from_gate_id < _num_PIs) { // PI -> gate
-        PI &from_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &from_gate =
             _PIs[_gate_idx_to_tpg_order_idx[from_gate_id] - pi_idx_accum];
-        Gate &to_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &to_gate =
             _gates[_gate_idx_to_tpg_order_idx[to_gate_id] - gate_idx_accum];
         to_gate._inputs.push_back(&from_gate);
       } else if ((to_gate_id >= (_num_PIs)) &&
                  (to_gate_id < (_num_PIs + _num_POs))) { // gate -> PO
-        Gate &from_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &from_gate =
             _gates[_gate_idx_to_tpg_order_idx[from_gate_id] - gate_idx_accum];
-        PO &to_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &to_gate =
             _POs[_gate_idx_to_tpg_order_idx[to_gate_id] - po_idx_accum];
         to_gate._inputs.push_back(&from_gate);
       } else { // gate -> gate
-        Gate &from_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &from_gate =
             _gates[_gate_idx_to_tpg_order_idx[from_gate_id] - gate_idx_accum];
-        Gate &to_gate =
+        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &to_gate =
             _gates[_gate_idx_to_tpg_order_idx[to_gate_id] - gate_idx_accum];
         to_gate._inputs.push_back(&from_gate);
       }
@@ -976,14 +976,14 @@ void fsim::Simulator::_read_pattern(std::istream &ptn) {
 }
 
 // simulation for gates
-void fsim::Simulator::_apply_INV(ElementBase<> &gate) {
-  ElementBase<> *pre_gate = gate._inputs[0];
+void fsim::Simulator::_apply_INV(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) {
+  ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *pre_gate = gate._inputs[0];
   size_t ret = pre_gate->_output_value;
   gate._output_value = ~ret;
 }
 
-void fsim::Simulator::_apply_AND(ElementBase<> &gate) {
-  ElementBase<> *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_AND(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) {
+  ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -993,8 +993,8 @@ void fsim::Simulator::_apply_AND(ElementBase<> &gate) {
   gate._output_value = ret;
 }
 
-void fsim::Simulator::_apply_OR(ElementBase<> &gate) {
-  ElementBase<> *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_OR(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) {
+  ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1004,8 +1004,8 @@ void fsim::Simulator::_apply_OR(ElementBase<> &gate) {
   gate._output_value = ret;
 }
 
-void fsim::Simulator::_apply_XOR(ElementBase<> &gate) {
-  ElementBase<> *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_XOR(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) {
+  ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1015,8 +1015,8 @@ void fsim::Simulator::_apply_XOR(ElementBase<> &gate) {
   gate._output_value = ret;
 }
 
-void fsim::Simulator::_apply_NAND(ElementBase<> &gate) {
-  ElementBase<> *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_NAND(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) {
+  ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1026,8 +1026,8 @@ void fsim::Simulator::_apply_NAND(ElementBase<> &gate) {
   gate._output_value = ~(ret);
 }
 
-void fsim::Simulator::_apply_NOR(ElementBase<> &gate) {
-  ElementBase<> *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_NOR(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) {
+  ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1037,8 +1037,8 @@ void fsim::Simulator::_apply_NOR(ElementBase<> &gate) {
   gate._output_value = ~(ret);
 }
 
-void fsim::Simulator::_apply_XNOR(ElementBase<> &gate) {
-  ElementBase<> *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_XNOR(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) {
+  ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   for (size_t i = 1; i < gate._inputs.size(); i++) {
@@ -1048,7 +1048,7 @@ void fsim::Simulator::_apply_XNOR(ElementBase<> &gate) {
   gate._output_value = ~(ret);
 }
 
-void fsim::Simulator::_apply_MUX(ElementBase<> &gate) {
+void fsim::Simulator::_apply_MUX(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) {
   size_t a = gate._inputs[0]->_output_value;
   size_t b = gate._inputs[1]->_output_value;
   size_t s = gate._inputs[2]->_output_value;
@@ -1058,25 +1058,25 @@ void fsim::Simulator::_apply_MUX(ElementBase<> &gate) {
   gate._output_value = (ret);
 }
 
-void fsim::Simulator::_apply_CLKBUF(ElementBase<> &gate) {
-  ElementBase<> *now_gate = gate._inputs[0];
+void fsim::Simulator::_apply_CLKBUF(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) {
+  ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *now_gate = gate._inputs[0];
   size_t ret = (now_gate)->_output_value;
 
   gate._output_value = ret;
 }
 
-void fsim::Simulator::_apply_PI(ElementBase<> &gate, const Pattern pattern,
+void fsim::Simulator::_apply_PI(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate, const Pattern pattern,
                                 const size_t pi) {
   gate._output_value = pattern._value[pi];
 }
 
-void fsim::Simulator::_apply_PO(ElementBase<> &gate) {
+void fsim::Simulator::_apply_PO(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) {
   // It outputs its previous gate's output_value if there is no SA fault
-  ElementBase<> *pre_gate = gate._inputs[0];
+  ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *pre_gate = gate._inputs[0];
   gate._output_value = pre_gate->_output_value;
 }
 
-void fsim::Simulator::_run_gate(ElementBase<> &gate, const Pattern pattern,
+void fsim::Simulator::_run_gate(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate, const Pattern pattern,
                                 const size_t pi, const size_t SA_fault,
                                 const size_t fault_val) {
 
@@ -1177,9 +1177,9 @@ void fsim::Simulator::visualization_graph(const std::string &outputFile) {
   // gates
   for (size_t i = 0; i < _gates.size(); i++) {              // now_gate
     for (size_t j = 0; j < _gates[i]._inputs.size(); j++) { // pre_gate
-      ElementBase<> *pre_gate =
+      ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *pre_gate =
           _gates[i]._inputs[j]; // pre_gate can be PI, Gate, PO
-      Gate now_gate = _gates[i];
+      ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> now_gate = _gates[i];
 
       std::string pre_s;
       if (pre_gate->_type == GateType::PI) {
@@ -1201,9 +1201,9 @@ void fsim::Simulator::visualization_graph(const std::string &outputFile) {
   // POs
   for (size_t i = 0; i < _POs.size(); i++) {              // now_gate
     for (size_t j = 0; j < _POs[i]._inputs.size(); j++) { // pre_gate
-      ElementBase<> *pre_gate =
+      ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> *pre_gate =
           _POs[i]._inputs[j]; // pre_gate can be PI, Gate, PO
-      PO now_gate = _POs[i];
+      ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> now_gate = _POs[i];
 
       std::string pre_s;
       if (pre_gate->_type == GateType::PI) {
@@ -1262,7 +1262,7 @@ void fsim::Simulator::print_topological(
   std::cout << "\n";
 }
 
-void fsim::Simulator::print_ppg(const ElementBase<> &gate) const {
+void fsim::Simulator::print_ppg(const ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate) const {
   std::cout << "\n=====\n\n";
   std::cout << "mem_id: " << &gate << "\n";
   std::cout << "idx: " << gate._idx << "\n";
