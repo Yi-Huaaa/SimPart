@@ -15,11 +15,10 @@
 #include <fsim/fsim.hpp>
 
 
-#define ELEMENT_INDEX_TYPE size_t
-#define ELEMENT_LEVEL_TYPE size_t
+#define ELEMENT_INDEX_TYPE_PART int
+#define ELEMENT_LEVEL_TYPE_PART int
 
-#define FAULT_INDEX_TYPE size_t
-#define FAULT_DATA_TYPE  size_t 
+#define FAULT_INDEX_TYPE_PART int
 
 
 
@@ -126,9 +125,9 @@ private:
   // Basic private members 
   int _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   int _sum_pi_gates_pos;
-  std::vector<PI> _PIs;
-  std::vector<Gate> _gates;
-  std::vector<PO> _POs;
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART>> _PIs;
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART>> _gates;
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART>> _POs;
 
   // Host memory 
   // Read Graph 
@@ -143,7 +142,7 @@ private:
   
   // Faults and Patterns 
   int _num_fault; // for read file
-  std::vector<Fault<FAULT_INDEX_TYPE>> _faults;
+  std::vector<Fault<FAULT_INDEX_TYPE_PART>> _faults;
 
   int _num_pattern; // total number of patterns that need to be tested
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
@@ -163,16 +162,14 @@ private:
   std::vector<std::vector<std::vector<int>>> _cones_partitioned;
   
   // Simulation
-  std::vector<int> _g_pi_results;
-  std::vector<int> _g_gate_results;
-  std::vector<int> _g_po_results;
-  std::vector<int> _b_pi_results;
-  std::vector<int> _b_gate_results;
-  std::vector<int> _b_po_results;
-  std::vector<int> _found_fault_to_pattern;
+  std::vector<size_t> _g_pi_results;
+  std::vector<size_t> _g_gate_results;
+  std::vector<size_t> _g_po_results;
+  std::vector<size_t> _b_pi_results;
+  std::vector<size_t> _b_gate_results;
+  std::vector<size_t> _b_po_results;
+  std::vector<size_t> _found_fault_to_pattern;
   int _pi_idx_accum, _po_idx_accum, _gate_idx_accum;
-
-
 
 
 
@@ -222,34 +219,40 @@ private:
   void _run_cones_good_case(const Pattern pattern, 
                             const size_t bits, 
                             const size_t num_threads);
-  void _run_cones_bad_case(const Fault<FAULT_INDEX_TYPE> &fault,
+  void _run_cones_bad_case(const Fault<FAULT_INDEX_TYPE_PART> &fault,
                           const Pattern pattern,
                           const size_t bits, const size_t num_threads);
-  void _write_to_array(std::vector<int> &pi_output, 
-                      std::vector<int> &gate_output,
-                      std::vector<int> &po_output,
+  void _write_to_array(std::vector<size_t> &pi_output, 
+                      std::vector<size_t> &gate_output,
+                      std::vector<size_t> &po_output,
                       const size_t bits);
-    void _apply_INV(ElementBase<> &gate);
-    void _apply_AND(ElementBase<> &gate);
-    void _apply_OR(ElementBase<> &gate);
-    void _apply_XOR(ElementBase<> &gate);
-    void _apply_NAND(ElementBase<> &gate);
-    void _apply_NOR(ElementBase<> &gate);
-    void _apply_XNOR(ElementBase<> &gate);
-    void _apply_MUX(ElementBase<> &gate);
-    void _apply_CLKBUF(ElementBase<> &gate);
-    void _apply_PI(ElementBase<> &gate, const Pattern pattern, const size_t pi);
-    void _apply_PO(ElementBase<> &gate);
-    void _run_gate(ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &gate, 
+    void _apply_INV(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
+    void _apply_AND(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
+    void _apply_OR(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
+    void _apply_XOR(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
+    void _apply_NAND(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
+    void _apply_NOR(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
+    void _apply_XNOR(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
+    void _apply_MUX(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
+    void _apply_CLKBUF(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
+    void _apply_PI(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate, const Pattern pattern, const size_t pi);
+    void _apply_PO(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
+    void _run_gate(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate, 
                    const Pattern pattern, 
-                   const size_t pi, 
-                   const size_t SA_fault, 
+                   const ELEMENT_INDEX_TYPE_PART pi, 
+                   const FAULT_INDEX_TYPE_PART SA_fault, 
                    const size_t fault_val);
-    
-    void _shift_to_correct_answer(std::vector<int> &results, const size_t bits,
-                                  const size_t num_shift_gates);
-  
-  
+    void _shift_to_correct_answer(std::vector<size_t> &results, const size_t bits,
+                                  const ELEMENT_INDEX_TYPE_PART num_shift_gates);
+    void _ask_simulation_memory() {
+      _g_pi_results.resize(_num_PIs);
+      _g_gate_results.resize(_num_inner_gates);
+      _g_po_results.resize(_num_POs);
+      _b_pi_results.resize(_num_PIs);
+      _b_gate_results.resize(_num_inner_gates);
+      _b_po_results.resize(_num_POs);
+      _found_fault_to_pattern.resize(2 * _faults.size());
+    }
   
 
 
@@ -271,10 +274,10 @@ private:
   void _print_construct_groups(const std::vector<std::vector<int>> &sinks_groups);
   void _count_duplications();
   // Simulation
-  void print_simulation_results(const std::vector<int> &pi_results,
-                                const std::vector<int> &gate_results,
-                                const std::vector<int> &po_results) const;
-  void print_ppg(const ElementBase<> &gate) const;
+  void print_simulation_results(const std::vector<size_t> &pi_results,
+                                const std::vector<size_t> &gate_results,
+                                const std::vector<size_t> &po_results) const;
+  void print_ppg(const ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate) const;
 
 };
 
