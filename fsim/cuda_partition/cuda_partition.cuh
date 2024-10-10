@@ -37,7 +37,7 @@
 
 
 // constexpr
-constexpr int _k = 16; // based on the kernel concurrency
+constexpr int _k = 2; // based on the kernel concurrency
 
 // Define the enum class
 enum class gpuGateType : int {
@@ -57,26 +57,26 @@ enum class gpuGateType : int {
 
 
 /* GPU functions */
-__global__ void _init_visited(const int _sum_pi_gates_pos, int *_visited);
+__global__ void _init_visited(const int _sum_pi_gates_pos, int *_visited_gpu);
 __global__ void _frist_level_enqueue(const int _num_PIs, 
                                     int *_queue_data, int *_queue_head, 
-                                    int *_queue_tail, int *_visited);
+                                    int *_queue_tail, int *_visited_gpu);
 __global__ void _frist_level (const int _num_PIs, 
                               const int *_adj_gpu,
                               const int *_adj_index_table_gpu,
                               const int *_invAdj_gpu,
                               const int *_invAdj_index_table_gpu,                              
                               int *_queue_data, int *_queue_head, int *_queue_tail, 
-                              int *_visited, 
-                              int *_partitionIndex);
+                              int *_visited_gpu, 
+                              int *_partitionIndex_gpu);
 __global__ void _GPU_partitioner (int *_queue_data, int *_queue_head, int *_queue_tail, int *_queue_size,
                                  const int *_adj_gpu, 
                                  const int *_adj_index_table_gpu, 
                                  const int *_invAdj_gpu,
                                  const int *_invAdj_index_table_gpu,
-                                 int *_visited,
-                                 int *_partitionIndex);
-__device__ void _enqueue(const int g_idx, int *_queue_head, int *_queue_tail, int *_visited);
+                                 int *_visited_gpu,
+                                 int *_partitionIndex_gpu);
+__device__ void _enqueue(const int g_idx, int *_queue_head, int *_queue_tail, int *_visited_gpu);
 __device__ int _dequeue(int *_queue_data, int *_queue_head);
 __device__ bool _canFirstLevelEnqueue(const int _num_PIs,
                                       const int g_idx, 
@@ -85,7 +85,7 @@ __device__ bool _canFirstLevelEnqueue(const int _num_PIs,
 __device__ bool _canEnqueue(const int g_idx, 
                             const int *_invAdj_gpu,
                             const int *_invAdj_index_table_gpu, 
-                            int *_visited);
+                            int *_visited_gpu);
 // For print
 __global__ void _gpu_print_read_graph(const int _sum_pi_gates_pos, 
                                       const int _szOfAdj, 
@@ -94,11 +94,11 @@ __global__ void _gpu_print_read_graph(const int _sum_pi_gates_pos,
                                       const int *_adj_index_table_gpu, 
                                       const int *_invAdj_index_table_gpu);
 __global__ void _print_first_level (const int _num_PIs, 
-                                    const int *_partitionIndex);
+                                    const int *_partitionIndex_gpu);
 __global__ void _print_queue(int *_queue_data, int *_queue_head, int *_queue_tail);
 __global__ void _print_GPU_partitioner(const int _sum_pi_gates_pos, 
-                                      const int *_partitionIndex);
-__global__ void _check_visited(const int sz, const int *_visited, const int mode);
+                                      const int *_partitionIndex_gpu);
+__global__ void _check_visited(const int sz, const int *_visited_gpu, const int mode);
 
 
 /* Forward declaration */
@@ -113,12 +113,15 @@ class CUDAPartitioner {
 
 public:
 
-  enum class Mode { CONES_PARALLEL_CUDA = 0, };
+  enum class Mode { GPU_PARTIOR_CPU_SIMUTOR = 0, GPU_PARTIOR_GPU_SIMUTOR, };
 
   // accessor
   void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
   void run(Mode mode, const size_t num_threads);
+  void freeMem() {
+    _free();
+  }
 
 private:
   // Basic private members 
@@ -134,7 +137,6 @@ private:
   int _szOfAdj; // size of _adj
   int *_adj; // fromGate -> toGate
   int *_invAdj; // toGate -> fromGate
-  // TODO: _adj_index_table and _invAdj_index_table table size can be reduced 
   int *_adj_index_table;
   int *_invAdj_index_table;
   // int *_gate_input_order_table;  // toGate -> fromGate
@@ -170,15 +172,13 @@ private:
   std::vector<size_t> _found_fault_to_pattern;
   int _pi_idx_accum, _po_idx_accum, _gate_idx_accum;
 
-
-
   // GPU memory 
   int *_adj_gpu; 
   int *_invAdj_gpu; 
   int *_adj_index_table_gpu;
   int *_invAdj_index_table_gpu;
-  int *_partitionIndex;
-  int *_visited;
+  int *_partitionIndex_gpu;
+  int *_visited_gpu;
 
   const int _NUM_THREADS = 1024;
   
@@ -209,12 +209,27 @@ private:
                       std::vector<std::set<int>> &_cones_set_g,
                       std::vector<bool> &visited_cpu);
 
-  // TODO: free memory 
+  void _free() {
+    free(_adj);
+    free(_invAdj);
+    free(_adj_index_table);
+    free(_invAdj_index_table);
 
+    cudaFree(_adj_gpu);
+    cudaFree(_invAdj_gpu);
+    cudaFree(_adj_index_table_gpu);
+    cudaFree(_invAdj_index_table_gpu);
+    cudaFree(_partitionIndex_gpu);
+    cudaFree(_visited_gpu);
+    cudaFree(_queue_data);
+    cudaFree(_queue_head);
+    cudaFree(_queue_tail);
+    cudaFree(_queue_size);
+  }
 
 
   // CPU Simulation
-  void _run_cones_gates(const size_t num_threads);
+  void _run_cones_gates_cpu(const size_t num_threads);
   void _run_cones_good_case(const Pattern pattern, 
                             const size_t bits, 
                             const size_t num_threads);
@@ -253,6 +268,8 @@ private:
       _found_fault_to_pattern.resize(2 * _faults.size());
     }
   
+    // GPU Simulator
+    void _run_cones_gates_gpu();
 
 
 

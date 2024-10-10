@@ -315,8 +315,8 @@ void CUDAPartitioner::_ask_gpu_memory() {
   cudaMalloc((void**)&_invAdj_gpu, _szOfAdj*sizeof(int));
   cudaMalloc((void**)&_adj_index_table_gpu, 2*_sum_pi_gates_pos*sizeof(int));
   cudaMalloc((void**)&_invAdj_index_table_gpu, 2*_sum_pi_gates_pos*sizeof(int));
-  cudaMalloc((void**)&_partitionIndex, _sum_pi_gates_pos*sizeof(int));
-  cudaMalloc((void**)&_visited, _sum_pi_gates_pos*sizeof(int));
+  cudaMalloc((void**)&_partitionIndex_gpu, _sum_pi_gates_pos*sizeof(int));
+  cudaMalloc((void**)&_visited_gpu, _sum_pi_gates_pos*sizeof(int));
   
   // Ask queue memory 
   // Note: we cudaMalloc a large size queue -> actually array, 22 is got by tuning
@@ -344,6 +344,9 @@ void CUDAPartitioner::_ask_gpu_memory() {
   cudaMemset(_queue_head, 0, 1*sizeof(int)); 
   cudaMemset(_queue_tail, 0, 1*sizeof(int)); 
   cudaMemset(_queue_size, 0, 1*sizeof(int)); 
+  
+  // Init visited gpu
+  cudaMemset(_visited_gpu, 0, _sum_pi_gates_pos*sizeof(int)); 
   cudaCheckErrors("CUDA: partitioner cudaMemcpyAsync - Failure");
 
 #ifdef CPU_GPU_READ_GRAPH_PRINT_FOR_CHECK
@@ -357,19 +360,19 @@ void CUDAPartitioner::_ask_gpu_memory() {
 #endif
 }
 
-__global__ void _init_visited(const int _sum_pi_gates_pos, int *_visited) {
+__global__ void _init_visited(const int _sum_pi_gates_pos, int *_visited_gpu) {
   int t_idx = blockIdx.x*blockDim.x+ threadIdx.x;
   if (t_idx < _sum_pi_gates_pos) {
-    _visited[t_idx] = 0;
+    _visited_gpu[t_idx] = 0;
   }
 }
 
 __device__ void _enqueue(const int g_idx, int *_queue_data, 
                          int *_queue_tail, 
-                         int *_visited) {
+                         int *_visited_gpu) {
   int pos = atomicAdd(_queue_tail, 1);
   _queue_data[pos] = g_idx;
-  _visited[g_idx] = 1;
+  _visited_gpu[g_idx] = 1;
   // printf("\t_enqueue, pos = %d, g_idx = %d\n", pos, g_idx);
 }
 
@@ -397,13 +400,13 @@ __device__ bool _canFirstLevelEnqueue(const int _num_PIs,
 __device__ bool _canEnqueue(const int g_idx, 
                             const int *_invAdj_gpu,
                             const int *_invAdj_index_table_gpu, 
-                            int *_visited) {
+                            int *_visited_gpu) {
   int ret = 0;
   // traverse its inputs 
   for (int fmGate = _invAdj_index_table_gpu[2*g_idx+0]; 
       fmGate < _invAdj_index_table_gpu[2*g_idx+1]; fmGate++) {
     int fmGateIdx = _invAdj_gpu[fmGate];
-    ret += _visited[fmGateIdx];
+    ret += _visited_gpu[fmGateIdx];
   }
 
   // printf("\t_canEnqueue: t_idx = %d g_idx = %d, ret = %d, %d\n", 
@@ -413,10 +416,10 @@ __device__ bool _canEnqueue(const int g_idx,
 
 __global__ void _frist_level_enqueue(const int _num_PIs, 
                                     int *_queue_data, int *_queue_head, 
-                                    int *_queue_tail, int *_visited) {
+                                    int *_queue_tail, int *_visited_gpu) {
   const int t_idx = blockIdx.x*blockDim.x + threadIdx.x;
   if (t_idx < _num_PIs) {
-    _enqueue(t_idx, _queue_data, _queue_tail, _visited);
+    _enqueue(t_idx, _queue_data, _queue_tail, _visited_gpu);
   }
 }
 
@@ -427,8 +430,8 @@ __global__ void _frist_level(const int _num_PIs,
                             const int *_invAdj_gpu,
                             const int *_invAdj_index_table_gpu,
                             int *_queue_data, int *_queue_head, int *_queue_tail, 
-                            int *_visited,
-                            int *_partitionIndex) {
+                            int *_visited_gpu,
+                            int *_partitionIndex_gpu) {
 
   const int t_idx = blockIdx.x*blockDim.x + threadIdx.x;
   if (t_idx < _num_PIs) {
@@ -458,15 +461,15 @@ __global__ void _frist_level(const int _num_PIs,
                       (maxGroupAccum);
 
       // Update queue 
-      if (_canEnqueue(toGateIdx, _invAdj_gpu, _invAdj_index_table_gpu, _visited)) {
-        _enqueue(toGateIdx, _queue_data, _queue_tail, _visited);
+      if (_canEnqueue(toGateIdx, _invAdj_gpu, _invAdj_index_table_gpu, _visited_gpu)) {
+        _enqueue(toGateIdx, _queue_data, _queue_tail, _visited_gpu);
         // printf("\t_enqueue t_idx = %d, toGateIdx = %d\n", t_idx, toGateIdx);
       }
     }
 
-    // Update _partitionIndex
-    _partitionIndex[g_idx] = maxGroupIdx;
-    // printf("t_idx = %d, _partitionIndex[%d] = %d\n", t_idx, g_idx, _partitionIndex[g_idx]);
+    // Update _partitionIndex_gpu
+    _partitionIndex_gpu[g_idx] = maxGroupIdx;
+    // printf("t_idx = %d, _partitionIndex_gpu[%d] = %d\n", t_idx, g_idx, _partitionIndex_gpu[g_idx]);
   }
 }
 
@@ -476,8 +479,8 @@ __global__ void _GPU_partitioner(int *_queue_data, int *_queue_head, int *_queue
                                  const int *_adj_index_table_gpu, 
                                  const int *_invAdj_gpu,
                                  const int *_invAdj_index_table_gpu, 
-                                 int *_visited,                                
-                                 int *_partitionIndex) {
+                                 int *_visited_gpu,                                
+                                 int *_partitionIndex_gpu) {
   int t_idx = threadIdx.x + blockIdx.x * blockDim.x;
   // printf("_queue_size[0] = %d\n", _queue_size[0]);
   // __syncthreads();
@@ -498,7 +501,7 @@ __global__ void _GPU_partitioner(int *_queue_data, int *_queue_head, int *_queue
     for (int fmGate = _invAdj_index_table_gpu[2*g_idx+0]; 
         fmGate < _invAdj_index_table_gpu[2*g_idx+1]; fmGate++) {
       int fmGateIdx = _invAdj_gpu[fmGate];
-      int fmGateGroup = _partitionIndex[fmGateIdx];
+      int fmGateGroup = _partitionIndex_gpu[fmGateIdx];
 
       groupIdxAccum[fmGateGroup]++;
       bool upd = groupIdxAccum[fmGateGroup] > maxGroupAccum;
@@ -510,9 +513,9 @@ __global__ void _GPU_partitioner(int *_queue_data, int *_queue_head, int *_queue
                       (maxGroupAccum);
     }
 
-    // Update _partitionIndex
-    _partitionIndex[g_idx] = maxGroupIdx;
-    // printf("\tt_idx = %d g_idx = %d, _partitionIndex[%d] %d\n", t_idx, g_idx, g_idx, _partitionIndex[g_idx]);
+    // Update _partitionIndex_gpu
+    _partitionIndex_gpu[g_idx] = maxGroupIdx;
+    // printf("\tt_idx = %d g_idx = %d, _partitionIndex_gpu[%d] %d\n", t_idx, g_idx, g_idx, _partitionIndex_gpu[g_idx]);
 
     
     // Update queue
@@ -522,8 +525,8 @@ __global__ void _GPU_partitioner(int *_queue_data, int *_queue_head, int *_queue
         int toGateIdx = _adj_gpu[toGate];
       
         // Update queue 
-        if (_canEnqueue(toGateIdx, _invAdj_gpu, _invAdj_index_table_gpu, _visited)) {
-          _enqueue(toGateIdx, _queue_data, _queue_tail, _visited);
+        if (_canEnqueue(toGateIdx, _invAdj_gpu, _invAdj_index_table_gpu, _visited_gpu)) {
+          _enqueue(toGateIdx, _queue_data, _queue_tail, _visited_gpu);
           // printf("\t_enqueue t_idx = %d, toGateIdx = %d\n", t_idx, toGateIdx);
         }
     }
@@ -545,18 +548,18 @@ int CUDAPartitioner::_get_queue_size() {
 
 void CUDAPartitioner::_call_gpu_partitioner() {
   const int num_threads = _NUM_THREADS;
-  int num_blocks = (_sum_pi_gates_pos + _NUM_THREADS - 1) / _NUM_THREADS;
+  // int num_blocks = (_sum_pi_gates_pos + _NUM_THREADS - 1) / _NUM_THREADS;
   int q_sz = 0;
   // printf("_sum_pi_gates_pos = %d\n", _sum_pi_gates_pos);
 
-  // _visited init 
-  _init_visited <<< num_blocks, num_threads >>> (_sum_pi_gates_pos, _visited);
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA: cudaDeviceSynchronize _frist_level - Failure");
+  // // _visited_gpu init -> changed to use cudaMemset
+  // _init_visited <<< num_blocks, num_threads >>> (_sum_pi_gates_pos, _visited_gpu);
+  // cudaDeviceSynchronize();
+  // cudaCheckErrors("CUDA: cudaDeviceSynchronize _frist_level - Failure");
 
   // For PIs level 
-  num_blocks = (_num_PIs + _NUM_THREADS - 1) / _NUM_THREADS;
-  _frist_level_enqueue <<< num_blocks, num_threads >>> (_num_PIs, _queue_data, _queue_head, _queue_tail, _visited);
+  int num_blocks = (_num_PIs + _NUM_THREADS - 1) / _NUM_THREADS;
+  _frist_level_enqueue <<< num_blocks, num_threads >>> (_num_PIs, _queue_data, _queue_head, _queue_tail, _visited_gpu);
   
   q_sz = _get_queue_size();
   
@@ -567,8 +570,8 @@ void CUDAPartitioner::_call_gpu_partitioner() {
                                                     _invAdj_gpu, 
                                                     _invAdj_index_table_gpu,
                                                     _queue_data, _queue_head, _queue_tail, 
-                                                    _visited,
-                                                    _partitionIndex);
+                                                    _visited_gpu,
+                                                    _partitionIndex_gpu);
   cudaCheckErrors("CUDA: _frist_level - Failure");
   cudaDeviceSynchronize();
   cudaCheckErrors("CUDA: cudaDeviceSynchronize _frist_level - Failure");
@@ -578,7 +581,7 @@ void CUDAPartitioner::_call_gpu_partitioner() {
   // cudaDeviceSynchronize();
   // cudaCheckErrors("CUDA: cudaDeviceSynchronize _frist_level - Failure");
 
-  // _print_first_level <<< 1, 1 >>> (_num_PIs, _partitionIndex);
+  // _print_first_level <<< 1, 1 >>> (_num_PIs, _partitionIndex_gpu);
   // cudaCheckErrors("CUDA: _print_first_level - Failure");
   // _print_queue <<< 1, 1 >>> (_queue_data, _queue_head, _queue_tail);
   // cudaCheckErrors("CUDA: _print_queue - Failure");
@@ -594,8 +597,8 @@ void CUDAPartitioner::_call_gpu_partitioner() {
                                                       _adj_index_table_gpu, 
                                                       _invAdj_gpu, 
                                                       _invAdj_index_table_gpu, 
-                                                      _visited,
-                                                      _partitionIndex);
+                                                      _visited_gpu,
+                                                      _partitionIndex_gpu);
                                                       
     cudaDeviceSynchronize();
     cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
@@ -610,7 +613,7 @@ void CUDAPartitioner::_call_gpu_partitioner() {
 #ifdef GPU_PART_CHECK_FOR_VISITED  
   cudaDeviceSynchronize();
   cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
-  _check_visited <<< 1, 1 >>> (_sum_pi_gates_pos, _visited, 1);
+  _check_visited <<< 1, 1 >>> (_sum_pi_gates_pos, _visited_gpu, 1);
   // printf("_num_PIs = %d, _num_POs = %d, _num_inner_gates = %d\n", _num_PIs, _num_POs, _num_inner_gates);
   cudaDeviceSynchronize();
   cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
@@ -618,7 +621,7 @@ void CUDAPartitioner::_call_gpu_partitioner() {
 
   // cudaDeviceSynchronize();
   // cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
-  // _print_GPU_partitioner <<< 1, 1 >>> (_sum_pi_gates_pos, _partitionIndex);
+  // _print_GPU_partitioner <<< 1, 1 >>> (_sum_pi_gates_pos, _partitionIndex_gpu);
   // cudaCheckErrors("CUDA: _print_GPU_partitioner - Failure");    
   // cudaDeviceSynchronize();
   // cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
@@ -648,7 +651,7 @@ void CUDAPartitioner::_copy_TS_resutls_to_Host() {
 
   cudaMemcpyAsync(_queue_data_cpu.data(), _queue_data, 
                   28*_szOfAdj*sizeof(int), cudaMemcpyDeviceToHost);
-  cudaMemcpyAsync(_partitionIndex_cpu.data(), _partitionIndex, 
+  cudaMemcpyAsync(_partitionIndex_cpu.data(), _partitionIndex_gpu, 
                   _sum_pi_gates_pos*sizeof(int), cudaMemcpyDeviceToHost);
   cudaMemcpyAsync(&_queue_tail_cpu, _queue_tail, 
                   1*sizeof(int), cudaMemcpyDeviceToHost);
@@ -787,19 +790,23 @@ void CUDAPartitioner::run(Mode mode, const size_t num_threads) {
   int m = static_cast<int>(mode);
 
   switch (mode) {
-    case Mode::CONES_PARALLEL_CUDA:
-      std::cout << "Mode: " << m << " (run CONES_PARALLEL_CUDA)\n";
-      _run_cones_gates(num_threads);
-      break;   
+    case Mode::GPU_PARTIOR_CPU_SIMUTOR:
+      std::cout << "Mode: " << m << " (run GPU_PARTIOR_CPU_SIMUTOR)\n";
+      _run_cones_gates_cpu(num_threads);
+      break;  
+    case Mode::GPU_PARTIOR_GPU_SIMUTOR:
+      std::cout << "Mode: " << m << " (run GPU_PARTIOR_GPU_SIMUTOR)\n";
+      // _run_cones_gates_gpu(num_threads);
+      break;         
     default:
       printf("No SUCH CASES\n");
       return; 
   }
 }
 
-void CUDAPartitioner::_run_cones_gates(const size_t num_threads) {
+void CUDAPartitioner::_run_cones_gates_cpu(const size_t num_threads) {
 #ifdef CPU_PART_DEBUG_PRINT_SIMULATION
-  std::cout << "execute simulation._run_cones_gates();\n";
+  std::cout << "execute simulation._run_cones_gates_cpu();\n";
 #endif
 
   // Simulation
@@ -848,11 +855,14 @@ void CUDAPartitioner::_run_cones_good_case(const Pattern pattern,
   //         num_threads, _cones_partitioned.size());
 
   // Parallelize across cones (c)
-  #pragma omp parallel for if (_cones_partitioned.size() > 1) schedule(dynamic)
+  // #pragma omp parallel for
+  // #pragma omp parallel for if (_cones_partitioned.size() > 1) schedule(dynamic)
   for (size_t c = 0; c < _cones_partitioned.size(); c++) {
     for (size_t lvl = 0; lvl < _cones_partitioned[c].size(); lvl++) {
       // Parallelize across gates within the same cone and level
-      #pragma omp parallel for schedule(dynamic)
+      #pragma omp parallel for
+      // #pragma omp parallel for schedule(dynamic)
+      // #pragma omp parallel for if (_cones_partitioned[c][lvl].size()) schedule(dynamic)
       for (size_t g = 0; g < _cones_partitioned[c][lvl].size(); g++) {
         int gateIdx = _cones_partitioned[c][lvl][g];
         
@@ -1110,7 +1120,9 @@ void CUDAPartitioner::_shift_to_correct_answer(std::vector<size_t> &results,
   }
 }
 
-
+void CUDAPartitioner::_run_cones_gates_gpu() {
+  
+}
 
 
 
@@ -1329,12 +1341,12 @@ __global__ void _gpu_print_read_graph(const int _sum_pi_gates_pos,
 }
 
 __global__ void _print_first_level(const int _num_PIs, 
-                                   const int *_partitionIndex) {
+                                   const int *_partitionIndex_gpu) {
   printf("Get Insdies _print_first_level\n");
   
   for (int i = 0; i < _num_PIs; i++) {
     const int piIdx = i;
-    const int groupIdx = _partitionIndex[piIdx];
+    const int groupIdx = _partitionIndex_gpu[piIdx];
     printf("piIdx = %d, groupIdx = %d\n", piIdx, groupIdx);
   }
   printf("\n");
@@ -1354,22 +1366,22 @@ __global__ void _print_queue(int *_queue_data, int *_queue_head, int *_queue_tai
 }
 
 __global__ void _print_GPU_partitioner(const int _sum_pi_gates_pos, 
-                                      const int *_partitionIndex) {
+                                      const int *_partitionIndex_gpu) {
                   
   printf("Get Insdies _print_GPU_partitioner\n");
   
   for (int i = 0; i < _sum_pi_gates_pos; i++) {
     const int gateIdx = i;
-    const int groupIdx = _partitionIndex[gateIdx];
+    const int groupIdx = _partitionIndex_gpu[gateIdx];
     printf("gateIdx = %d, groupIdx = %d\n", gateIdx, groupIdx);
   }
 }
 
-__global__ void _check_visited(const int sz, const int *_visited, const int mode) {
+__global__ void _check_visited(const int sz, const int *_visited_gpu, const int mode) {
   
   int ret = 0;
   for (int i = 0; i < sz; i++) {
-    if (_visited[i] == 0) {
+    if (_visited_gpu[i] == 0) {
       ret++;
       printf("check_visited == false, %d\n", i);
     }

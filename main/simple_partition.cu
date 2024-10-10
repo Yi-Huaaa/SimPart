@@ -7,7 +7,7 @@
 #include <vector>
 #include <iostream>
 
-#define CPU_PARTITIONER_VERSION
+// #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
     #define VERSION 1 // VERSION can be 0, 1, 2, 3, 4, 5 
     #if VERSION == 0
@@ -105,6 +105,8 @@ int main(int argc, char *argv[]) {
     end = std::chrono::steady_clock::now();
     duration_Partition += (end - start);
   }
+
+  cudaPartitioner.freeMem();
 #endif  // GPU_PARTITIONER_VERSION
 
     
