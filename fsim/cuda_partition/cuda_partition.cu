@@ -30,8 +30,9 @@
 // #define CPU_COPY_TS_RESULTS_BACK_TO_HOST
 // #define CPU_PRINT_LEVELIZED
 // #define CPU_PRINT_CONSTRUCT_GROUPS
+// #define GPU_PART_CHECK_FOR_VISITED
+#define CHECK_CONSTRUCT_PARTITIONS_DUPLICATIONS
 
-// #define CHECK_CONSTRUCT_PARTITIONS_DUPLICATIONS
 // #define CPU_PART_DEBUG_PRINT_SIMULATION // show the output answers
 // #define CPU_PART_DEBUG_PRINT_GRAPH
 
@@ -546,7 +547,7 @@ void CUDAPartitioner::_call_gpu_partitioner() {
   const int num_threads = _NUM_THREADS;
   int num_blocks = (_sum_pi_gates_pos + _NUM_THREADS - 1) / _NUM_THREADS;
   int q_sz = 0;
-  printf("_sum_pi_gates_pos = %d\n", _sum_pi_gates_pos);
+  // printf("_sum_pi_gates_pos = %d\n", _sum_pi_gates_pos);
 
   // _visited init 
   _init_visited <<< num_blocks, num_threads >>> (_sum_pi_gates_pos, _visited);
@@ -606,13 +607,14 @@ void CUDAPartitioner::_call_gpu_partitioner() {
     cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
   }
 
+#ifdef GPU_PART_CHECK_FOR_VISITED  
   cudaDeviceSynchronize();
   cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
   _check_visited <<< 1, 1 >>> (_sum_pi_gates_pos, _visited, 1);
   // printf("_num_PIs = %d, _num_POs = %d, _num_inner_gates = %d\n", _num_PIs, _num_POs, _num_inner_gates);
   cudaDeviceSynchronize();
   cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
-
+#endif 
 
   // cudaDeviceSynchronize();
   // cudaCheckErrors("CUDA: cudaDeviceSynchronize - Failure");
@@ -695,7 +697,7 @@ void CUDAPartitioner::_construct_cones(std::vector<int> &sinks,
                                        std::vector<std::set<int>> &_cones_set_g,
                                        std::vector<bool> &visited_cpu) {
 
-  printf("sinks.size() = %lu\n", sinks.size());
+  // printf("sinks.size() = %lu\n", sinks.size());
   for (size_t sink = 0; sink < sinks.size(); sink++) {
     int sinkIdx = sinks[sink];
     std::queue<int> preGates; 
@@ -764,7 +766,7 @@ void CUDAPartitioner::_construct_groups(){
     }
   }  
 
-
+#ifdef GPU_PART_CHECK_FOR_VISITED
   int accum = 0;
   for (size_t i = 0; i < visited_cpu.size(); i++) {
     if (!visited_cpu[i]) {
@@ -772,7 +774,7 @@ void CUDAPartitioner::_construct_groups(){
     }
   }
   printf("BIBI2: visited_cpu: accum = %d\n\n", accum);
-
+#endif 
 
 #ifdef CPU_PRINT_CONSTRUCT_GROUPS
   _print_construct_groups(sinks_groups);
@@ -783,8 +785,6 @@ void CUDAPartitioner::_construct_groups(){
 // Simulation functions 
 void CUDAPartitioner::run(Mode mode, const size_t num_threads) {  
   int m = static_cast<int>(mode);
-  std::cout << "Mode: " << m << " (run CONES_PARALLEL_CUDA)\n";
-  std::cout << "num_threads = " << num_threads << "\n";
 
   switch (mode) {
     case Mode::CONES_PARALLEL_CUDA:
@@ -798,7 +798,7 @@ void CUDAPartitioner::run(Mode mode, const size_t num_threads) {
 }
 
 void CUDAPartitioner::_run_cones_gates(const size_t num_threads) {
-  #ifdef CPU_PART_DEBUG_PRINT_SIMULATION
+#ifdef CPU_PART_DEBUG_PRINT_SIMULATION
   std::cout << "execute simulation._run_cones_gates();\n";
 #endif
 
@@ -844,13 +844,15 @@ void CUDAPartitioner::_run_cones_good_case(const Pattern pattern,
                                           const size_t num_threads) {
 
   omp_set_num_threads(num_threads);  // Set the number of threads for OpenMP
+  // printf("num_threads = %lu, _cones_partitioned.size() = %lu\n", 
+  //         num_threads, _cones_partitioned.size());
 
   // Parallelize across cones (c)
-  #pragma omp parallel for
+  #pragma omp parallel for if (_cones_partitioned.size() > 1) schedule(dynamic)
   for (size_t c = 0; c < _cones_partitioned.size(); c++) {
     for (size_t lvl = 0; lvl < _cones_partitioned[c].size(); lvl++) {
       // Parallelize across gates within the same cone and level
-      #pragma omp parallel for
+      #pragma omp parallel for schedule(dynamic)
       for (size_t g = 0; g < _cones_partitioned[c][lvl].size(); g++) {
         int gateIdx = _cones_partitioned[c][lvl][g];
         
@@ -861,7 +863,7 @@ void CUDAPartitioner::_run_cones_good_case(const Pattern pattern,
                   (_POs[gateIdx - _po_idx_accum]);
 
         // Execute the gate operation
-        _run_gate(tmp, pattern, gateIdx, 0, static_cast<size_t>(0));
+        _run_gate(tmp, pattern, gateIdx, 0, 0);
       }
     }
   }

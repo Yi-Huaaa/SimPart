@@ -37,8 +37,7 @@
 
 
 // constexpr
-constexpr int _k = 2; // based on the kernel concurrency
-constexpr int QUEUE_SIZE = 1024; // 
+constexpr int _k = 16; // based on the kernel concurrency
 
 // Define the enum class
 enum class gpuGateType : int {

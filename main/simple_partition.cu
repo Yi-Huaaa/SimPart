@@ -7,7 +7,7 @@
 #include <vector>
 #include <iostream>
 
-// #define CPU_PARTITIONER_VERSION
+#define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
     #define VERSION 1 // VERSION can be 0, 1, 2, 3, 4, 5 
     #if VERSION == 0
@@ -27,7 +27,7 @@
         #define NUM_THREADS 1
     #else // VERSION == 5
         #define MODE 5
-        #define NUM_THREADS 8    
+        #define NUM_THREADS 8
     #endif
   #endif
   
@@ -117,11 +117,8 @@ int main(int argc, char *argv[]) {
 #ifdef SHOW_ALL_TIME
   std::cout << "Execution Time:\n";
   std::cout << "read_data: " << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
-  std::cout << "run_CUDA: " <<  round_to(((duration_Partition.count()/TIMES))*1000, 0.001) << " ms\n";
-#else 
-  std::cout << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
-  std::cout << round_to((duration_Partition.count())*1000, 0.001) << " ms\n";
-#endif  // SHOW_ALL_TIME
+  std::cout << "run_simulator: " <<  round_to(((duration_Partition.count()/TIMES))*1000, 0.001) << " ms\n";
+#endif // SHOW_ALL_TIME
 
 
   // cpuPartitioner.KaHyParExample();
