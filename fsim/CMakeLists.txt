@@ -1,4 +1,5 @@
 # CMakeLists.txt in the fsim directory
+# Fault simulation - CPU version
 add_library(fsim 
   fault.cpp fault.hpp
   pattern.cpp pattern.hpp
@@ -9,6 +10,7 @@ add_library(fsim
   simulation.cpp simulation.hpp
 )
 
+# Fault simulation - GPU version
 add_library(fsim_cuda 
   fault.cpp fault.hpp
   pattern.cpp pattern.hpp
@@ -20,23 +22,32 @@ add_library(fsim_cuda
   ./cuda/simulation.cu ./cuda/simulation.cuh
 )
 
+# GPU - CUDA Graph Simulator 
 add_library(fsim_cuda_graph 
   ./cuda_graph/simulation.cu ./cuda_graph/simulation.cuh
 )
 
+# CPU and GPU paritioner 
 add_library(fsim_cuda_partition
   ./cuda_partition/cpu_partition.cu  ./cuda_partition/cpu_partition.cuh
   ./cuda_partition/cuda_partition.cu ./cuda_partition/cuda_partition.cuh
-  # CPU:
+  # CPU: 
   fault.cpp fault.hpp
   pattern.cpp pattern.hpp
   base_ppg.cpp base_ppg.hpp
   pi.cpp pi.hpp
   po.cpp po.hpp
   gate.cpp gate.hpp
-  simulation.cpp simulation.hpp  
-)
+  simulation.cpp simulation.hpp
+  ./cuda_simulator/gpu_simulation.cu
+  ./cuda_simulator/gpu_simulation.cuh  
+  )
 
+# GPU Simulation:
+add_library(fsim_cuda_simulator
+  ./cuda_simulator/gpu_simulation.cu
+  ./cuda_simulator/gpu_simulation.cuh  
+)
 
 
 # -----------------------------------------------------------------------------
@@ -102,4 +113,13 @@ target_compile_options(fsim_cuda_partition PRIVATE
   -lineinfo
   -O3
   -DNDEBUG
+)
+
+
+target_compile_options(fsim_cuda_simulator PRIVATE
+  -Wall
+  -Wextra
+  -Wfatal-errors
+  -Wshadow
+  -O3  
 )

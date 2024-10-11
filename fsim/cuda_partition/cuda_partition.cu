@@ -83,7 +83,7 @@ void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &
   _read_pattern(ptn);
 
   /* Partitioning */
-  _ask_gpu_memory();
+   _ask_gpu_memory_part();
   _call_gpu_partitioner();
   _construct_partitioned_groups();
 
@@ -309,7 +309,7 @@ void CUDAPartitioner::_read_pattern(std::istream &ptn) {
 
 
 // GPU functions
-void CUDAPartitioner::_ask_gpu_memory() {
+void CUDAPartitioner:: _ask_gpu_memory_part() {
   // For partitioner
   cudaMalloc((void**)&_adj_gpu, _szOfAdj*sizeof(int));
   cudaMalloc((void**)&_invAdj_gpu, _szOfAdj*sizeof(int));
@@ -790,17 +790,25 @@ void CUDAPartitioner::run(Mode mode, const size_t num_threads) {
   int m = static_cast<int>(mode);
 
   switch (mode) {
-    case Mode::GPU_PARTIOR_CPU_SIMUTOR:
+    case Mode::GPU_PARTIOR_CPU_SIMUTOR: {
       std::cout << "Mode: " << m << " (run GPU_PARTIOR_CPU_SIMUTOR)\n";
       _run_cones_gates_cpu(num_threads);
+      GALPS_GPUSimulator<ELEMENT_INDEX_TYPE_PART> gpuSimulator;
+      gpuSimulator.HAHAHA(100);
+      gpuSimulator._run_levelized_gpu();
       break;  
-    case Mode::GPU_PARTIOR_GPU_SIMUTOR:
+    }
+
+    case Mode::GPU_PARTIOR_GPU_SIMUTOR: {
       std::cout << "Mode: " << m << " (run GPU_PARTIOR_GPU_SIMUTOR)\n";
       // _run_cones_gates_gpu(num_threads);
-      break;         
-    default:
+      break;
+    }
+
+    default: {
       printf("No SUCH CASES\n");
       return; 
+    }
   }
 }
 
@@ -1120,12 +1128,67 @@ void CUDAPartitioner::_shift_to_correct_answer(std::vector<size_t> &results,
   }
 }
 
-void CUDAPartitioner::_run_cones_gates_gpu() {
+void CUDAPartitioner::_ask_gpu_memory_simu() {
+  // // Memory allocation
+  // cudaMalloc((void**)&_TS_order_gpu, _sum_inputs_gates*sizeof(int));
+  // cudaMalloc((void**)&_pi_gate_po_gate_type_gpu, _sum_inputs_gates*sizeof(int));
+  // cudaMalloc((void**)&_patterns_gpu, _num_rounds*_num_PIs*sizeof(int));
+  // cudaMalloc((void**)&_fault_gate_idx_gpu, _num_faults*sizeof(int));
+  // cudaMalloc((void**)&_fault_SA_fault_val_gpu, _num_faults*sizeof(size_t));
+  // cudaMalloc((void**)&_pi_gate_po_output_res_gpu, _sum_inputs_gates*sizeof(size_t));
+  // cudaMalloc((void**)&_g_pi_results_gpu, _num_PIs*sizeof(size_t));
+  // cudaMalloc((void**)&_g_gate_results_gpu, _num_inner_gates*sizeof(size_t));
+  // cudaMalloc((void**)&_g_po_results_gpu, _num_POs*sizeof(size_t));
+  // cudaMalloc((void**)&_b_pi_results_gpu, _num_PIs*sizeof(size_t));
+  // cudaMalloc((void**)&_b_gate_results_gpu, _num_inner_gates*sizeof(size_t));
+  // cudaMalloc((void**)&_b_po_results_gpu, _num_POs*sizeof(size_t));
+  // cudaMalloc((void**)&_found_fault_to_pattern_gpu, 2*_num_faults*sizeof(int));  
+  // cudaCheckErrors("CUDA: Asking simulation memory - Failure");
+
+//   // Memory initialzation
+//   _TS_order_init <<< 1, 1 >>>(, _TS_order_gpu);
+//   _TS_order_gpu
+//   _pi_gate_po_gate_type_gpu
+//   _patterns_gpu
+//   _fault_gate_idx_gpu
+//   _fault_SA_fault_val_gpu  
+
+
+//   _level_of_gates.resize(_sum_pi_gates_pos, 0);
+//   _max_level = 0;
   
+//   for (int i = 0; i < _queue_tail_cpu; i++) {
+//     int gateIdx = _queue_data_cpu[i];
+//     // travverse its inputs 
+//     for (int fmGate = _invAdj_index_table[2*gateIdx+0]; 
+//         fmGate < _invAdj_index_table[2*gateIdx+1];
+//         fmGate++) {
+//       int fmGateIdx = _invAdj[fmGate];
+//       int new_level = _level_of_gates[fmGateIdx]+1;
+      
+//       // Update _level_of_gates[gateIdx]
+//       _level_of_gates[gateIdx] = (new_level > _level_of_gates[gateIdx]) ? 
+//                                 (new_level) : 
+//                                 (_level_of_gates[gateIdx]);
+//       _max_level = (_level_of_gates[gateIdx] > _max_level) ? 
+//                   (_level_of_gates[gateIdx]) : 
+//                   (_max_level);
+//     }
+//   } 
+//   _total_num_levels = _max_level + 1;
+
+// #ifdef CPU_PRINT_LEVELIZED
+//   _print_levelized();
+// #endif 
+
+  // Memory copy
+  // cudaMemcpyAsync(_adj_gpu, _adj, 
+  //                 _szOfAdj*sizeof(int), cudaMemcpyHostToDevice);
 }
 
+__global__ void _TS_order_init() {
 
-
+}
 
 
 

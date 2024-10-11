@@ -14,6 +14,9 @@
 /* CPU */
 #include <fsim/fsim.hpp>
 
+/* GPU Simulator */
+#include <fsim/cuda_simulator/fsim_cuda_simulator.cuh>
+
 
 #define ELEMENT_INDEX_TYPE_PART int
 #define ELEMENT_LEVEL_TYPE_PART int
@@ -118,6 +121,7 @@ public:
   // accessor
   void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
+  // void _prepare_cpu_simulation();
   void run(Mode mode, const size_t num_threads);
   void freeMem() {
     _free();
@@ -139,7 +143,6 @@ private:
   int *_invAdj; // toGate -> fromGate
   int *_adj_index_table;
   int *_invAdj_index_table;
-  // int *_gate_input_order_table;  // toGate -> fromGate
   
   // Faults and Patterns 
   int _num_fault; // for read file
@@ -162,7 +165,7 @@ private:
   std::vector<std::vector<std::set<int>>> _cones_set;
   std::vector<std::vector<std::vector<int>>> _cones_partitioned;
   
-  // Simulation
+  // CPU Simulation
   std::vector<size_t> _g_pi_results;
   std::vector<size_t> _g_gate_results;
   std::vector<size_t> _g_po_results;
@@ -172,7 +175,7 @@ private:
   std::vector<size_t> _found_fault_to_pattern;
   int _pi_idx_accum, _po_idx_accum, _gate_idx_accum;
 
-  // GPU memory 
+  // GPU partitioner memory: 
   int *_adj_gpu; 
   int *_invAdj_gpu; 
   int *_adj_index_table_gpu;
@@ -182,11 +185,28 @@ private:
 
   const int _NUM_THREADS = 1024;
   
-  // New Queue for processing nodes on GPU
+  // GPU partitioner: New Queue for processing nodes on GPU
   int *_queue_data;
   int *_queue_head;
   int *_queue_tail;
   int *_queue_size;
+
+  // GPU Simulation: 
+  int *_TS_order_gpu;
+  int *_pi_gate_po_gate_type_gpu;
+  size_t *_patterns_gpu;
+  int *_fault_gate_idx_gpu;
+  size_t *_fault_SA_fault_val_gpu;
+  size_t *_pi_gate_po_output_res_gpu;
+  size_t *_g_pi_results_gpu;
+  size_t *_g_gate_results_gpu;
+  size_t *_g_po_results_gpu;
+  size_t *_b_pi_results_gpu;
+  size_t *_b_gate_results_gpu;
+  size_t *_b_po_results_gpu;
+  int *_found_fault_to_pattern_gpu;
+
+
 
   /* Read files - CPU function */
   void _read_graph(std::istream &ckt, int*gate_input_order_table_readIn);
@@ -195,7 +215,7 @@ private:
   void _read_fault(std::istream &flst);
 
   /* GPU function */
-  void _ask_gpu_memory();
+  void _ask_gpu_memory_part();
   void _call_gpu_partitioner();
   int _get_queue_size();
 
@@ -210,6 +230,7 @@ private:
                       std::vector<bool> &visited_cpu);
 
   void _free() {
+    // Partition
     free(_adj);
     free(_invAdj);
     free(_adj_index_table);
@@ -225,6 +246,9 @@ private:
     cudaFree(_queue_head);
     cudaFree(_queue_tail);
     cudaFree(_queue_size);
+
+    // Simulation 
+
   }
 
 
@@ -269,7 +293,7 @@ private:
     }
   
     // GPU Simulator
-    void _run_cones_gates_gpu();
+    void _ask_gpu_memory_simu();
 
 
 
