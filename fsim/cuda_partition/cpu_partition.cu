@@ -78,12 +78,11 @@ void CPUPartitioner::read(Mode mode, std::istream &ckt, std::istream &flst, std:
 
   // Read gate 
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
-  std::vector<std::vector<size_t>> adj;
-  std::vector<std::vector<size_t>> invAdj;
-  _read_graph(ckt, adj, invAdj);
+
+  _read_graph(ckt);
   
   // levelization
-  _levelization(adj);
+  _levelization();
 
   // whether partitioning
   switch (mode) {
@@ -93,20 +92,20 @@ void CPUPartitioner::read(Mode mode, std::istream &ckt, std::istream &flst, std:
       break;
     case Mode::CONES_SEQUENTIAL:
       /* Partitioning */
-      _partition(adj);
+      _partition();
       break;
     case Mode::CONES_PARALLEL_OMP:
       /* Partitioning */
-      _partition(adj);
+      _partition();
       break;
     case Mode::REPCUT_SEQUENTIAL:
       /* Partitioning */
-      _partition(adj);
+      _partition();
       _RepCut(duration_0, duration_1);
       break;
     case Mode::REPCUT_PARALLEL_OMP:
       /* Partitioning */
-      _partition(adj);
+      _partition();
       _RepCut(duration_0, duration_1);
       break;      
     default:
@@ -117,10 +116,10 @@ void CPUPartitioner::read(Mode mode, std::istream &ckt, std::istream &flst, std:
 
 
   /* Construct circuit, Read Pattern, Read Fault */
-  _construct_graph(ckt);
   _read_fault(flst);
   _read_pattern(ptn);
-  _ask_simulation_memory();
+
+
 
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_read_data = end - start;
@@ -130,7 +129,7 @@ void CPUPartitioner::read(Mode mode, std::istream &ckt, std::istream &flst, std:
   
 
 
-  _print_num_PIs_Gates_POs(mode);
+  // _print_num_PIs_Gates_POs(mode);
 
 }
 
@@ -179,19 +178,11 @@ void CPUPartitioner::_ask_simulation_memory() {
   _found_fault_to_pattern.resize(2 * _faults.size());
 }
 
-void CPUPartitioner::_read_graph(std::istream &ckt, 
-                                  std::vector<std::vector<size_t>> &adj,
-                                  std::vector<std::vector<size_t>> &invAdj) {
+void CPUPartitioner::_read_graph(std::istream &ckt) {
   _sum_pi_gates_pos = _num_PIs + _num_inner_gates + _num_POs;
 
-  adj.resize(_sum_pi_gates_pos);
-  invAdj.resize(_sum_pi_gates_pos);
-
-  // Map table for recording gate input _order
-  // Record for each to_gate, its from_gates's are which _order (#_inputs, A/A1, B/A2, A3/S, A4)
-  size_t sz = 5*_sum_pi_gates_pos*sizeof(size_t);
-  _gate_input_order_table = (size_t*)malloc(sz);
-  memset(_gate_input_order_table, 0, sz);
+  _adj.resize(_sum_pi_gates_pos);
+  _invAdj.resize(_sum_pi_gates_pos);
 
   // Construct adjacent list
   for (size_t i = 0; i < _num_wires; i++) {
@@ -202,30 +193,40 @@ void CPUPartitioner::_read_graph(std::istream &ckt,
       size_t gate_tmp, pin_tmp;
       ckt >> gate_tmp >> pin_tmp;
       pin_tmp = (pin_tmp == 5) ? (3) : (pin_tmp);
-      adj[gate_0].push_back(gate_tmp);
-      invAdj[gate_tmp].push_back(gate_0);
-
-      _gate_input_order_table[gate_tmp*5+pin_tmp] = gate_0;
-      _gate_input_order_table[gate_tmp*5+0]++;
+      _adj[gate_0].push_back(gate_tmp);
+      _invAdj[gate_tmp].push_back(gate_0);
     }
   }
   
   // Find all _sources, actually == PIs
   for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
-    if (_gate_input_order_table[i*5] == 0) {
+    if (_invAdj[i].size() == 0) { // inputs == 0
       _sources.push_back(i);
     }
   }
   assert(_sources.size() == _num_PIs && "_sources.size() != _num_PIs");
-  
-#ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
 
+  // Read GateType
+  _gate_type.resize(_sum_pi_gates_pos);
+  for (size_t i = 0; i < _num_PIs; i++) {
+    _gate_type[i] = GateType::PI;
+  }
+  for (size_t i = _num_PIs; i < (_num_PIs + _num_POs); i++) {
+    _gate_type[i] = GateType::PO;
+  }
+  for (size_t i = (_num_PIs + _num_POs); i < (_sum_pi_gates_pos); i++) {
+    size_t t; // type
+    ckt >> t;
+    _gate_type[i] = static_cast<GateType>(t);
+  }
+
+#ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
   printf("_sources.size() = %lu\n", _sources.size());
   for (size_t i = 0; i < _num_PIs; i++) {
-    if (adj[i].size() == 0) {
-      printf("adj[%lu].size() = %lu;;; gates = ", i, adj[i].size());
-      for (size_t j = 0; j < adj[i].size(); j++) {
-        printf("%lu, ", adj[i][j]);
+    if (_adj[i].size() == 0) {
+      printf("_adj[%lu].size() = %lu;;; gates = ", i, _adj[i].size());
+      for (size_t j = 0; j < _adj[i].size(); j++) {
+        printf("%lu, ", _adj[i][j]);
       }
       printf("\n");
     }
@@ -233,137 +234,55 @@ void CPUPartitioner::_read_graph(std::istream &ckt,
   printf("\n");
 
   for (size_t i = 0; i < _num_PIs; i++) {
-    printf("invAdj[%lu].size() = %lu;;; gates = ", i, invAdj[i].size());
-    for (size_t j = 0; j < invAdj[i].size(); j++) {
-      printf("%lu, ", invAdj[i][j]);
+    printf("_invAdj[%lu].size() = %lu;;; gates = ", i, _invAdj[i].size());
+    for (size_t j = 0; j < _invAdj[i].size(); j++) {
+      printf("%lu, ", _invAdj[i][j]);
     }
     printf("\n");
   }
   printf("\n");
 
-  printf("Check _gate_input_order_table\n");
-  for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
-    printf("_gate_input_order_table[%lu] = ", i);
-    for (size_t j = 0; j < 5; j++) {
-      printf("%lu, ", _gate_input_order_table[i*5+j]);
-    }
-  }
+  printf("_gate_type:\n");
+  for (size_t i = 0; i < _gate_type.size(); i++) {
+    std::cout << "Gate_" << i << ", _gate_type = " << gateTypeToString(_gate_type[i]) << "\n";
+  }  
+  
 #endif 
 }
 
 
-void CPUPartitioner::_construct_graph(std::istream &ckt) {
-  // Read GateType
-  std::vector<GateType> gate_type;
-  gate_type.resize(_sum_pi_gates_pos);
-  for (size_t i = 0; i < _num_PIs; i++) {
-    gate_type[i] = GateType::PI;
-  }
-  for (size_t i = _num_PIs; i < (_num_PIs + _num_POs); i++) {
-    gate_type[i] = GateType::PO;
-  }
-  for (size_t i = (_num_PIs + _num_POs); i < (_sum_pi_gates_pos); i++) {
-    size_t t; // type
-    ckt >> t;
-    gate_type[i] = static_cast<GateType>(t);
-  }
+void CPUPartitioner::_construct_graph() {
+  _Gates.resize(_sum_pi_gates_pos);
 
-  // printf("gate_type:\n");
-  // for (size_t i = 0; i < gate_type.size(); i++) {
-  //   std::cout << "Gate_" << i << ", gate_type = " << gateTypeToString(gate_type[i]) << "\n";
-  // }
+  for (size_t toGate = 0; toGate < _invAdj.size(); toGate++) {
+    size_t toGateIdx = toGate;
+    _Gates[toGate]._idx = toGateIdx;
+    _Gates[toGate]._type = _gate_type[toGate];
+    _Gates[toGate]._level = _level_of_gates[toGate];
+    _Gates[toGate]._output_value = 0;
 
-  _pi_idx_accum = 0; 
-  _po_idx_accum = _num_PIs;
-  _gate_idx_accum = (_num_PIs + _num_POs);
-
-  // PIs are stored in the order specified by the `order` array
-  _PIs.resize(_num_PIs);
-  for (size_t i = 0; i < _num_PIs; i++) {
-    size_t gate_id = i;
-    _PIs[i]._idx = gate_id;
-    _PIs[i]._type = gate_type[gate_id];
-    _PIs[i]._level = _level_of_gates[i];
-    _PIs[i]._output_value = 0;
-  }
-
-  // gates are stored in the order specified by the `order` array
-  _gates.resize(_num_inner_gates);
-  for (size_t i = 0; i < _num_inner_gates; i++) {
-    size_t gate_id = i + _gate_idx_accum;
-    _gates[i]._idx = gate_id;
-    _gates[i]._type = gate_type[gate_id];
-    _gates[i]._level = _level_of_gates[i];
-    _gates[i]._output_value = 0;
-  }
-
-  // POs are stored in the order specified by the `order` array
-  _POs.resize(_num_POs);
-  for (size_t i = 0; i < _num_POs; i++) {
-    size_t gate_id = i+_po_idx_accum;
-    _POs[i]._idx = gate_id;
-    _POs[i]._type = gate_type[gate_id];
-    _POs[i]._level = _level_of_gates[i];
-    _POs[i]._output_value = 0;
-  }
-
-  // Give the input gates number
-  for (size_t gateIdx = _num_PIs; gateIdx < _sum_pi_gates_pos; gateIdx++) {
-    for (size_t j = 1; j < (_gate_input_order_table[gateIdx*5] + 1); j++) { // how many inputs for this gate
-      size_t from_gate_id = _gate_input_order_table[gateIdx*5+j];
-      size_t to_gate_id = gateIdx;
-
-      if (from_gate_id < _num_PIs) { // PI -> gate
-        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &from_gate =
-            _PIs[from_gate_id - _pi_idx_accum];
-            ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &to_gate =
-            _gates[to_gate_id - _gate_idx_accum];
-        to_gate._inputs.push_back(&from_gate);
-        to_gate._level = _level_of_gates[to_gate_id];
-        // printf("PI_%lu (%lu) -> Gate_%lu (%lu)\n", from_gate_id - _pi_idx_accum, from_gate_id, to_gate_id - _gate_idx_accum, to_gate_id);
-      } else if ((to_gate_id >= (_num_PIs)) &&
-                 (to_gate_id < (_num_PIs + _num_POs))) { // gate -> PO
-        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &from_gate =
-            _gates[from_gate_id - _gate_idx_accum];
-        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &to_gate =
-            _POs[to_gate_id - _po_idx_accum];
-        to_gate._inputs.push_back(&from_gate);
-        to_gate._level = _level_of_gates[to_gate_id];
-        // printf("Gate_%lu (%lu) -> PO_%lu (%lu)\n", from_gate_id - _gate_idx_accum, from_gate_id, to_gate_id - _po_idx_accum, to_gate_id);
-      } else { // gate -> gate
-        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &from_gate =
-            _gates[from_gate_id - _gate_idx_accum];
-        ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE> &to_gate =
-            _gates[to_gate_id - _gate_idx_accum];
-        // printf("Gate_%lu (%lu) -> Gate_%lu (%lu)\n", from_gate_id - _gate_idx_accum, from_gate_id, to_gate_id - _gate_idx_accum, to_gate_id);
-        to_gate._inputs.push_back(&from_gate);
-        to_gate._level = _level_of_gates[to_gate_id];
-      }
+    for (size_t fmGate = 0; fmGate < _invAdj[toGate].size(); fmGate++) {
+      size_t fmGateIdx = _invAdj[toGate][fmGate];
+      ElementBase<> &from_gate =
+        _Gates[fmGateIdx];
+      ElementBase<> &to_gate =
+        _Gates[toGateIdx];
+      to_gate._inputs.push_back(&from_gate);
     }
   }
 
+  printf("_invAdj.size() = %lu, _sum_pi_gates_pos = %lu\n", _invAdj.size(), _sum_pi_gates_pos);
+
 #ifdef PART_DEBUG_PRINT_GRAPH
-  std::cout << "\n_PIs = [\n";
-  for (size_t i = 0; i < _num_PIs; i++) {
-    print_ppg(_PIs[i]);
-  }
-  std::cout << "]\n";
-
-  std::cout << "\n_gates = [\n";
-  for (size_t i = 0; i < _num_inner_gates; i++) {
-    print_ppg(_gates[i]);
-  }
-  std::cout << "]\n";
-
-  std::cout << "\n_POs = [\n";
-  for (size_t i = 0; i < _num_POs; i++) {
-    print_ppg(_POs[i]);
+  std::cout << "\n_Gates = [\n";
+  for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
+    print_ppg(_Gates[i]);
   }
   std::cout << "]\n";
 #endif  
 }
 
-void CPUPartitioner::_levelization(std::vector<std::vector<size_t>> &adj) {
+void CPUPartitioner::_levelization() {
   // printf("start _levelization\n");
 #ifdef CPU_PAR_OMP_MODE
   omp_set_num_threads(num_threads);
@@ -373,7 +292,7 @@ void CPUPartitioner::_levelization(std::vector<std::vector<size_t>> &adj) {
   _level_of_gates.resize(_sum_pi_gates_pos, 0);
 
   // Parallelizing the outer loop with OpenMP
-  #pragma omp parallel for shared(adj) reduction(max:_max_level)
+  #pragma omp parallel for shared(_adj) reduction(max:_max_level)
   for (size_t fromGate = 0; fromGate < _sources.size(); fromGate++) {
     size_t sourceIdx = _sources[fromGate];
     std::queue<size_t> postGates; 
@@ -385,10 +304,10 @@ void CPUPartitioner::_levelization(std::vector<std::vector<size_t>> &adj) {
       size_t startGateIdx = postGates.front(); 
       postGates.pop();
       int tid = omp_get_thread_num();
-      // printf("\tstartGateIdx = %lu %lu (tid = %d)\n", startGateIdx, adj[startGateIdx].size(), tid);
+      // printf("\tstartGateIdx = %lu %lu (tid = %d)\n", startGateIdx, _adj[startGateIdx].size(), tid);
 
-      for (size_t j = 0; j < adj[startGateIdx].size(); j++) {
-        size_t postGateIdx = adj[startGateIdx][j];
+      for (size_t j = 0; j < _adj[startGateIdx].size(); j++) {
+        size_t postGateIdx = _adj[startGateIdx][j];
         bool update = (_level_of_gates[startGateIdx] >= _level_of_gates[postGateIdx]);
         _level_of_gates[postGateIdx] = (update)  
                                         ? (_level_of_gates[startGateIdx]+1) 
@@ -409,8 +328,8 @@ void CPUPartitioner::_levelization(std::vector<std::vector<size_t>> &adj) {
 
   // Find all _sinks
   // #pragma omp parallel for
-  for (size_t i = 0; i < adj.size(); i++) {
-    if (adj[i].size() == 0) {
+  for (size_t i = 0; i < _adj.size(); i++) {
+    if (_adj[i].size() == 0) {
       // #pragma omp critical
       // {
         _sinks.push_back(i);
@@ -455,7 +374,7 @@ void CPUPartitioner::_levelization(std::vector<std::vector<size_t>> &adj) {
 #endif
 }
 
-void CPUPartitioner::_partition(std::vector<std::vector<size_t>> &adj) {
+void CPUPartitioner::_partition() {
   // printf("start _partition\n");
   
   bool stop = false; 
@@ -468,7 +387,7 @@ void CPUPartitioner::_partition(std::vector<std::vector<size_t>> &adj) {
     std::vector<std::vector<std::vector<size_t>>> outputCones;
 
     int stopLevel = -1;
-    _find_all_cones(startLevel, adj, 
+    _find_all_cones(startLevel, 
                     gateBelongsToWhichCones, 
                     coneIdxToSinkGateIdx, 
                     stopLevel);
@@ -486,17 +405,16 @@ bool CPUPartitioner::_gateHasCone(std::vector<std::vector<size_t>> &gateBelongsT
 }
 
 // gate has postGates in this time during the construction of its _cones 
-bool CPUPartitioner::_gateHasPostGates(std::vector<std::vector<size_t>> &adj, 
-                                      const size_t gateIdx, const size_t startLevel) {
+bool CPUPartitioner::_gateHasPostGates(const size_t gateIdx, const size_t startLevel) {
   if ((_level_of_gates[gateIdx] == startLevel) || 
-      (adj[gateIdx].size() == 0)) {
+      (_adj[gateIdx].size() == 0)) {
     return false; 
   }
   
   // All of its post gates's level are larger than startLevel, which means that they have been processed  
   size_t i = 0; 
-  while(i < adj[gateIdx].size()) {
-    size_t postGateIdx = adj[gateIdx][i];
+  while(i < _adj[gateIdx].size()) {
+    size_t postGateIdx = _adj[gateIdx][i];
     if (startLevel >= _level_of_gates[postGateIdx]) {
       return true; 
     }
@@ -508,14 +426,13 @@ bool CPUPartitioner::_gateHasPostGates(std::vector<std::vector<size_t>> &adj,
 
 void CPUPartitioner::_getConeIdices(const size_t conesSz, const size_t gateIdx, 
                                     const size_t startLevel, bool newCone, 
-                                    std::vector<std::vector<size_t>> &adj, 
                                     std::vector<std::vector<size_t>> &gateBelongsToWhichCones) {
   if (newCone) {
     gateBelongsToWhichCones[gateIdx].push_back(conesSz);
   } else {
     std::unordered_set<size_t> unique_numbers;
-    for (size_t postGate = 0; postGate < adj[gateIdx].size(); postGate++) {
-      size_t postGateIdx = adj[gateIdx][postGate];
+    for (size_t postGate = 0; postGate < _adj[gateIdx].size(); postGate++) {
+      size_t postGateIdx = _adj[gateIdx][postGate];
       if (startLevel >= _level_of_gates[postGateIdx]) {
         for (size_t c = 0; c < gateBelongsToWhichCones[postGateIdx].size(); c++) {
           size_t postGateCone = gateBelongsToWhichCones[postGateIdx][c];
@@ -572,7 +489,6 @@ For finding all _cones: needing to find all _cones (two kinds)
 * Note: this version without considering the "_merge_bound"
 */
 void CPUPartitioner::_find_all_cones(const size_t startLevel, 
-                      std::vector<std::vector<size_t>> &adj, 
                       std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                       std::vector<size_t> &coneIdxToSinkGateIdx,
                       int &stopLevel) {
@@ -588,12 +504,12 @@ void CPUPartitioner::_find_all_cones(const size_t startLevel,
     for (size_t g = 0; g < _gateIdx_in_each_level[level].size(); g++) {
       size_t gateIdx = _gateIdx_in_each_level[level][g];
       bool hasCone = _gateHasCone(gateBelongsToWhichCones, gateIdx);
-      bool hasPostGate = _gateHasPostGates(adj, gateIdx, startLevel);
+      bool hasPostGate = _gateHasPostGates(gateIdx, startLevel);
       bool newCone = (!hasCone && !hasPostGate);
 
       // It can have multiple cone Idices 
       _getConeIdices(_cones.size(), gateIdx, startLevel, 
-                    newCone, adj, gateBelongsToWhichCones);
+                    newCone, gateBelongsToWhichCones);
       _updateConIdxTable(newCone, gateIdx, coneIdxToSinkGateIdx);
 
       // Update cone
@@ -1051,8 +967,15 @@ void CPUPartitioner::_get_KHP_partitioning_res(std::vector<size_t> &vertex_to_pa
 
 // --------------------------------------------------------------------------------------
 
+void CPUPartitioner::_prepare_cpu_simulation() {
+  _construct_graph();
+  _ask_simulation_memory();
+}
+
 // Run the simulation 
 void CPUPartitioner::run(Mode mode, const size_t num_threads) {
+  _prepare_cpu_simulation();
+
   switch (mode) {
     case Mode::SEQUENTIAL: {
       std::cout << "run SEQUENTIAL\n";
@@ -1173,9 +1096,7 @@ void CPUPartitioner::_run_good_case(const Pattern pattern, const size_t bits, co
       // printf("\tthread_id = %d, gateIdx = %lu\n", thread_id, gateIdx);
 
       // Select the correct element (PI, PO, or gate)
-      ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
-                          (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
-                          static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
+      ElementBase<> &tmp = _Gates[gateIdx];
 
       // Execute the gate operation
       _run_gate(tmp, pattern, gateIdx, 0, 0);
@@ -1207,14 +1128,12 @@ void CPUPartitioner::_run_bad_case(const Fault <FAULT_INDEX_TYPE> &fault,
       size_t gateIdx = _gateIdx_in_each_level[lvl][g];
 
       // Calculate SA_fault using a ternary operator (avoiding if-else)
-      size_t SA_fault = (gateIdx < _num_PIs) ? ((gateIdx + _pi_idx_accum) == wrong_gate) :
-                        (gateIdx >= (_num_PIs + _num_POs)) ? ((gateIdx + _gate_idx_accum) == wrong_gate) :
-                                                            ((gateIdx + _po_idx_accum) == wrong_gate);
+      size_t SA_fault = (gateIdx < _num_PIs) ? ((gateIdx) == wrong_gate) :
+                        (gateIdx >= (_num_PIs + _num_POs)) ? ((gateIdx+_num_PIs+_num_POs) == wrong_gate) :
+                        ((gateIdx+_num_PIs) == wrong_gate);
 
       // Select the correct element (PI, PO, or gate)
-      ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
-                          (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
-                          static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
+      ElementBase<> &tmp = _Gates[gateIdx];
 
       // Execute the gate operation
       _run_gate(tmp, pattern, gateIdx, SA_fault, fault_val);
@@ -1289,10 +1208,7 @@ void CPUPartitioner::_run_cones_good_case(const Pattern pattern,
         // printf("c = %ld, lvl = %d, g = %ld, gateIdx = %ld\n", c, lvl, g, gateIdx);
         
         // Select the correct element (PI, PO, or gate)
-        ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
-                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
-                            static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
-
+      ElementBase<> &tmp = _Gates[gateIdx];
         // Execute the gate operation
         _run_gate(tmp, pattern, gateIdx, 0, 0);
       }
@@ -1330,14 +1246,12 @@ void CPUPartitioner::_run_cones_bad_case(const Fault<FAULT_INDEX_TYPE> &fault,
         size_t gateIdx = _cones[c][lvl][g];
 
         // Calculate SA_fault using a ternary operator (avoiding if-else)
-        size_t SA_fault = (gateIdx < _num_PIs) ? ((gateIdx + _pi_idx_accum) == wrong_gate) :
-                          (gateIdx >= (_num_PIs + _num_POs)) ? ((gateIdx + _gate_idx_accum) == wrong_gate) :
-                                                              ((gateIdx + _po_idx_accum) == wrong_gate);
+        size_t SA_fault = (gateIdx < _num_PIs) ? ((gateIdx) == wrong_gate) :
+                          (gateIdx >= (_num_PIs + _num_POs)) ? ((gateIdx+_num_PIs+_num_POs) == wrong_gate) :
+                          ((gateIdx + _num_PIs) == wrong_gate);
 
         // Select the correct element (PI, PO, or gate)
-        ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
-                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
-                            static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
+        ElementBase<> &tmp = _Gates[gateIdx];
 
         // Execute the gate operation
         _run_gate(tmp, pattern, gateIdx, SA_fault, fault_val);
@@ -1411,9 +1325,7 @@ void CPUPartitioner::_run_RepCut_cones_good_case(const Pattern pattern,
       for (const auto& gateIdx : _RepCut_output_cones[c][lvl]) {
         
         // Select the correct element (PI, PO, or gate)
-        ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
-                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
-                            static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
+        ElementBase<> &tmp = _Gates[gateIdx];
 
         // Execute the gate operation
         _run_gate(tmp, pattern, gateIdx, 0, 0);
@@ -1449,14 +1361,12 @@ void CPUPartitioner::_run_RepCut_cones_bad_case(const Fault <FAULT_INDEX_TYPE> &
       for (const auto& gateIdx : _RepCut_output_cones[c][lvl]) {
 
         // Calculate SA_fault using a ternary operator (avoiding if-else)
-        size_t SA_fault = (gateIdx < _num_PIs) ? ((gateIdx + _pi_idx_accum) == wrong_gate) :
-                          (gateIdx >= (_num_PIs + _num_POs)) ? ((gateIdx + _gate_idx_accum) == wrong_gate) :
-                                                              ((gateIdx + _po_idx_accum) == wrong_gate);
+        size_t SA_fault = (gateIdx < _num_PIs) ? ((gateIdx) == wrong_gate) :
+                          (gateIdx >= (_num_PIs + _num_POs)) ? ((gateIdx+_num_PIs+_num_POs) == wrong_gate) :
+                          ((gateIdx + _num_PIs) == wrong_gate);
 
         // Select the correct element (PI, PO, or gate)
-        ElementBase<> &tmp = (gateIdx < _num_PIs) ? static_cast<ElementBase<>&>(_PIs[gateIdx - _pi_idx_accum]) :
-                            (gateIdx >= (_num_PIs + _num_POs)) ? static_cast<ElementBase<>&>(_gates[gateIdx - _gate_idx_accum]) :
-                            static_cast<ElementBase<>&>(_POs[gateIdx - _po_idx_accum]);
+        ElementBase<> &tmp = _Gates[gateIdx];
 
         // Execute the gate operation
         _run_gate(tmp, pattern, gateIdx, SA_fault, fault_val);
@@ -1477,16 +1387,17 @@ void CPUPartitioner::_write_to_array(std::vector<size_t> &pi_output,
                                     std::vector<size_t> &gate_output,
                                     std::vector<size_t> &po_output,
                                     const size_t bits) {
-  // Duplicated the answer of good_case into a new memory
-  for (size_t i = 0; i < _num_PIs; i++) {
-    pi_output[i] = _PIs[i]._output_value;
+  // Duplicated the answer into a new memory
+  for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
+    if (i < _num_PIs) { // PI
+      pi_output[i] = _Gates[i]._output_value;
+    } else if (i >= _num_PIs && i < (_num_PIs+_num_POs)) { // PO
+      po_output[i-_num_PIs] = _Gates[i]._output_value;
+    } else { // gate
+      gate_output[i-(_num_PIs+_num_POs)] = _Gates[i]._output_value;
+    }
   }
-  for (size_t i = 0; i < _num_inner_gates; i++) {
-    gate_output[i] = _gates[i]._output_value;
-  }
-  for (size_t i = 0; i < _num_POs; i++) {
-    po_output[i] = _POs[i]._output_value;
-  }
+
 
   if (bits < SIZE_T_BITS) {
     _shift_to_correct_answer(pi_output, bits, _num_PIs);

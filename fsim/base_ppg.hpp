@@ -38,6 +38,10 @@ class ElementBase {
   friend class CPUPartitioner;
   friend class CUDAPartitioner;
 
+  // This is the correct syntax for declaring a template class as a friend
+  template<typename T> 
+  friend class GALPS_CPUSimulator;
+
 public:
   // accessor
   IndexType idx() const { return _idx; }

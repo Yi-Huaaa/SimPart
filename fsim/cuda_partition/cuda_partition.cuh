@@ -14,15 +14,15 @@
 /* CPU */
 #include <fsim/fsim.hpp>
 
-/* GPU Simulator */
-#include <fsim/cuda_simulator/fsim_cuda_simulator.cuh>
+/* Simulator */
+#include <fsim/cpu_simulator/galps_cpu_simulator.cuh>
+#include <fsim/cuda_simulator/galps_cuda_simulator.cuh>
 
 
 #define ELEMENT_INDEX_TYPE_PART int
 #define ELEMENT_LEVEL_TYPE_PART int
 
 #define FAULT_INDEX_TYPE_PART int
-
 
 
 // error checking macro
@@ -106,13 +106,13 @@ __global__ void _check_visited(const int sz, const int *_visited_gpu, const int 
 
 /* Forward declaration */
 class CUDASimulator;
-
-
+template class GALPS_CPUSimulator<ELEMENT_INDEX_TYPE_PART>;
 
 class CUDAPartitioner {
   
   // Declare friend class 
   friend class CUDASimulator;
+  friend class GALPS_CPUSimulator<ELEMENT_INDEX_TYPE_PART>;
 
 public:
 
@@ -121,7 +121,6 @@ public:
   // accessor
   void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
-  // void _prepare_cpu_simulation();
   void run(Mode mode, const size_t num_threads);
   void freeMem() {
     _free();
@@ -131,9 +130,8 @@ private:
   // Basic private members 
   int _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   int _sum_pi_gates_pos;
-  std::vector<ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART>> _PIs;
-  std::vector<ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART>> _gates;
-  std::vector<ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART>> _POs;
+  // Include PIs, POs, Gates, 
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART>> _Gates;
 
   // Host memory 
   // Read Graph 
@@ -173,7 +171,6 @@ private:
   std::vector<size_t> _b_gate_results;
   std::vector<size_t> _b_po_results;
   std::vector<size_t> _found_fault_to_pattern;
-  int _pi_idx_accum, _po_idx_accum, _gate_idx_accum;
 
   // GPU partitioner memory: 
   int *_adj_gpu; 
@@ -209,8 +206,8 @@ private:
 
 
   /* Read files - CPU function */
-  void _read_graph(std::istream &ckt, int*gate_input_order_table_readIn);
-  void _construct_graph(int *gate_input_order_table_readIn);
+  void _read_graph(std::istream &ckt);
+  void _construct_graph();
   void _read_pattern(std::istream &ptn);
   void _read_fault(std::istream &flst);
 
@@ -253,47 +250,19 @@ private:
 
 
   // CPU Simulation
-  void _run_cones_gates_cpu(const size_t num_threads);
-  void _run_cones_good_case(const Pattern pattern, 
-                            const size_t bits, 
-                            const size_t num_threads);
-  void _run_cones_bad_case(const Fault<FAULT_INDEX_TYPE_PART> &fault,
-                          const Pattern pattern,
-                          const size_t bits, const size_t num_threads);
-  void _write_to_array(std::vector<size_t> &pi_output, 
-                      std::vector<size_t> &gate_output,
-                      std::vector<size_t> &po_output,
-                      const size_t bits);
-    void _apply_INV(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
-    void _apply_AND(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
-    void _apply_OR(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
-    void _apply_XOR(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
-    void _apply_NAND(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
-    void _apply_NOR(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
-    void _apply_XNOR(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
-    void _apply_MUX(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
-    void _apply_CLKBUF(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
-    void _apply_PI(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate, const Pattern pattern, const size_t pi);
-    void _apply_PO(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate);
-    void _run_gate(ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate, 
-                   const Pattern pattern, 
-                   const ELEMENT_INDEX_TYPE_PART pi, 
-                   const FAULT_INDEX_TYPE_PART SA_fault, 
-                   const size_t fault_val);
-    void _shift_to_correct_answer(std::vector<size_t> &results, const size_t bits,
-                                  const ELEMENT_INDEX_TYPE_PART num_shift_gates);
-    void _ask_simulation_memory() {
-      _g_pi_results.resize(_num_PIs);
-      _g_gate_results.resize(_num_inner_gates);
-      _g_po_results.resize(_num_POs);
-      _b_pi_results.resize(_num_PIs);
-      _b_gate_results.resize(_num_inner_gates);
-      _b_po_results.resize(_num_POs);
-      _found_fault_to_pattern.resize(2 * _faults.size());
-    }
-  
-    // GPU Simulator
-    void _ask_gpu_memory_simu();
+  void _prepare_cpu_simulation();
+  void _ask_simulation_memory() {
+    _g_pi_results.resize(_num_PIs);
+    _g_gate_results.resize(_num_inner_gates);
+    _g_po_results.resize(_num_POs);
+    _b_pi_results.resize(_num_PIs);
+    _b_gate_results.resize(_num_inner_gates);
+    _b_po_results.resize(_num_POs);
+    _found_fault_to_pattern.resize(2 * _faults.size());
+  }
+
+  // GPU Simulator
+  void _ask_gpu_memory_simu();
 
 
 
@@ -307,7 +276,7 @@ private:
                       const int num_PIs) const;
   void print_bits_stack(const int size, const void *const ptr) const;
   gpuGateType convertGateTypeToGpu(GateType gate_type);
-  void _print_read_graph(int *gate_input_order_table_readIn) const;
+  void _print_read_graph() const;
   void _check_graph_connection_CPU();
   void _print_copy_TS_resutls_to_Host();
   void _print_levelized();

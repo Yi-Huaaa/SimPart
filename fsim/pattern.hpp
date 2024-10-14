@@ -16,6 +16,11 @@ class Pattern {
   friend class CPUPartitioner;
   friend class CUDAPartitioner;
 
+  // This is the correct syntax for declaring a template class as a friend
+  template<typename T> 
+  friend class GALPS_CPUSimulator;
+
+
 public:
   // accessor
   // plain old data type can simply be returned as a copy

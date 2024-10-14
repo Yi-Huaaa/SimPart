@@ -52,11 +52,11 @@ private:
   /* Private members */
   size_t _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   size_t _sum_pi_gates_pos;
-  std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> _PIs;
-  std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> _gates;
-  std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> _POs;
-  size_t *_gate_input_order_table;
-  
+  std::vector<ElementBase<ELEMENT_INDEX_TYPE, ELEMENT_LEVEL_TYPE>> _Gates;
+  std::vector<std::vector<size_t>> _adj;
+  std::vector<std::vector<size_t>> _invAdj;
+  std::vector<GateType> _gate_type;
+
   // Fault and Pattern 
   size_t _num_fault; // for read file
   std::vector<Fault<FAULT_INDEX_TYPE>> _faults;
@@ -82,7 +82,6 @@ private:
   std::vector<size_t> _b_gate_results;
   std::vector<size_t> _b_po_results;
   std::vector<size_t> _found_fault_to_pattern;
-  size_t _pi_idx_accum, _po_idx_accum, _gate_idx_accum;
 
   // For merge
   // const size_t _merge_threshold = 11; // adjustable  
@@ -121,21 +120,17 @@ private:
 
   /* Functions */
   // Construct
-  void _read_graph(std::istream &ckt, 
-                  std::vector<std::vector<size_t>> &adj,
-                  std::vector<std::vector<size_t>> &invAdj);                  
-  void _levelization(std::vector<std::vector<size_t>> &adj);
+  void _read_graph(std::istream &ckt);
+  void _levelization();
   
 
-  void _partition(std::vector<std::vector<size_t>> &adj);
+  void _partition();
   void _show_cones_size();
   bool _gateHasCone(std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                     const size_t gateIdx);
-  bool _gateHasPostGates(std::vector<std::vector<size_t>> &adj, 
-                        const size_t gateIdx, const size_t startLevel);         
+  bool _gateHasPostGates(const size_t gateIdx, const size_t startLevel);         
   void _getConeIdices(const size_t conesSz, const size_t gateIdx, const size_t startLevel, 
                       bool newCone, 
-                      std::vector<std::vector<size_t>> &adj, 
                       std::vector<std::vector<size_t>> &gateBelongsToWhichCones);
   void _updateConIdxTable(bool newCone, const size_t gateIdx, 
                           std::vector<size_t> &coneIdxToSinkGateIdx);
@@ -144,7 +139,6 @@ private:
                     std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                     size_t &coneWidth);
   void _find_all_cones(const size_t startLevel, 
-                          std::vector<std::vector<size_t>> &adj, 
                           std::vector<std::vector<size_t>> &gateBelongsToWhichCones,
                           std::vector<size_t> &coneIdxToSinkGateIdx,
                           int &stopLevel);
@@ -167,7 +161,7 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
 
 
   // FSIM
-  void _construct_graph(std::istream &ckt);
+  void _construct_graph();
   void _read_pattern(std::istream &ptn);
   void _read_fault(std::istream &flst);
   void _ask_simulation_memory();
@@ -177,6 +171,7 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                       const size_t bits);
 
   // Simulation - sequentail and parallel (without partitioning to cones)
+  void _prepare_cpu_simulation();
   void _run_fsim(const size_t num_threads);
   void _run_good_case(const Pattern pattern, const size_t bits, const size_t num_threads);
   void _run_bad_case(const Fault <FAULT_INDEX_TYPE> &fault, 

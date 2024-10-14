@@ -39,14 +39,16 @@ add_library(fsim_cuda_partition
   po.cpp po.hpp
   gate.cpp gate.hpp
   simulation.cpp simulation.hpp
+  ./cpu_simulator/cpu_simulation.cuh 
   ./cuda_simulator/gpu_simulation.cu
   ./cuda_simulator/gpu_simulation.cuh  
   )
 
-# GPU Simulation:
-add_library(fsim_cuda_simulator
+# Simulation:
+add_library(galps_simulator
+  ./cpu_simulator/cpu_simulation.cuh 
+  ./cuda_simulator/gpu_simulation.cuh 
   ./cuda_simulator/gpu_simulation.cu
-  ./cuda_simulator/gpu_simulation.cuh  
 )
 
 
@@ -54,6 +56,7 @@ add_library(fsim_cuda_simulator
 # Link OpenMP for CUDA partition (needed for OpenMP support in CUDA code)
 # -----------------------------------------------------------------------------
 target_link_libraries(fsim_cuda_partition PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(galps_simulator PRIVATE OpenMP::OpenMP_CXX)
 
 
 # -----------------------------------------------------------------------------
@@ -116,7 +119,7 @@ target_compile_options(fsim_cuda_partition PRIVATE
 )
 
 
-target_compile_options(fsim_cuda_simulator PRIVATE
+target_compile_options(galps_simulator PRIVATE
   -Wall
   -Wextra
   -Wfatal-errors
