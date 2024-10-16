@@ -13,7 +13,9 @@
 
 // CPU
 #include <fsim/fsim.hpp>
-#include <libkahypar.h>
+#include <libkahypar.h> // kahypar single thread
+#include <libmtkahypar.h> // kahypar multi-threads
+
 
 #define ELEMENT_INDEX_TYPE size_t
 #define ELEMENT_LEVEL_TYPE size_t
@@ -45,6 +47,7 @@ public:
   void run(Mode mode, const size_t num_threads);
   void visualization_graph(const std::string &outputFile);
   void KaHyParExample();
+  void mt_KaHyParExample();
 
 
 

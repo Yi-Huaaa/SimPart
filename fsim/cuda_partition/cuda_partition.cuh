@@ -40,7 +40,7 @@
 
 
 // constexpr
-constexpr int _k = 2; // based on the kernel concurrency
+constexpr int _k = 4; // based on the kernel concurrency
 
 // Define the enum class
 enum class gpuGateType : int {
@@ -89,6 +89,33 @@ __device__ bool _canEnqueue(const int g_idx,
                             const int *_invAdj_gpu,
                             const int *_invAdj_index_table_gpu, 
                             int *_visited_gpu);
+
+
+// Prepare for simulation
+template<typename IndexType = int>
+__global__ void _levelize_gpu(const IndexType *_queue_data, const IndexType *_queue_tail, 
+                              const IndexType *_invAdj_gpu,
+                              const IndexType *_invAdj_index_table_gpu,
+                              IndexType *_max_level_gpu, IndexType *_total_num_levels_gpu,
+                              IndexType *_level_of_gates_gpu);
+template<typename IndexType = int>
+__global__ void _map_sinks_to_group(const IndexType _sum_pi_gates_pos, const IndexType _kk, 
+                                    const IndexType *num_of_sinks_gpu,
+                                    const IndexType *_partitionIndex_gpu, 
+                                    const IndexType *is_sinks_gpu,
+                                    IndexType *sinks2G_start_index_gpu, IndexType *tmp,
+                                    IndexType *sinks_to_groups_gpu) ;                              
+template<typename IndexType = int>
+__global__ void _construct_groups_gpu(); 
+template<typename IndexType>
+__global__ void _compute_numGates_gpu(const IndexType arraySz, 
+                                      const IndexType *sinks2G_start_index_gpu, 
+                                      const IndexType *sinks_to_groups_gpu, 
+                                      const IndexType *_invAdj_gpu, 
+                                      const IndexType *_invAdj_index_table_gpu,
+                                      const IndexType *_level_of_gates_gpu,
+                                      IndexType *R1);
+
 // For print
 __global__ void _gpu_print_read_graph(const int _sum_pi_gates_pos, 
                                       const int _szOfAdj, 
@@ -99,9 +126,18 @@ __global__ void _gpu_print_read_graph(const int _sum_pi_gates_pos,
 __global__ void _print_first_level (const int _num_PIs, 
                                     const int *_partitionIndex_gpu);
 __global__ void _print_queue(int *_queue_data, int *_queue_head, int *_queue_tail);
+__global__ void _print_full_queue(int *_queue_data, int *_queue_tail);
 __global__ void _print_GPU_partitioner(const int _sum_pi_gates_pos, 
                                       const int *_partitionIndex_gpu);
 __global__ void _check_visited(const int sz, const int *_visited_gpu, const int mode);
+
+template<typename IndexType = int>
+__global__ void _check_levelize_gpu(const IndexType *_max_level_gpu, 
+                                    const IndexType *_total_num_levels_gpu, 
+                                    const IndexType _sum_pi_gates_pos, 
+                                    const IndexType *_level_of_gates_gpu);
+
+
 
 
 /* Forward declaration */
@@ -189,7 +225,12 @@ private:
   int *_queue_size;
 
   // GPU Simulation: 
-  int *_TS_order_gpu;
+  int *_cones_partitioned_gpu;
+  int *_max_level_gpu;
+  int *_total_num_levels_gpu;
+  int *_level_of_gates_gpu;
+  size_t *_numGates_per_level_gpu;
+
   int *_pi_gate_po_gate_type_gpu;
   size_t *_patterns_gpu;
   int *_fault_gate_idx_gpu;
@@ -262,8 +303,16 @@ private:
   }
 
   // GPU Simulator
+  void _prepare_gpu_simulation();
+  template<typename IndexType = int>
   void _ask_gpu_memory_simu();
-
+  template<typename IndexType = int>
+  void _TS_levelize_gpu();
+  template<typename IndexType = int>
+  void _construct_cones_gpu();
+  void _move_patterns_h2d();
+  void _move_faults_h2d();
+  void _move_GateType_h2d();
 
 
 

@@ -41,6 +41,8 @@ class ElementBase {
   // This is the correct syntax for declaring a template class as a friend
   template<typename T> 
   friend class GALPS_CPUSimulator;
+  template<typename T1> 
+  friend class GALPS_GPUSimulator;
 
 public:
   // accessor

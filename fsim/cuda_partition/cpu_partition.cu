@@ -1089,7 +1089,8 @@ void CPUPartitioner::_run_good_case(const Pattern pattern, const size_t bits, co
   for (size_t lvl = 0; lvl < _gateIdx_in_each_level.size(); lvl++) {
     // printf("lvl = %lu\n", lvl);
     // Parallelize only the second loop (gate index loop)
-    #pragma omp parallel for schedule(dynamic)
+    // #pragma omp parallel for schedule(dynamic)
+    #pragma omp parallel for
     for (size_t g = 0; g < _gateIdx_in_each_level[lvl].size(); g++) {
       int thread_id = omp_get_thread_num();
       size_t gateIdx = _gateIdx_in_each_level[lvl][g];
@@ -1122,7 +1123,8 @@ void CPUPartitioner::_run_bad_case(const Fault <FAULT_INDEX_TYPE> &fault,
 
   for (size_t lvl = 0; lvl < _gateIdx_in_each_level.size(); lvl++) {
     // Parallelize only the second loop (gate index loop)
-    #pragma omp parallel for schedule(dynamic)
+    // #pragma omp parallel for schedule(dynamic)
+    #pragma omp parallel for
     for (size_t g = 0; g < _gateIdx_in_each_level[lvl].size(); g++) {
       int thread_id = omp_get_thread_num();
       size_t gateIdx = _gateIdx_in_each_level[lvl][g];
@@ -1973,6 +1975,123 @@ void CPUPartitioner::KaHyParExample() {
   }
 
   kahypar_context_free(context);
+}
+
+void CPUPartitioner::mt_KaHyParExample() {
+  const double imbalance = 0.015;
+  const int k = 2;
+  // BIBI
+  /* Construct context */
+  // Initialize Mt-KaHyPar
+  mt_kahypar_initialize_thread_pool(
+    std::thread::hardware_concurrency() /* use all available cores */,
+    true /* activate interleaved NUMA allocation policy */ );
+
+  // Setup partitioning context
+  mt_kahypar_context_t* context = mt_kahypar_context_new();
+  mt_kahypar_load_preset(context, DEFAULT /* corresponds to MT-KaHyPar-D */);
+  // In the following, we partition a hypergraph into two blocks
+  // with an allowed imbalance of 3% and optimize the connective metric (KM1)
+  mt_kahypar_set_partitioning_parameters(context,
+                                          k /* number of blocks */, 
+                                          imbalance /* imbalance parameter */,
+                                          KM1 /* objective function */);
+  mt_kahypar_set_seed(42 /* seed */);
+
+  /* Construct hypergraph */
+  // Number of vertices
+  const mt_kahypar_hypernode_id_t num_vertices = 5;  // Example number of vertices
+
+  // Number of hyperedges
+  const mt_kahypar_hyperedge_id_t num_hyperedges = 5;  // Example number of hyperedges
+
+  // Define hyperedges: each hyperedge connects multiple vertices
+  const std::vector<std::vector<mt_kahypar_hypernode_id_t>> hyperedges = {
+    {0, 1, },      // Hyperedge 0 connects vertices 0, 1, 
+    {0, 1, 2, },   // Hyperedge 1 connects vertices 0, 1, 2, 
+    {1, 2, },      // Hyperedge 2 connects vertices 1, 2, 
+    {2, 3, 4, },   // Hyperedge 3 connects vertices 2, 3, 4, 
+    {3, 4, }       // Hyperedge 4 connects vertices 3, 4, 
+  };
+
+  // Flatten the hyperedges array into a single vector of vertices
+  std::vector<mt_kahypar_hypernode_id_t> edge_vector;
+  std::vector<size_t> edge_offsets;  // Offsets for where each hyperedge starts in the flattened array
+  for (const auto& edge : hyperedges) {
+    edge_offsets.push_back(edge_vector.size());  // Mark the start of each hyperedge
+    edge_vector.insert(edge_vector.end(), edge.begin(), edge.end());  // Insert all vertices in the hyperedge
+  }
+  edge_offsets.push_back(edge_vector.size());  // Final offset to mark the end
+
+  // // Optional: Weights for hyperedges and vertices (can be nullptr if not used)
+    // const mt_kahypar_hyperedge_weight_t* hyperedge_weights = nullptr;  // No weights for hyperedges
+    // const mt_kahypar_hypernode_weight_t* vertex_weights = nullptr;     // No weights for vertices
+  // Inputs for vertex weights (converted from KaHyPar example)
+  std::unique_ptr<mt_kahypar_hypernode_weight_t[]> vertex_weights =
+    std::make_unique<mt_kahypar_hypernode_weight_t[]>(num_vertices);
+  double tmp0[num_vertices] = {250, 267, 433, 250, 250};  // Example vertex weights
+  for (size_t i = 0; i < num_vertices; i++) {
+    vertex_weights[i] = static_cast<mt_kahypar_hypernode_weight_t>(tmp0[i]);
+  }
+
+  // Inputs for hyperedge weights (converted from KaHyPar example)
+  std::unique_ptr<mt_kahypar_hyperedge_weight_t[]> hyperedge_weights =
+    std::make_unique<mt_kahypar_hyperedge_weight_t[]>(num_hyperedges);
+  size_t tmp1[num_hyperedges] = {2, 1, 2, 1, 2};  // Example hyperedge weights
+  for (size_t i = 0; i < num_hyperedges; i++) {
+    hyperedge_weights[i] = static_cast<mt_kahypar_hyperedge_weight_t>(tmp1[i]);
+  }
+
+  // Define the preset type (e.g., DEFAULT)
+  mt_kahypar_preset_type_t preset = DEFAULT;  // Choose a preset type (e.g., DEFAULT or another preset)
+
+  // Now, create the hypergraph in memory using the correct API
+  mt_kahypar_hypergraph_t hypergraph = mt_kahypar_create_hypergraph(
+    preset,  // Preset type
+    num_vertices,  // Number of vertices
+    num_hyperedges,  // Number of hyperedges
+    edge_offsets.data(),  // Array of hyperedge indices (offsets)
+    edge_vector.data(),   // Flattened array of hyperedges (vertices)
+    hyperedge_weights.get(),  // Hyperedge weights (nullptr if unweighted)
+    vertex_weights.get()      // Vertex weights (nullptr if unweighted)
+  );
+
+  // Partition the hypergraph
+  mt_kahypar_partitioned_hypergraph_t partitioned_hg =
+    mt_kahypar_partition(hypergraph, context);
+
+  // Extract the partition information (which block each vertex belongs to)
+  std::unique_ptr<mt_kahypar_partition_id_t[]> partition =
+    std::make_unique<mt_kahypar_partition_id_t[]>(mt_kahypar_num_hypernodes(hypergraph));
+  mt_kahypar_get_partition(partitioned_hg, partition.get());
+
+  /* Extract block weights */
+  std::unique_ptr<mt_kahypar_hypernode_weight_t[]> block_weights =
+    std::make_unique<mt_kahypar_hypernode_weight_t[]>(2);  // Since we have 2 blocks
+  mt_kahypar_get_block_weights(partitioned_hg, block_weights.get());
+
+  /* Compute Metrics */
+  const double imbalance_2 = mt_kahypar_imbalance(partitioned_hg, context);
+  const double km1_2 = mt_kahypar_km1(partitioned_hg);
+
+  /* Output Results */
+  std::cout << "BIBI:" << std::endl;
+  std::cout << "Partitioning Results:" << std::endl;
+  std::cout << "Imbalance         = " << imbalance_2 << std::endl;
+  std::cout << "Km1               = " << km1_2 << std::endl;
+  std::cout << "Weight of Block 0 = " << block_weights[0] << std::endl;
+  std::cout << "Weight of Block 1 = " << block_weights[1] << std::endl;
+
+  // Output the partition results (which partition each vertex belongs to)
+  std::cout << "Partitioned Vertices:" << std::endl;
+  for (mt_kahypar_hypernode_id_t i = 0; i < num_vertices; ++i) {
+    std::cout << "Vertex " << i << " is in partition " << partition[i] << std::endl;
+  }
+
+  /* Cleanup */
+  mt_kahypar_free_context(context);
+  mt_kahypar_free_hypergraph(hypergraph);
+  mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
 }
 
 

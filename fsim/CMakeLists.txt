@@ -81,6 +81,21 @@ target_link_libraries(fsim_cuda_partition PRIVATE ${KAHYPAR_LIB})
 message(STATUS "KAHYPAR_LIB: ${KAHYPAR_LIB}")
 
 
+# -----------------------------------------------------------------------------
+# MT-KAHYPAR_LIB 
+# -----------------------------------------------------------------------------
+find_library(MT_KAHYPAR_LIB mtkahypar PATHS /usr/local/lib)
+
+# Add include directories for libmtkahypar headers
+include_directories(/usr/local/include)
+
+# Link the library with the target fsim_cuda_partition
+target_link_libraries(fsim_cuda_partition PRIVATE ${MT_KAHYPAR_LIB})
+message(STATUS "MT_KAHYPAR_LIB: ${MT_KAHYPAR_LIB}")
+
+
+
+
 
 # Set compiler flags for the "fsim" library
 target_compile_options(fsim PRIVATE

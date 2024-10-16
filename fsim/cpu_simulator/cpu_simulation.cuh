@@ -50,10 +50,10 @@ public:
             const size_t num_pattern, 
             const size_t num_rounds,
             const size_t num_fault, 
-            const std::vector<Pattern> &patterns,
-            const std::vector<Fault<IndexType>> &faults,
+            const std::vector<Pattern> &_patterns,
+            const std::vector<Fault<IndexType>> &_faults,
             std::vector<ElementBase<IndexType, IndexType>> &_Gates,
-            const std::vector<std::vector<std::vector<IndexType>>> &cones_partitioned,
+            const std::vector<std::vector<std::vector<IndexType>>> &_cones_partitioned,
             std::vector<size_t> &_g_pi_results,
             std::vector<size_t> &_g_gate_results,
             std::vector<size_t> &_g_po_results,
@@ -70,10 +70,6 @@ public:
     _num_pattern = num_pattern;
     _num_rounds = num_rounds;
     _num_fault = num_fault;
-    
-    _patterns = patterns;
-    _faults = faults;
-    _cones_partitioned = cones_partitioned;
 
     // run simulation
     _run_cones_gates_cpu(_Gates, 
@@ -83,7 +79,10 @@ public:
                         _b_pi_results,
                         _b_gate_results,
                         _b_po_results,
-                        _found_fault_to_pattern);
+                        _found_fault_to_pattern,
+                        _cones_partitioned, 
+                        _patterns, 
+                        _faults);
   }
 
 private:
@@ -97,9 +96,6 @@ private:
   IndexType _num_fault; 
   size_t _num_threads;
 
-  std::vector<Pattern> _patterns;
-  std::vector<Fault<IndexType>> _faults;
-  std::vector<std::vector<std::vector<IndexType>>> _cones_partitioned;
 
   void _run_cones_gates_cpu(std::vector<ElementBase<IndexType, IndexType>> &_Gates,
                             std::vector<size_t> &_g_pi_results,
@@ -108,21 +104,26 @@ private:
                             std::vector<size_t> &_b_pi_results,
                             std::vector<size_t> &_b_gate_results,
                             std::vector<size_t> &_b_po_results,
-                            std::vector<size_t> &_found_fault_to_pattern);
+                            std::vector<size_t> &_found_fault_to_pattern,
+                            const std::vector<std::vector<std::vector<IndexType>>> &_cones_partitioned,
+                            const std::vector<Pattern> &_patterns,
+                            const std::vector<Fault<IndexType>> &_faults);
 
   void _run_cones_good_case(std::vector<ElementBase<IndexType, IndexType>> &_Gates,
                             const Pattern pattern, 
                             const size_t bits,
                             std::vector<size_t> &_g_pi_results,
                             std::vector<size_t> &_g_gate_results,
-                            std::vector<size_t> &_g_po_results);
+                            std::vector<size_t> &_g_po_results,
+                            const std::vector<std::vector<std::vector<IndexType>>> &_cones_partitioned);
   void _run_cones_bad_case(std::vector<ElementBase<IndexType, IndexType>> &_Gates,
                           const Fault<IndexType> &fault, 
                           const Pattern pattern,
                           const size_t bits,
                           std::vector<size_t> &_b_pi_results,
                           std::vector<size_t> &_b_gate_results,
-                          std::vector<size_t> &_b_po_results);
+                          std::vector<size_t> &_b_po_results,
+                          const std::vector<std::vector<std::vector<IndexType>>> &_cones_partitioned);
   void _write_to_array(std::vector<ElementBase<IndexType, IndexType>> &_Gates,
                       std::vector<size_t> &pi_output, 
                       std::vector<size_t> &gate_output,
@@ -168,7 +169,10 @@ void GALPS_CPUSimulator<IndexType>::_run_cones_gates_cpu(std::vector<ElementBase
                                                       std::vector<size_t> &_b_pi_results,
                                                       std::vector<size_t> &_b_gate_results,
                                                       std::vector<size_t> &_b_po_results,
-                                                      std::vector<size_t> &_found_fault_to_pattern) {
+                                                      std::vector<size_t> &_found_fault_to_pattern,
+                                                      const std::vector<std::vector<std::vector<IndexType>>> &_cones_partitioned,
+                                                      const std::vector<Pattern> &_patterns,
+                                                      const std::vector<Fault<IndexType>> &_faults) {
   #ifdef CPU_PART_DEBUG_PRINT_SIMULATION
     std::cout << "execute simulation._run_cones_gates_cpu();\n";
   #endif
@@ -183,13 +187,13 @@ void GALPS_CPUSimulator<IndexType>::_run_cones_gates_cpu(std::vector<ElementBase
       std::cout << "Run Good case with threads = " << _num_threads << std::endl;
   #endif
       _run_cones_good_case(_Gates, _patterns[rd], num_testcases_this_round, 
-                          _g_pi_results, _g_gate_results, _g_po_results);
+                          _g_pi_results, _g_gate_results, _g_po_results, _cones_partitioned);
           
       // // bad simulation (fault simulation)
       // for (size_t j = 0; j < _faults.size(); j++) {
       //   _run_cones_bad_case(_Gates, _faults[j], _patterns[rd], 
       //                       num_testcases_this_round,
-      // _b_pi_results, _b_gate_results, _b_po_results);
+      // _b_pi_results, _b_gate_results, _b_po_results, _cones_partitioned);
   
       //   size_t found_fault = 0;
       //   for (size_t i = 0; i < _num_POs; i++) {
@@ -218,10 +222,10 @@ void GALPS_CPUSimulator<IndexType>::_run_cones_gates_cpu(std::vector<ElementBase
                                                           const size_t bits,
                                                           std::vector<size_t> &_g_pi_results,
                                                           std::vector<size_t> &_g_gate_results,
-                                                          std::vector<size_t> &_g_po_results) {
+                                                          std::vector<size_t> &_g_po_results,
+                                                          const std::vector<std::vector<std::vector<IndexType>>> &_cones_partitioned) {
   
     omp_set_num_threads(_num_threads);  // Set the number of threads for OpenMP
-  
     // Parallelize across cones (c)
     // #pragma omp parallel for
     // #pragma omp parallel for if (_cones_partitioned.size() > 1) schedule(dynamic)
@@ -260,7 +264,8 @@ void GALPS_CPUSimulator<IndexType>::_run_cones_gates_cpu(std::vector<ElementBase
                                             const size_t bits,
                                             std::vector<size_t> &_b_pi_results,
                                             std::vector<size_t> &_b_gate_results,
-                                            std::vector<size_t> &_b_po_results) {
+                                            std::vector<size_t> &_b_po_results,
+                                            const std::vector<std::vector<std::vector<IndexType>>> &_cones_partitioned) {
     // printf("Getting inside _run_cones_bad_case\n");
     omp_set_num_threads(_num_threads);  // Set the number of threads for OpenMP
   
