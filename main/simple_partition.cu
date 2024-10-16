@@ -9,7 +9,7 @@
 
 #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
-    #define VERSION 1 // VERSION can be 0, 1, 2, 3, 4, 5 
+    #define VERSION 6 // VERSION can be 0, 1, 2, 3, 4, 5, 6, 7
     #if VERSION == 0
         #define MODE 0
         #define NUM_THREADS 1
@@ -25,8 +25,14 @@
     #elif VERSION == 4
         #define MODE 4
         #define NUM_THREADS 1
-    #else // VERSION == 5
+    #elif VERSION == 5
         #define MODE 5
+        #define NUM_THREADS 1
+    #elif VERSION == 6
+        #define MODE 6
+        #define NUM_THREADS 1                
+    #else // VERSION == 7
+        #define MODE 7
         #define NUM_THREADS 8
     #endif
   #endif
@@ -124,7 +130,7 @@ int main(int argc, char *argv[]) {
 
 
   // cpuPartitioner.KaHyParExample();
-  cpuPartitioner.mt_KaHyParExample();
+  // cpuPartitioner.mt_KaHyParExample();
 
   return 0;
 }

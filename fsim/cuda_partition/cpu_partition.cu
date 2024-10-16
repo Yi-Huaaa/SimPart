@@ -98,16 +98,30 @@ void CPUPartitioner::read(Mode mode, std::istream &ckt, std::istream &flst, std:
       /* Partitioning */
       _partition();
       break;
-    case Mode::REPCUT_SEQUENTIAL:
+    case Mode::REPCUT_SEQUENTIAL: {
       /* Partitioning */
       _partition();
       _RepCut(duration_0, duration_1);
       break;
-    case Mode::REPCUT_PARALLEL_OMP:
+    }
+    case Mode::REPCUT_PARALLEL_OMP: {
       /* Partitioning */
       _partition();
       _RepCut(duration_0, duration_1);
-      break;      
+      break;  
+    }
+    case Mode::REPCUT_MT_SEQUENTIAL: {
+      /* Partitioning */
+      _partition();
+      _RepCut_MT(duration_0, duration_1);
+      break;
+    }
+    case Mode::REPCUT_MT_PARALLEL_OMP: {
+      /* Partitioning */
+      _partition();
+      _RepCut_MT(duration_0, duration_1);
+      break;  
+    }    
     default:
       printf("read: No SUCH CASES\n");
       return; 
@@ -647,6 +661,29 @@ duration_1 = end1 - start;
   }
 }
 
+void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1) {
+  auto start = std::chrono::steady_clock::now();
+  auto end0 = std::chrono::steady_clock::now();
+  auto end1 = std::chrono::steady_clock::now();
+
+
+  _find_clusters();
+
+  if (_can_run_kahypar) {
+    _construct_hyperGraph();
+end0 = std::chrono::steady_clock::now();
+duration_0 = end0 - start;    
+    std::vector<size_t> vertex_to_partition;
+    _run_mtKaHyPar(vertex_to_partition);
+    _get_KHP_partitioning_res(vertex_to_partition);
+end1 = std::chrono::steady_clock::now();
+duration_1 = end1 - start;        
+  } else {
+    _RepCut_output_cones = _cones;
+  }
+}
+
+
 /* For those gates who belong to the same cones belong to the same cluster */
 void CPUPartitioner::_find_clusters() {
   _gate_to_cones.resize(_sum_pi_gates_pos);
@@ -753,9 +790,8 @@ void CPUPartitioner::_construct_hyperedge_vertices() {
 
   _vertexIdx_to_sinkGateIdx.resize(_is_sink_clusters_idx.size()); 
 
-  // Get hyperedge_include_which_vertices
-  std::vector<std::set<size_t>> hyperedge_include_which_vertices;
-  hyperedge_include_which_vertices.resize(_non_sink_clusters_idx.size()); 
+  // Get _hyperedge_include_which_vertices
+  _hyperedge_include_which_vertices.resize(_non_sink_clusters_idx.size()); 
   _hyperedges_weight.resize(_non_sink_clusters_idx.size());
 
   for (size_t c = 0; c < _cones.size(); c++) {
@@ -778,7 +814,7 @@ void CPUPartitioner::_construct_hyperedge_vertices() {
         size_t clusterIdx = _gate_to_cluster[gateIdx];
         if (!_is_sink_clusters[clusterIdx]) { // is hyperegde
           size_t hyperedgeIdx = _to_hypergraph_vertex_idx[clusterIdx];
-          hyperedge_include_which_vertices[hyperedgeIdx].insert(vertexIdx);
+          _hyperedge_include_which_vertices[hyperedgeIdx].insert(vertexIdx);
           
           // Update _hyperedges_weight
           _hyperedges_weight[hyperedgeIdx] = _clusters[clusterIdx].size();
@@ -788,10 +824,10 @@ void CPUPartitioner::_construct_hyperedge_vertices() {
   }
   
   /* Get _hyperedges_weight, _hyperedges_eind, _hyperedges_eptr */
-  for (size_t hyperedge = 0; hyperedge < hyperedge_include_which_vertices.size(); hyperedge++) {
+  for (size_t hyperedge = 0; hyperedge < _hyperedge_include_which_vertices.size(); hyperedge++) {
     // Update _hyperedges_eptr
     _hyperedges_eptr.push_back(_hyperedges_eind.size());
-    for (const auto& vertexIdx : hyperedge_include_which_vertices[hyperedge]) {
+    for (const auto& vertexIdx : _hyperedge_include_which_vertices[hyperedge]) {
       // Update _hyperedges_eind
       _hyperedges_eind.push_back(vertexIdx);
     }
@@ -804,8 +840,8 @@ void CPUPartitioner::_construct_hyperedge_vertices() {
   std::vector<std::set<size_t>> vertex_include_which_hyperedges;
   vertex_include_which_hyperedges.resize(_is_sink_clusters_idx.size());
 
-  for (size_t hyperedgeIdx = 0; hyperedgeIdx < hyperedge_include_which_vertices.size(); hyperedgeIdx++) {
-    for (const auto& vertexIdx : hyperedge_include_which_vertices[hyperedgeIdx]) {
+  for (size_t hyperedgeIdx = 0; hyperedgeIdx < _hyperedge_include_which_vertices.size(); hyperedgeIdx++) {
+    for (const auto& vertexIdx : _hyperedge_include_which_vertices[hyperedgeIdx]) {
       vertex_include_which_hyperedges[vertexIdx].insert(hyperedgeIdx);
     }
   }  
@@ -819,8 +855,7 @@ void CPUPartitioner::_construct_hyperedge_vertices() {
   _multiple_100(tmp_vectices_weight);
   
 #ifdef PART_DEBUG_REPCUT_PRINT_FIND_CLUSTERS
-  print_hyperedge_vertices_details(hyperedge_include_which_vertices, 
-                                  vertex_include_which_hyperedges);
+  print_hyperedge_vertices_details(vertex_include_which_hyperedges);
 #endif 
 }
 
@@ -920,9 +955,136 @@ void CPUPartitioner::_run_KaHyPar(std::vector<size_t> &vertex_to_partition) {
   kahypar_context_free(context);
 
 #ifdef PART_DEBUG_REPCUT_PRINT_KAHYPAR_RESULTS
+  printf("KaHyPar results\n");
   for(size_t i = 0; i < vertex_to_partition.size(); i++) {
     std::cout << i << ":" << vertex_to_partition[i] << std::endl;
   }  
+#endif
+}
+
+void CPUPartitioner::_run_mtKaHyPar(std::vector<size_t> &vertex_to_partition) {
+  printf("_run_mtKaHyPar\n");
+  
+  /* Construct context */
+  mt_kahypar_initialize_thread_pool(
+    std::thread::hardware_concurrency() /* use all available cores */,
+    true /* activate interleaved NUMA allocation policy */ );
+
+  // Setup partitioning context
+  mt_kahypar_context_t* context = mt_kahypar_context_new();
+  mt_kahypar_load_preset(context, DEFAULT /* corresponds to MT-KaHyPar-D */);
+  // In the following, we partition a hypergraph into two blocks
+  // with an allowed _imbalance of 3% and optimize the connective metric (KM1)
+  mt_kahypar_set_partitioning_parameters(context,
+                                        _k_sizet /* number of blocks */, 
+                                        _imbalance /* _imbalance parameter */,
+                                        KM1 /* objective function */);
+  mt_kahypar_set_seed(42 /* seed */);
+
+  /* Construct hypergraph */
+  // Settings of #V and #he of H
+  const mt_kahypar_hypernode_id_t num_vertices = _KaHyPar_num_vertices;
+  const mt_kahypar_hyperedge_id_t num_hyperedges = _KaHyPar_num_hyperedges;
+
+  assert(_vectices_weight.size() == _KaHyPar_num_vertices 
+        && "_vectices_weight.size() == _KaHyPar_num_vertices ERROR"); 
+  assert(_hyperedges_weight.size() == _KaHyPar_num_hyperedges 
+        && "_hyperedges_weight.size() == _KaHyPar_num_hyperedges ERROR"); 
+
+  
+  // Define hyperedges: each hyperedge connects multiple vertices
+  std::vector<std::vector<mt_kahypar_hypernode_id_t>> hyperedges;
+  for (const auto& vertex_set : _hyperedge_include_which_vertices) {
+    std::vector<mt_kahypar_hypernode_id_t> hyperedge(vertex_set.begin(), vertex_set.end());
+    hyperedges.push_back(hyperedge);  
+  }
+
+
+  // Flatten the hyperedges array into a single vector of vertices
+  std::vector<mt_kahypar_hypernode_id_t> edge_vector;
+  std::vector<size_t> edge_offsets;  // Offsets for where each hyperedge starts in the flattened array
+  for (const auto& edge : hyperedges) {
+    edge_offsets.push_back(edge_vector.size());  // Mark the start of each hyperedge
+    edge_vector.insert(edge_vector.end(), edge.begin(), edge.end());  // Insert all vertices in the hyperedge
+  }
+  edge_offsets.push_back(edge_vector.size());  // Final offset to mark the end
+
+  // // Optional: Weights for hyperedges and vertices (can be nullptr if not used)
+  // Inputs for vertex weights (converted from KaHyPar example)
+  std::unique_ptr<mt_kahypar_hypernode_weight_t[]> vertex_weights = 
+              std::make_unique<mt_kahypar_hypernode_weight_t[]>(num_vertices);
+  for (size_t i = 0; i < num_vertices; i++) {
+    vertex_weights[i] = _vectices_weight[i];
+  }
+
+  // Inputs for hyperedge weights (converted from KaHyPar example)
+  std::unique_ptr<mt_kahypar_hyperedge_weight_t[]> hyperedge_weights = 
+        std::make_unique<mt_kahypar_hyperedge_weight_t[]>(num_hyperedges);
+  for (size_t i = 0; i < (num_hyperedges); i++) {
+    hyperedge_weights[i] = _hyperedges_weight[i];
+  }
+
+  // Define the preset type (e.g., DEFAULT)
+  mt_kahypar_preset_type_t preset = DEFAULT;  // Choose a preset type (e.g., DEFAULT or another preset)
+
+  // Now, create the hypergraph in memory using the correct API
+  mt_kahypar_hypergraph_t hypergraph = mt_kahypar_create_hypergraph(
+    preset,  // Preset type
+    num_vertices,  // Number of vertices
+    num_hyperedges,  // Number of hyperedges
+    edge_offsets.data(),  // Array of hyperedge indices (offsets)
+    edge_vector.data(),   // Flattened array of hyperedges (vertices)
+    hyperedge_weights.get(),  // Hyperedge weights (nullptr if unweighted)
+    vertex_weights.get()      // Vertex weights (nullptr if unweighted)
+  );
+
+  // Partition the hypergraph
+  mt_kahypar_partitioned_hypergraph_t partitioned_hg =
+    mt_kahypar_partition(hypergraph, context);
+  // Extract the partition information (which block each vertex belongs to)
+  std::unique_ptr<mt_kahypar_partition_id_t[]> partition =
+    std::make_unique<mt_kahypar_partition_id_t[]>(mt_kahypar_num_hypernodes(hypergraph));
+  mt_kahypar_get_partition(partitioned_hg, partition.get());
+
+  /* Extract block weights */
+  std::unique_ptr<mt_kahypar_hypernode_weight_t[]> block_weights =
+    std::make_unique<mt_kahypar_hypernode_weight_t[]>(2);  // Since we have 2 blocks
+  mt_kahypar_get_block_weights(partitioned_hg, block_weights.get());
+
+  /* Compute Metrics */
+  const double imbalance_2 = mt_kahypar_imbalance(partitioned_hg, context);
+  const double km1_2 = mt_kahypar_km1(partitioned_hg);
+
+  for(size_t i = 0; i < num_vertices; i++) {
+    vertex_to_partition.push_back(size_t(partition[i]));
+  }
+
+
+  /* Cleanup */
+  mt_kahypar_free_context(context);
+  mt_kahypar_free_hypergraph(hypergraph);
+  mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
+
+#ifdef PART_DEBUG_REPCUT_PRINT_KAHYPAR_RESULTS
+  printf("MTKaHyPar results\n");
+
+  /* Output Results */
+  std::cout << "BIBI:" << std::endl;
+  std::cout << "Partitioning Results:" << std::endl;
+  std::cout << "Imbalance         = " << imbalance_2 << std::endl;
+  std::cout << "Km1               = " << km1_2 << std::endl;
+  std::cout << "Weight of Block 0 = " << block_weights[0] << std::endl;
+  std::cout << "Weight of Block 1 = " << block_weights[1] << std::endl;
+
+  // Output the partition results (which partition each vertex belongs to)
+  std::cout << "Partitioned Vertices:" << std::endl;
+  for (mt_kahypar_hypernode_id_t i = 0; i < num_vertices; ++i) {
+    std::cout << "Vertex " << i << " is in partition " << partition[i] << std::endl;
+  }  
+
+  // for(size_t i = 0; i < vertex_to_partition.size(); i++) {
+  //   std::cout << i << ":" << vertex_to_partition[i] << std::endl;
+  // }  
 #endif
 }
 
@@ -1032,6 +1194,39 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
       _run_RepCut_cones_gates(num_threads);
       break;      
     }
+    case Mode::REPCUT_MT_SEQUENTIAL: {
+      std::cout << "run REPCUT_MT_SEQUENTIAL and REPCUT_MT_PARALLEL_OMP\n";
+      if (_can_run_kahypar) {
+        printf("_can_run_kahypar TRUE\n");
+      } else {
+        printf("_can_run_kahypar FALSE\n");
+      }
+      assert(num_threads == 1 && "RUN REPCUT_MT_SEQUENTIAL num_threads > 1");
+      auto start = std::chrono::steady_clock::now();      
+      _run_RepCut_cones_gates(num_threads);
+      auto end = std::chrono::steady_clock::now();      
+      std::chrono::duration<double> duration_0 = end - start;
+
+      start = std::chrono::steady_clock::now();      
+      const size_t new_num_threads = 8;
+      _run_RepCut_cones_gates(new_num_threads);
+      end = std::chrono::steady_clock::now();      
+      std::chrono::duration<double> duration_1 = end - start;
+      
+      std::cout << "BIBI run_CUDA SEQ: " << _round_to((duration_0.count())*1000, 0.001) << " ms\n";
+      std::cout << "BIBI run_CUDA OMP: " << _round_to((duration_1.count())*1000, 0.001) << " ms\n";
+      break;
+    }
+    case Mode::REPCUT_MT_PARALLEL_OMP: {
+      std::cout << "run REPCUT_MT_PARALLEL_OMP\n";
+      if (_can_run_kahypar) {
+        printf("_can_run_kahypar TRUE\n");
+      } else {
+        printf("_can_run_kahypar FALSE\n");
+      }
+      _run_RepCut_cones_gates(num_threads);
+      break;      
+    }    
     default:
       printf("No SUCH CASES\n");
       return; 
@@ -1782,13 +1977,12 @@ void CPUPartitioner::_print_find_clusters() const {
 
 
 void CPUPartitioner::print_hyperedge_vertices_details(
-                    const std::vector<std::set<size_t>> &hyperedge_include_which_vertices,
                     const std::vector<std::set<size_t>> &vertex_include_which_hyperedges) const {
 
-  printf("hyperedge_include_which_vertices:\n");
-  for (size_t hyperedge = 0; hyperedge < hyperedge_include_which_vertices.size(); hyperedge++) {
+  printf("_hyperedge_include_which_vertices:\n");
+  for (size_t hyperedge = 0; hyperedge < _hyperedge_include_which_vertices.size(); hyperedge++) {
     printf("hyperedge %lu includes vertex indices: ", hyperedge);
-    for (const auto& vertexIdx : hyperedge_include_which_vertices[hyperedge]) {
+    for (const auto& vertexIdx : _hyperedge_include_which_vertices[hyperedge]) {
       printf("%lu, ", vertexIdx);
     }
     printf("\n");
@@ -1979,7 +2173,7 @@ void CPUPartitioner::KaHyParExample() {
 
 void CPUPartitioner::mt_KaHyParExample() {
   const double imbalance = 0.015;
-  const int k = 2;
+  const size_t k = 2;
   // BIBI
   /* Construct context */
   // Initialize Mt-KaHyPar
