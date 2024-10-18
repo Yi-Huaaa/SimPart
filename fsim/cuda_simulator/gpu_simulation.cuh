@@ -76,54 +76,57 @@ class GALPS_GPUSimulator {
   friend class CUDAPartitioner;
 
 public:
-  // // Simulation - (1) levelization (2) cones 
-  // void run_gpu_simulator_cones(const size_t num_threads,
-  //                               const size_t num_PIs, 
-  //                               const size_t num_inner_gates,
-  //                               const size_t num_POs, 
-  //                               const size_t sum_pi_gates_pos,
-  //                               const size_t num_pattern, 
-  //                               const size_t num_rounds,
-  //                               const size_t num_fault, 
-  //                               const std::vector<Pattern> &_patterns,
-  //                               const std::vector<Fault<IndexType>> &_faults,
-  //                               std::vector<ElementBase<IndexType, IndexType>> &_Gates,
-  //                               const std::vector<std::vector<std::vector<IndexType>>> &_cones_partitioned,
-  //                               std::vector<size_t> &_g_pi_results,
-  //                               std::vector<size_t> &_g_gate_results,
-  //                               std::vector<size_t> &_g_po_results,
-  //                               std::vector<size_t> &_b_pi_results,
-  //                               std::vector<size_t> &_b_gate_results,
-  //                               std::vector<size_t> &_b_po_results,
-  //                               std::vector<size_t> &_found_fault_to_pattern,
-  //                               const size_t *_numGates_per_level_gpu,
-  //                               const IndexType *_max_level_gpu,
-  //                               const IndexType *_total_num_levels_gpu) {
-  //   // Get vars          
-  //   _num_threads = num_threads;
-  //   _num_PIs = num_PIs;
-  //   _num_inner_gates = num_inner_gates;
-  //   _num_POs = num_POs;
-  //   _sum_pi_gates_pos = sum_pi_gates_pos;
-  //   _num_pattern = num_pattern;
-  //   _num_rounds = num_rounds;
-  //   _num_fault = num_fault;
+  // Simulation - (1) levelization (2) cones 
+  void run_gpu_simulator_cones_gpu(const IndexType num_PIs, 
+                                  const IndexType num_inner_gates,
+                                  const IndexType num_POs, 
+                                  const IndexType sum_pi_gates_pos,
+                                  const IndexType num_pattern, 
+                                  const size_t num_rounds,
+                                  const IndexType num_fault, 
+                                  const IndexType *_pi_gate_po_gate_type_gpu,
+                                  const size_t *_patterns_gpu,
+                                  const IndexType *_fault_gate_idx_gpu,
+                                  const size_t *_fault_SA_fault_val_gpu,
+                                  const size_t *_pi_gate_po_output_res_gpu,
+                                  const IndexType *_numGates_per_level_gpu_of_groups_gpu,
+                                  const IndexType *_total_numGates_partitioned_gpu,
+                                  const IndexType *_per_level_of_group_start_accum_gpu,
+                                  const IndexType *_cones_partitioned_gpu,
+                                  const IndexType *_total_num_levels_gpu,
+                                  const IndexType *_level_of_gates_gpu,
+                                  size_t *_g_pi_results_gpu,
+                                  size_t *_g_gate_results_gpu,
+                                  size_t *_g_po_results_gpu,
+                                  size_t *_b_pi_results_gpu,
+                                  size_t *_b_gate_results_gpu,
+                                  size_t *_b_po_results_gpu,
+                                  int *_found_fault_to_pattern_gpu) {
+    // Get vars          
+    _num_PIs = num_PIs;
+    _num_inner_gates = num_inner_gates;
+    _num_POs = num_POs;
+    _sum_pi_gates_pos = sum_pi_gates_pos;
+    _num_pattern = num_pattern;
+    _num_rounds = num_rounds;
+    _num_fault = num_fault;
     
-    
-  //   // // run simulation
-  //   // _run_cones_gates_gpu(_Gates, 
-  //   //                     _g_pi_results,
-  //   //                     _g_gate_results,
-  //   //                     _g_po_results,
-  //   //                     _b_pi_results,
-  //   //                     _b_gate_results,
-  //   //                     _b_po_results,
-  //   //                     _found_fault_to_pattern,
-  //   //                     _TS_order_gpu, 
+    // printf("Hello world\n");
+
+    // run simulation
+    _run_cones_gates_gpu(_Gates, 
+                        _g_pi_results,
+                        _g_gate_results,
+                        _g_po_results,
+                        _b_pi_results,
+                        _b_gate_results,
+                        _b_po_results,
+                        _found_fault_to_pattern,
+                        _TS_order_gpu, 
                       
-  //   //                   );
-  // }
-  // // void run_gpu_simulator_level();
+                      );
+  }
+  // void run_gpu_simulator_level();
 
 
 private:
@@ -139,7 +142,6 @@ private:
   IndexType _num_pattern; 
   size_t _num_rounds; 
   IndexType _num_fault; 
-  size_t _num_threads;
 
   std::vector<Pattern> _patterns;
   std::vector<Fault<IndexType>> _faults;
@@ -196,7 +198,7 @@ void GALPS_GPUSimulator<IndexType>::_run_cones_gates_gpu(std::vector<ElementBase
               ? (SIZE_T_BITS)
               : (_num_pattern % SIZE_T_BITS);
   #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
-      std::cout << "Run Good case with threads = " << _num_threads << std::endl;
+      // std::cout << "Run Good case with threads = " << _num_threads << std::endl;
   #endif
       _run_cones_good_case(_Gates, _patterns[rd], num_testcases_this_round, 
                           _g_pi_results, _g_gate_results, _g_po_results);

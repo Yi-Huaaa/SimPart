@@ -272,17 +272,13 @@ private:
 
 
   // GPU simulation pre-process
-  int *_gateIdx_in_each_level_gpu; 
-  // number of gates per level (one group -> levelized)
-  int *_numGates_per_level_gpu; 
-  std::vector<int> _numGates_per_level; // CPU
-  // number of gates per level of each group
-  int *_numGates_per_level_gpu_of_groups_gpu; 
+  int *_gateIdx_in_each_level_gpu;  // levelize restuls 
+  int *_numGates_per_level_gpu; // levelize: number of gates per level
+  std::vector<int> _numGates_per_level; // levelize: CPU
+  int *_numGates_per_level_gpu_of_groups_gpu; // number of gates per level of each group 
   int *_total_numGates_partitioned_gpu;
-  // start point of each level of each group in _total_numGates_partitioned_gpu
-  int *_per_level_of_group_start_accum_gpu;
-  // partitioned results 
-  int *_cones_partitioned_gpu;
+  int *_per_level_of_group_start_accum_gpu; // start point of each level of each group in _total_numGates_partitioned_gpu
+  int *_cones_partitioned_gpu; // partitioned results 
 
 
   // GPU Simulation: 

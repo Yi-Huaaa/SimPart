@@ -762,22 +762,27 @@ void CUDAPartitioner::run(Mode mode, const size_t num_threads) {
       _prepare_gpu_simulation();
 
       GALPS_GPUSimulator<ELEMENT_INDEX_TYPE_PART> gpuSimulator;
-      // gpuSimulator.run_gpu_simulator_cones(num_threads, 
-      //                   _num_PIs, _num_inner_gates, _num_POs, 
-      //                   _sum_pi_gates_pos, 
-      //                   _num_pattern, _num_rounds, _num_fault,
-      //                   _patterns, _faults, _Gates,
-      //                   _cones_partitioned,
-      //                   _g_pi_results,
-      //                   _g_gate_results,
-      //                   _g_po_results,
-      //                   _b_pi_results,
-      //                   _b_gate_results,
-      //                   _b_po_results,
-      //                   _found_fault_to_pattern,
-      //                   _numGates_per_level_gpu,
-      //                   _max_level_gpu,
-      //                   _total_num_levels_gpu);      
+      gpuSimulator.run_gpu_simulator_cones_gpu(_num_PIs, _num_inner_gates, _num_POs, 
+                                                        _sum_pi_gates_pos, 
+                                                        _num_pattern, _num_rounds, _num_fault,
+                                                        _pi_gate_po_gate_type_gpu, 
+                                                        _patterns_gpu,
+                                                        _fault_gate_idx_gpu,
+                                                        _fault_SA_fault_val_gpu,
+                                                        _pi_gate_po_output_res_gpu,
+                                                        _numGates_per_level_gpu_of_groups_gpu,
+                                                        _total_numGates_partitioned_gpu,
+                                                        _per_level_of_group_start_accum_gpu,
+                                                        _cones_partitioned_gpu,
+                                                        _total_num_levels_gpu,
+                                                        _level_of_gates_gpu,
+                                                        _g_pi_results_gpu,
+                                                        _g_gate_results_gpu,
+                                                        _g_po_results_gpu,
+                                                        _b_pi_results_gpu,
+                                                        _b_gate_results_gpu,
+                                                        _b_po_results_gpu,
+                                                        _found_fault_to_pattern_gpu);
       break;
     }
 
