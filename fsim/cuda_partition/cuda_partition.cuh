@@ -328,12 +328,13 @@ private:
                       std::vector<bool> &visited_cpu);
 
   void _free() {
-    // Partition
+    // Host
     free(_adj);
     free(_invAdj);
     free(_adj_index_table);
     free(_invAdj_index_table);
 
+    // Device
     cudaFree(_adj_gpu);
     cudaFree(_invAdj_gpu);
     cudaFree(_adj_index_table_gpu);
@@ -344,9 +345,27 @@ private:
     cudaFree(_queue_head);
     cudaFree(_queue_tail);
     cudaFree(_queue_size);
-
-    // Simulation 
-
+    cudaFree(_cones_partitioned_gpu);
+    cudaFree(_max_level_gpu);
+    cudaFree(_total_num_levels_gpu);
+    cudaFree(_level_of_gates_gpu);
+    cudaFree(_numGates_per_level_gpu);
+    cudaFree(_gateIdx_in_each_level_gpu);
+    cudaFree(_numGates_per_level_gpu_of_groups_gpu);
+    cudaFree(_per_level_of_group_start_accum_gpu);
+    cudaFree(_total_numGates_partitioned_gpu);
+    cudaFree(_pi_gate_po_gate_type_gpu);
+    cudaFree(_patterns_gpu);
+    cudaFree(_fault_gate_idx_gpu);
+    cudaFree(_fault_SA_fault_val_gpu);
+    cudaFree(_pi_gate_po_output_res_gpu);
+    cudaFree(_g_pi_results_gpu);
+    cudaFree(_g_gate_results_gpu);
+    cudaFree(_g_po_results_gpu);
+    cudaFree(_b_pi_results_gpu);
+    cudaFree(_b_gate_results_gpu);
+    cudaFree(_b_po_results_gpu);
+    cudaFree(_found_fault_to_pattern_gpu);
   }
 
 

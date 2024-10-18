@@ -1237,6 +1237,7 @@ void CUDAPartitioner::_construct_partitioned_groups_gpu() {
 
   cudaDeviceSynchronize();
   cudaCheckErrors("CUDA:  cudaDeviceSynchronize - Failure");
+  cudaFree(pos_gpu);
 
 #ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
   cudaDeviceSynchronize();
@@ -1351,7 +1352,7 @@ void CUDAPartitioner::_move_faults_h2d() {
   std::vector<IndexType> fault_gate_idx;
   std::vector<size_t> fault_SA_fault_val;
 
-  for (size_t i = 0; i < _num_fault; i++) {
+  for (IndexType i = 0; i < _num_fault; i++) {
     fault_gate_idx.push_back(_faults[i]._gate_with_fault);
     fault_SA_fault_val.push_back(_faults[i]._gate_SA_fault_val);
   }
@@ -1367,7 +1368,6 @@ void CUDAPartitioner::_move_faults_h2d() {
   cudaDeviceSynchronize();
 #endif
 }
-
 
 void CUDAPartitioner::_prepare_gpu_simulation() {
   // Allocate GPU memory 
@@ -1388,12 +1388,6 @@ void CUDAPartitioner::_prepare_gpu_simulation() {
   _move_patterns_h2d();
   _move_faults_h2d<int>();
 }
-
-
-
-
-
-
 
 
 
