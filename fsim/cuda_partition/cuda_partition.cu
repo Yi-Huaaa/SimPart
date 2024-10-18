@@ -31,13 +31,13 @@
 // #define CPU_COPY_TS_RESULTS_BACK_TO_HOST
 // #define CPU_PRINT_LEVELIZED
 // #define CPU_PRINT_CONSTRUCT_GROUPS
-#define GPU_PART_CHECK_FOR_VISITED
+// #define GPU_PART_CHECK_FOR_VISITED
 // #define CHECK_CONSTRUCT_PARTITIONS_DUPLICATIONS
 
 // For simulation 
 // #define CPU_PART_DEBUG_PRINT_GRAPH // print _construct_graph
 // #define CPU_PART_DEBUG_PRINT_SIMULATION // show the output answers
-#define GPU_PREPARE_SIMULATION_PRINT_CHECK
+// #define GPU_PREPARE_SIMULATION_PRINT_CHECK
 
 // error checking macro
 #define cudaCheckErrors(msg) \
@@ -851,21 +851,21 @@ __global__ void _construct_gateIdx_in_each_level_gpu(const IndexType _sum_pi_gat
     index_accum_gpu[gateLevel]++;
   }  
 
-  printf("_numGates_per_level_gpu\n");
-  for (IndexType lvl = 0; lvl < *_total_num_levels_gpu; lvl++) {
-    printf("_numGates_per_level_gpu[%d] = %d\n", lvl, _numGates_per_level_gpu[lvl]);
-  } printf("\n");
+  // printf("_numGates_per_level_gpu\n");
+  // for (IndexType lvl = 0; lvl < *_total_num_levels_gpu; lvl++) {
+  //   printf("_numGates_per_level_gpu[%d] = %d\n", lvl, _numGates_per_level_gpu[lvl]);
+  // } printf("\n");
 
-  printf("index_accum_gpu\n");
-  for (IndexType lvl = 0; lvl < *_total_num_levels_gpu; lvl++) {
-    printf("index_accum_gpu[%d] = %d\n", lvl, index_accum_gpu[lvl]);
-  } printf("\n");
-  printf("*_total_num_levels_gpu = %d\n", *_total_num_levels_gpu);
+  // printf("index_accum_gpu\n");
+  // for (IndexType lvl = 0; lvl < *_total_num_levels_gpu; lvl++) {
+  //   printf("index_accum_gpu[%d] = %d\n", lvl, index_accum_gpu[lvl]);
+  // } printf("\n");
+  // printf("*_total_num_levels_gpu = %d\n", *_total_num_levels_gpu);
 
-  printf("_gateIdx_in_each_level_gpu: [");
-  for (IndexType i = 0; i < _sum_pi_gates_pos; i++) {
-    printf("%d, ", _gateIdx_in_each_level_gpu[i]);
-  } printf("]\n");
+  // printf("_gateIdx_in_each_level_gpu: [");
+  // for (IndexType i = 0; i < _sum_pi_gates_pos; i++) {
+  //   printf("%d, ", _gateIdx_in_each_level_gpu[i]);
+  // } printf("]\n");
 }
 
 template<typename IndexType>
@@ -1269,7 +1269,7 @@ void CUDAPartitioner::_ask_gpu_memory_simu_0() {
 template<typename IndexType>
 void CUDAPartitioner::_ask_gpu_memory_simu_1() {
   cudaMemcpy(&_total_num_levels, _total_num_levels_gpu, 1*sizeof(IndexType),  cudaMemcpyDeviceToHost);
-  printf("_total_num_levels = %d\n", _total_num_levels);
+  // printf("_total_num_levels = %d\n", _total_num_levels);
 
   cudaMalloc((void**)&_numGates_per_level_gpu, _total_num_levels*sizeof(IndexType));
   cudaMalloc((void**)&_gateIdx_in_each_level_gpu, _sum_pi_gates_pos*sizeof(IndexType));
