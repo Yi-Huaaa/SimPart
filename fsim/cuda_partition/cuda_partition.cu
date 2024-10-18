@@ -1289,7 +1289,7 @@ void CUDAPartitioner::_ask_gpu_memory_simu_1() {
 template<typename IndexType>
 void CUDAPartitioner::_ask_gpu_memory_simu_2(){
   cudaMalloc((void**)&_pi_gate_po_gate_type_gpu, _sum_pi_gates_pos*sizeof(int));
-  cudaMalloc((void**)&_patterns_gpu, _num_rounds*_num_PIs*sizeof(int));
+  cudaMalloc((void**)&_patterns_gpu, _num_rounds*_num_PIs*sizeof(size_t));
   cudaMalloc((void**)&_fault_gate_idx_gpu, _num_fault*sizeof(int));
   cudaMalloc((void**)&_fault_SA_fault_val_gpu, _num_fault*sizeof(size_t));
   
@@ -1326,36 +1326,46 @@ void CUDAPartitioner::_move_GateType_h2d() {
 #endif 
 }
 
-
-
 void CUDAPartitioner::_move_patterns_h2d() {
-  // // _patterns_gpu
-  // size_t *_patterns_cpu = (size_t *)malloc((_num_rounds*_num_PIs)*sizeof(size_t));
-  // for (size_t i = 0; i < _num_rounds; i++) {
-  //   for (size_t pi = 0; pi < _num_PIs; pi++) {
-  //     size_t idx = _num_PIs*i + pi;
-  //     _patterns_cpu[idx] = _patterns[i]._value[pi];
-  //   }
-  // }
+  std::vector<size_t> patterns_cpu;
+  for (size_t i = 0; i < _num_rounds; i++) {
+    for (size_t pi = 0; pi < _num_PIs; pi++) {
+      patterns_cpu.push_back(_patterns[i]._value[pi]);
+    }
+  }
 
-  // cudaMemcpy(_patterns_gpu, _patterns_cpu, (_num_rounds*_num_PIs)*sizeof(size_t), cudaMemcpyHostToDevice);
-  // cudaCheckErrors("cudaMemcpy 2 failure");
+  cudaMemcpy(_patterns_gpu, patterns_cpu.data(), 
+            (_num_rounds*_num_PIs)*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaCheckErrors("CUDA: _patterns_gpu cudaMemcpy failure");
+
+#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
+  cudaDeviceSynchronize();
+  print_patterns_gpu <<< 1, 1 >>> (_patterns_gpu, _num_rounds, _num_PIs);
+  cudaCheckErrors("CUDA: print_patterns_gpu failure");
+  cudaDeviceSynchronize();
+#endif
 }
 
+template<typename IndexType>
 void CUDAPartitioner::_move_faults_h2d() {
-  // // _fault_gate_idx_gpu; _fault_SA_fault_val_gpu;
-  // size_t *fault_gate_idx_cpu = (size_t *)malloc((_num_fault)*sizeof(size_t));
-  // size_t *fault_SA_fault_val_cpu = (size_t *)malloc((_num_fault)*sizeof(size_t));
-  // for (size_t i = 0; i < _num_fault; i++) {
-  //   fault_gate_idx_cpu[i]     = _faults[i]._gate_with_fault;
-  //   fault_SA_fault_val_cpu[i] = _faults[i]._gate_SA_fault_val;
-  // }
-  // cudaCheckErrors("fault_gate_idx cpy failure");
+  std::vector<IndexType> fault_gate_idx;
+  std::vector<size_t> fault_SA_fault_val;
 
-  // cudaMemcpy(_fault_gate_idx_gpu, fault_gate_idx_cpu, _num_fault*sizeof(size_t), cudaMemcpyHostToDevice);
-  // cudaCheckErrors("cudaMemcpy 3 failure");
-  // cudaMemcpy(_fault_SA_fault_val_gpu, fault_SA_fault_val_cpu, _num_fault*sizeof(size_t), cudaMemcpyHostToDevice);
-  // cudaCheckErrors("cudaMemcpy 4 failure");  
+  for (size_t i = 0; i < _num_fault; i++) {
+    fault_gate_idx.push_back(_faults[i]._gate_with_fault);
+    fault_SA_fault_val.push_back(_faults[i]._gate_SA_fault_val);
+  }
+
+  cudaMemcpy(_fault_gate_idx_gpu, fault_gate_idx.data(), _num_fault*sizeof(IndexType), cudaMemcpyHostToDevice);
+  cudaMemcpy(_fault_SA_fault_val_gpu, fault_SA_fault_val.data(), _num_fault*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaCheckErrors("CUDA: _fault_gate_idx_gpu OR _fault_SA_fault_val_gpu cudaMemcpy failure");
+
+#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
+  cudaDeviceSynchronize();
+  print_fault_gate_idx_gpu <<< 1, 1 >>> (_fault_gate_idx_gpu, _fault_SA_fault_val_gpu, _num_fault);
+  cudaCheckErrors("CUDA: print_patterns_gpu failure");
+  cudaDeviceSynchronize();
+#endif
 }
 
 
@@ -1374,10 +1384,9 @@ void CUDAPartitioner::_prepare_gpu_simulation() {
 
   // Ask gpu memory needed by simulation
   _ask_gpu_memory_simu_2<int>();
-  _move_GateType_h2d();
-  // _move_patterns_h2d();
-  // _move_faults_h2d();
-
+  _move_GateType_h2d<int>();
+  _move_patterns_h2d();
+  _move_faults_h2d<int>();
 }
 
 
@@ -2007,17 +2016,12 @@ __global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, si
   } printf("]\n");
 }
 
-// __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, size_t _num_faults, 
-//                                           size_t * _FFR_levelization_gpu, size_t s, size_t n) {
-//   printf("print_fault_gate_idx_gpu (_num_faults = %ld): [\n", _num_faults);
-//   for (size_t i = 0; i < _num_faults; i++) {
-//     printf("gate_w_f = %ld, SA_val = %ld\n", _fault_gate_idx_gpu[i], _fault_SA_fault_val_gpu[i]);
-//   } printf("]\n");
-
-//   printf("_FFR_levelization_gpu =\n");
-//   for (size_t i = s; i < n; i++) {
-//     printf("!_FFR_levelization_gpu[%ld] = %ld\n", i, _FFR_levelization_gpu[i]);
-//   } printf("]\n");
-// }
+template<typename IndexType>
+__global__ void print_fault_gate_idx_gpu(IndexType *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, IndexType _num_fault) {
+  printf("print_fault_gate_idx_gpu (_num_fault = %d): [\n", _num_fault);
+  for (size_t i = 0; i < _num_fault; i++) {
+    printf("gate_w_f = %d, SA_val = %ld\n", _fault_gate_idx_gpu[i], _fault_SA_fault_val_gpu[i]);
+  } printf("]\n");
+}
 
 

@@ -179,7 +179,8 @@ __global__ void _print_construct_cones_partitioned_gpu(IndexType *_total_numGate
 template<typename IndexType>                                                      
 __global__ void print_pi_gate_po_gate_type_gpu(const IndexType *_pi_gate_po_gate_type_gpu, const IndexType num);
 __global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs);
-
+template<typename IndexType>
+__global__ void print_fault_gate_idx_gpu(IndexType *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, IndexType _num_fault);
 
 
 
@@ -377,6 +378,7 @@ private:
   template<typename IndexType = int>
   void _move_GateType_h2d();
   void _move_patterns_h2d();
+  template<typename IndexType>
   void _move_faults_h2d();
   
 
