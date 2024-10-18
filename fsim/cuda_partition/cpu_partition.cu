@@ -53,7 +53,11 @@ ForwardIterator remove_if(ForwardIterator first, ForwardIterator last, UnaryPred
 }
 
 // CPUPartitioner fucntions
-void CPUPartitioner::read(Mode mode, const std::string &ckt_path, const std::string &flst_path, const std::string &ptn_path) {
+void CPUPartitioner::read(Mode mode, 
+                          const std::string &ckt_path, 
+                          const std::string &flst_path, 
+                          const std::string &ptn_path,
+                          const size_t num_threads) {
   // printf("Get inside CPUPartitioner::read first\n");
 
   using std::string_literals::operator""s;
@@ -67,10 +71,14 @@ void CPUPartitioner::read(Mode mode, const std::string &ckt_path, const std::str
   if (!ptn)
     throw std::runtime_error("cannot open pattern file "s + ptn_path);
 
-  read(mode, ckt, flst, ptn);
+  read(mode, ckt, flst, ptn, num_threads);
 }
 
-void CPUPartitioner::read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn) {
+void CPUPartitioner::read(Mode mode, 
+                          std::istream &ckt, 
+                          std::istream &flst, 
+                          std::istream &ptn, 
+                          const size_t num_threads) {
   auto start = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_0;
   std::chrono::duration<double> duration_1;
@@ -113,13 +121,13 @@ void CPUPartitioner::read(Mode mode, std::istream &ckt, std::istream &flst, std:
     case Mode::REPCUT_MT_SEQUENTIAL: {
       /* Partitioning */
       _partition();
-      _RepCut_MT(duration_0, duration_1);
+      _RepCut_MT(duration_0, duration_1, num_threads);
       break;
     }
     case Mode::REPCUT_MT_PARALLEL_OMP: {
       /* Partitioning */
       _partition();
-      _RepCut_MT(duration_0, duration_1);
+      _RepCut_MT(duration_0, duration_1, num_threads);
       break;  
     }    
     default:
@@ -661,7 +669,9 @@ duration_1 = end1 - start;
   }
 }
 
-void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1) {
+void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_0, 
+                                std::chrono::duration<double> &duration_1,
+                                const size_t num_threads) {
   auto start = std::chrono::steady_clock::now();
   auto end0 = std::chrono::steady_clock::now();
   auto end1 = std::chrono::steady_clock::now();
@@ -674,7 +684,7 @@ void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_0, std::
 end0 = std::chrono::steady_clock::now();
 duration_0 = end0 - start;    
     std::vector<size_t> vertex_to_partition;
-    _run_mtKaHyPar(vertex_to_partition);
+    _run_mtKaHyPar(vertex_to_partition, num_threads);
     _get_KHP_partitioning_res(vertex_to_partition);
 end1 = std::chrono::steady_clock::now();
 duration_1 = end1 - start;        
@@ -962,12 +972,13 @@ void CPUPartitioner::_run_KaHyPar(std::vector<size_t> &vertex_to_partition) {
 #endif
 }
 
-void CPUPartitioner::_run_mtKaHyPar(std::vector<size_t> &vertex_to_partition) {
+void CPUPartitioner::_run_mtKaHyPar(std::vector<size_t> &vertex_to_partition, 
+                                  const size_t num_threads) {
   printf("_run_mtKaHyPar\n");
   
   /* Construct context */
   mt_kahypar_initialize_thread_pool(
-    std::thread::hardware_concurrency() /* use all available cores */,
+    num_threads, 
     true /* activate interleaved NUMA allocation policy */ );
 
   // Setup partitioning context
@@ -979,6 +990,7 @@ void CPUPartitioner::_run_mtKaHyPar(std::vector<size_t> &vertex_to_partition) {
                                         _k_sizet /* number of blocks */, 
                                         _imbalance /* _imbalance parameter */,
                                         KM1 /* objective function */);
+
   mt_kahypar_set_seed(42 /* seed */);
 
   /* Construct hypergraph */
@@ -1162,21 +1174,20 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
       break;
     }
     case Mode::REPCUT_SEQUENTIAL: {
-      std::cout << "run REPCUT_SEQUENTIAL\n";
+      std::cout << "run REPCUT_SEQUENTIAL = 1\n";
       if (_can_run_kahypar) {
         printf("_can_run_kahypar TRUE\n");
       } else {
         printf("_can_run_kahypar FALSE\n");
       }
-      assert(num_threads == 1 && "RUN REPCUT_SEQUENTIAL num_threads > 1");
       auto start = std::chrono::steady_clock::now();      
-      _run_RepCut_cones_gates(num_threads);
+      _run_RepCut_cones_gates(1);
       auto end = std::chrono::steady_clock::now();      
       std::chrono::duration<double> duration_0 = end - start;
 
+      std::cout << "run REPCUT_PARALLEL_OMP, num_threads = " << num_threads << "\n";
       start = std::chrono::steady_clock::now();      
-      const size_t new_num_threads = 8;
-      _run_RepCut_cones_gates(new_num_threads);
+      _run_RepCut_cones_gates(num_threads);
       end = std::chrono::steady_clock::now();      
       std::chrono::duration<double> duration_1 = end - start;
       
@@ -1201,15 +1212,14 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
       } else {
         printf("_can_run_kahypar FALSE\n");
       }
-      assert(num_threads == 1 && "RUN REPCUT_MT_SEQUENTIAL num_threads > 1");
       auto start = std::chrono::steady_clock::now();      
-      _run_RepCut_cones_gates(num_threads);
+      _run_RepCut_cones_gates(1);
       auto end = std::chrono::steady_clock::now();      
       std::chrono::duration<double> duration_0 = end - start;
 
+      std::cout << "run REPCUT_MT_SEQUENTIAL, num_threads = " << num_threads << "\n";
       start = std::chrono::steady_clock::now();      
-      const size_t new_num_threads = 8;
-      _run_RepCut_cones_gates(new_num_threads);
+      _run_RepCut_cones_gates(num_threads);
       end = std::chrono::steady_clock::now();      
       std::chrono::duration<double> duration_1 = end - start;
       

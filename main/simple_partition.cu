@@ -7,7 +7,7 @@
 #include <vector>
 #include <iostream>
 
-#define CPU_PARTITIONER_VERSION
+// #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
     #define VERSION 6 // VERSION can be 0, 1, 2, 3, 4, 5, 6, 7
     #if VERSION == 0
@@ -30,7 +30,7 @@
         #define NUM_THREADS 1
     #elif VERSION == 6
         #define MODE 6
-        #define NUM_THREADS 1                
+        #define NUM_THREADS 1
     #else // VERSION == 7
         #define MODE 7
         #define NUM_THREADS 8
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
   // Read data and Run cpuPartitioner
   auto start = std::chrono::steady_clock::now();
     cpuPartitioner.read(CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
-                        ckt_path, flst_path, ptn_path);
+                        ckt_path, flst_path, ptn_path,NUM_THREADS);
   auto end = std::chrono::steady_clock::now();
   duration_read_data = end - start;
   

@@ -44,8 +44,11 @@ public:
                   };
 
   // accessor
-  void read(Mode mode, const std::string &ckt, const std::string &flst, const std::string &ptn);
-  void read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn);
+  void read(Mode mode, const std::string &ckt, 
+            const std::string &flst, 
+            const std::string &ptn,
+            const size_t num_threads);
+  void read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn, const size_t num_threads);
   void run(Mode mode, const size_t num_threads);
   void visualization_graph(const std::string &outputFile);
   void KaHyParExample();
@@ -157,7 +160,9 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
 
   // RepCut
   void _RepCut(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1);
-  void _RepCut_MT(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1);
+  void _RepCut_MT(std::chrono::duration<double> &duration_0, 
+                  std::chrono::duration<double> &duration_1,
+                  const size_t num_threads);
   void _find_clusters();
   void _construct_hyperGraph();
   void _construct_hyperedge_vertices();
@@ -165,7 +170,8 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
         std::vector<std::set<size_t>> &vertex_include_which_hyperedges);
   void _multiple_100(std::vector<double> &tmp_vectices_weight);        
   void _run_KaHyPar(std::vector<size_t> &vertex_to_partition);
-  void _run_mtKaHyPar(std::vector<size_t> &vertex_to_partition);
+  void _run_mtKaHyPar(std::vector<size_t> &vertex_to_partition,
+                      const size_t num_threads);
   void _get_KHP_partitioning_res(std::vector<size_t> &vertex_to_partition);
 
 
