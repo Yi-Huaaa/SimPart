@@ -1288,34 +1288,76 @@ void CUDAPartitioner::_ask_gpu_memory_simu_1() {
 
 template<typename IndexType>
 void CUDAPartitioner::_ask_gpu_memory_simu_2(){
-  // cudaMalloc((void**)&_pi_gate_po_gate_type_gpu, _sum_pi_gates_pos*sizeof(int));
-  // cudaMalloc((void**)&_patterns_gpu, _num_rounds*_num_PIs*sizeof(int));
-  // cudaMalloc((void**)&_fault_gate_idx_gpu, _num_faults*sizeof(int));
-  // cudaMalloc((void**)&_fault_SA_fault_val_gpu, _num_faults*sizeof(size_t));
-  // cudaMalloc((void**)&_pi_gate_po_output_res_gpu, _sum_pi_gates_pos*sizeof(size_t));
-  // cudaMalloc((void**)&_g_pi_results_gpu, _num_PIs*sizeof(size_t));
-  // cudaMalloc((void**)&_g_gate_results_gpu, _num_inner_gates*sizeof(size_t));
-  // cudaMalloc((void**)&_g_po_results_gpu, _num_POs*sizeof(size_t));
-  // cudaMalloc((void**)&_b_pi_results_gpu, _num_PIs*sizeof(size_t));
-  // cudaMalloc((void**)&_b_gate_results_gpu, _num_inner_gates*sizeof(size_t));
-  // cudaMalloc((void**)&_b_po_results_gpu, _num_POs*sizeof(size_t));
-  // cudaMalloc((void**)&_found_fault_to_pattern_gpu, 2*_num_faults*sizeof(int));  
+  cudaMalloc((void**)&_pi_gate_po_gate_type_gpu, _sum_pi_gates_pos*sizeof(int));
+  cudaMalloc((void**)&_patterns_gpu, _num_rounds*_num_PIs*sizeof(int));
+  cudaMalloc((void**)&_fault_gate_idx_gpu, _num_fault*sizeof(int));
+  cudaMalloc((void**)&_fault_SA_fault_val_gpu, _num_fault*sizeof(size_t));
+  
+  cudaMalloc((void**)&_pi_gate_po_output_res_gpu, _sum_pi_gates_pos*sizeof(size_t));
+  cudaMalloc((void**)&_g_pi_results_gpu, _num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_g_gate_results_gpu, _num_inner_gates*sizeof(size_t));
+  cudaMalloc((void**)&_g_po_results_gpu, _num_POs*sizeof(size_t));
+  cudaMalloc((void**)&_b_pi_results_gpu, _num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_b_gate_results_gpu, _num_inner_gates*sizeof(size_t));
+  cudaMalloc((void**)&_b_po_results_gpu, _num_POs*sizeof(size_t));
+  cudaMalloc((void**)&_found_fault_to_pattern_gpu, 2*_num_fault*sizeof(int));  
 }
 
+template<typename IndexType>
+void CUDAPartitioner::_move_GateType_h2d() {
+  // pi_gate_po_gate_type_gpu
+  std::vector<IndexType>pi_gate_po_gate_type;
+  // IndexType *pi_gate_po_gate_type = (IndexType *)malloc(_sum_pi_gates_pos*sizeof(IndexType));
+  // memset(pi_gate_po_gate_type, 0, (_sum_pi_gates_pos)*sizeof(IndexType));
+
+  for (IndexType g = 0; g < _sum_pi_gates_pos; g++) {
+    pi_gate_po_gate_type.push_back(static_cast<IndexType>(_gate_type[g]));
+  }
+
+  cudaMemcpyAsync(_pi_gate_po_gate_type_gpu, pi_gate_po_gate_type.data(), 
+                _sum_pi_gates_pos*sizeof(IndexType), cudaMemcpyHostToDevice);
+  cudaCheckErrors("CUDA: _pi_gate_po_gate_type_gpu cudaMemcpy failure");
+
+#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
+  cudaDeviceSynchronize();
+  print_pi_gate_po_gate_type_gpu <<< 1, 1 >>> (_pi_gate_po_gate_type_gpu, _sum_pi_gates_pos);
+  cudaCheckErrors("CUDA: print_pi_gate_po_gate_type_gpu failure");
+  cudaDeviceSynchronize();
+#endif 
+}
 
 
 
 void CUDAPartitioner::_move_patterns_h2d() {
+  // // _patterns_gpu
+  // size_t *_patterns_cpu = (size_t *)malloc((_num_rounds*_num_PIs)*sizeof(size_t));
+  // for (size_t i = 0; i < _num_rounds; i++) {
+  //   for (size_t pi = 0; pi < _num_PIs; pi++) {
+  //     size_t idx = _num_PIs*i + pi;
+  //     _patterns_cpu[idx] = _patterns[i]._value[pi];
+  //   }
+  // }
 
+  // cudaMemcpy(_patterns_gpu, _patterns_cpu, (_num_rounds*_num_PIs)*sizeof(size_t), cudaMemcpyHostToDevice);
+  // cudaCheckErrors("cudaMemcpy 2 failure");
 }
 
 void CUDAPartitioner::_move_faults_h2d() {
+  // // _fault_gate_idx_gpu; _fault_SA_fault_val_gpu;
+  // size_t *fault_gate_idx_cpu = (size_t *)malloc((_num_fault)*sizeof(size_t));
+  // size_t *fault_SA_fault_val_cpu = (size_t *)malloc((_num_fault)*sizeof(size_t));
+  // for (size_t i = 0; i < _num_fault; i++) {
+  //   fault_gate_idx_cpu[i]     = _faults[i]._gate_with_fault;
+  //   fault_SA_fault_val_cpu[i] = _faults[i]._gate_SA_fault_val;
+  // }
+  // cudaCheckErrors("fault_gate_idx cpy failure");
 
+  // cudaMemcpy(_fault_gate_idx_gpu, fault_gate_idx_cpu, _num_fault*sizeof(size_t), cudaMemcpyHostToDevice);
+  // cudaCheckErrors("cudaMemcpy 3 failure");
+  // cudaMemcpy(_fault_SA_fault_val_gpu, fault_SA_fault_val_cpu, _num_fault*sizeof(size_t), cudaMemcpyHostToDevice);
+  // cudaCheckErrors("cudaMemcpy 4 failure");  
 }
 
-void CUDAPartitioner::_move_GateType_h2d() {
-
-}
 
 void CUDAPartitioner::_prepare_gpu_simulation() {
   // Allocate GPU memory 
@@ -1332,10 +1374,9 @@ void CUDAPartitioner::_prepare_gpu_simulation() {
 
   // Ask gpu memory needed by simulation
   _ask_gpu_memory_simu_2<int>();
-  
+  _move_GateType_h2d();
   // _move_patterns_h2d();
   // _move_faults_h2d();
-  // _move_GateType_h2d();
 
 }
 
@@ -1907,4 +1948,76 @@ __global__ void _print_construct_cones_partitioned_gpu(IndexType *_total_numGate
   }                                                      
   printf("]\n\n");
 }
+
+template<typename IndexType>
+__global__ void print_pi_gate_po_gate_type_gpu(const IndexType *_pi_gate_po_gate_type_gpu, const IndexType num) {
+  printf("print_pi_gate_po_gate_type_gpu (num = %d): [\n", num);
+  for (IndexType i = 0; i < num; i++) {
+    IndexType type = _pi_gate_po_gate_type_gpu[i];
+    switch (type) {
+      case 0:
+        printf("i = %d, type_INV\n", i);
+        break;
+      case 1:
+        printf("i = %d, type_AND\n", i);
+        break;
+      case 2:
+        printf("i = %d, type_OR\n", i);
+        break;
+      case 3:
+        printf("i = %d, type_XOR\n", i);
+        break;
+      case 4:
+        printf("i = %d, type_NAND\n", i);
+        break;
+      case 5:
+        printf("i = %d, type_NOR\n", i);
+        break;
+      case 6:
+        printf("i = %d, type_XNOR\n", i);
+        break;
+      case 7:
+        printf("i = %d, type_MUX\n", i);
+        break;
+      case 8:
+        printf("i = %d, type_CLKBUF\n", i);
+        break;
+      case 9:
+        printf("i = %d, type_PI\n", i);
+        break;
+      case 10:
+        printf("i = %d, type_PO\n", i);
+        break;
+      case 11:
+        printf("i = %d, type_UNKNOWN\n", i);
+        break;
+    }
+  }
+  printf("]\n");
+}
+
+__global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs) {
+  printf("print_patterns_gpu (_num_rounds = %ld, _num_PIs = %ld): [\n", _num_rounds, _num_PIs);
+  for (size_t i = 0; i < _num_rounds; i++) {
+    printf("RD_%ld: [", i);
+    for (size_t pi = 0; pi < _num_PIs; pi++) {
+      size_t idx = _num_PIs*i + pi;
+      printf("%ld, ", _patterns_gpu[idx]);
+    } printf("]\n");
+  } printf("]\n");
+}
+
+// __global__ void print_fault_gate_idx_gpu(size_t *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, size_t _num_faults, 
+//                                           size_t * _FFR_levelization_gpu, size_t s, size_t n) {
+//   printf("print_fault_gate_idx_gpu (_num_faults = %ld): [\n", _num_faults);
+//   for (size_t i = 0; i < _num_faults; i++) {
+//     printf("gate_w_f = %ld, SA_val = %ld\n", _fault_gate_idx_gpu[i], _fault_SA_fault_val_gpu[i]);
+//   } printf("]\n");
+
+//   printf("_FFR_levelization_gpu =\n");
+//   for (size_t i = s; i < n; i++) {
+//     printf("!_FFR_levelization_gpu[%ld] = %ld\n", i, _FFR_levelization_gpu[i]);
+//   } printf("]\n");
+// }
+
 

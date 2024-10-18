@@ -176,7 +176,9 @@ __global__ void _print_prefix_sum(const size_t sz0,
 template<typename IndexType>
 __global__ void _print_construct_cones_partitioned_gpu(IndexType *_total_numGates_partitioned_gpu,
                                                       IndexType *_cones_partitioned_gpu);
-
+template<typename IndexType>                                                      
+__global__ void print_pi_gate_po_gate_type_gpu(const IndexType *_pi_gate_po_gate_type_gpu, const IndexType num);
+__global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs);
 
 
 
@@ -285,6 +287,7 @@ private:
   // GPU Simulation: 
   int *_max_level_gpu;
   int *_total_num_levels_gpu;
+  // for levelization
   int *_level_of_gates_gpu;
 
   int *_pi_gate_po_gate_type_gpu;
@@ -371,10 +374,11 @@ private:
   template<typename IndexType = int>
   void _ask_gpu_memory_simu_2();  
 
-
+  template<typename IndexType = int>
+  void _move_GateType_h2d();
   void _move_patterns_h2d();
   void _move_faults_h2d();
-  void _move_GateType_h2d();
+  
 
 
 
