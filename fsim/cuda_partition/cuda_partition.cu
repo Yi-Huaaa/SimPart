@@ -39,6 +39,7 @@
 // #define CPU_PART_DEBUG_PRINT_SIMULATION // show the output answers
 // #define GPU_PREPARE_SIMULATION_PRINT_CHECK
 
+
 // error checking macro
 #define cudaCheckErrors(msg) \
     do { \
@@ -82,13 +83,10 @@ void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &
   /* Partitioning */
   _ask_gpu_memory_part();
   _call_gpu_partitioner();
-
-  /* Prepare for simulation */
-  _prepare_cpu_simulation();
-
 }
 
-void CUDAPartitioner::_prepare_cpu_simulation() {
+/* Prepare for simulation */
+void CUDAPartitioner::prepare_cpu_simulation() {
   _construct_partitioned_groups();
   // Note: _construct_graph need to be back at _construct_partitioned_groups
   _construct_graph();
@@ -735,54 +733,53 @@ void CUDAPartitioner::_construct_groups(){
 
 // Simulation functions 
 void CUDAPartitioner::run(Mode mode, const size_t num_threads) {  
-  int m = static_cast<int>(mode);
+  // int m = static_cast<int>(mode);
 
   switch (mode) {
     case Mode::GPU_PARTIOR_CPU_SIMUTOR: {
-      std::cout << "Mode: " << m << " (run GPU_PARTIOR_CPU_SIMUTOR)\n";
+      // std::cout << "Mode: " << m << " (run GPU_PARTIOR_CPU_SIMUTOR)\n";
       GALPS_CPUSimulator<ELEMENT_INDEX_TYPE_PART> cpuSimulator;
       cpuSimulator.run_cpu_simulator_cones(num_threads, 
-                        _num_PIs, _num_inner_gates, _num_POs, 
-                        _sum_pi_gates_pos, 
-                        _num_pattern, _num_rounds, _num_fault,
-                        _patterns, _faults, _Gates,
-                        _cones_partitioned,
-                        _g_pi_results,
-                        _g_gate_results,
-                        _g_po_results,
-                        _b_pi_results,
-                        _b_gate_results,
-                        _b_po_results,
-                        _found_fault_to_pattern);
+                                          _num_PIs, _num_inner_gates, _num_POs, 
+                                          _sum_pi_gates_pos, 
+                                          _num_pattern, _num_rounds, _num_fault,
+                                          _patterns, _faults, _Gates,
+                                          _cones_partitioned,
+                                          _g_pi_results,
+                                          _g_gate_results,
+                                          _g_po_results,
+                                          _b_pi_results,
+                                          _b_gate_results,
+                                          _b_po_results,
+                                          _found_fault_to_pattern);
       break;  
     }
 
     case Mode::GPU_PARTIOR_GPU_SIMUTOR: {
-      std::cout << "Mode: " << m << " (run GPU_PARTIOR_GPU_SIMUTOR)\n";
-      _prepare_gpu_simulation();
-
+      // std::cout << "Mode: " << m << " (run GPU_PARTIOR_GPU_SIMUTOR)\n";
       GALPS_GPUSimulator<ELEMENT_INDEX_TYPE_PART> gpuSimulator;
-      gpuSimulator.run_gpu_simulator_cones_gpu(_num_PIs, _num_inner_gates, _num_POs, 
-                                                        _sum_pi_gates_pos, 
-                                                        _num_pattern, _num_rounds, _num_fault,
-                                                        _pi_gate_po_gate_type_gpu, 
-                                                        _patterns_gpu,
-                                                        _fault_gate_idx_gpu,
-                                                        _fault_SA_fault_val_gpu,
-                                                        _pi_gate_po_output_res_gpu,
-                                                        _numGates_per_level_gpu_of_groups_gpu,
-                                                        _total_numGates_partitioned_gpu,
-                                                        _per_level_of_group_start_accum_gpu,
-                                                        _cones_partitioned_gpu,
-                                                        _total_num_levels_gpu,
-                                                        _level_of_gates_gpu,
-                                                        _g_pi_results_gpu,
-                                                        _g_gate_results_gpu,
-                                                        _g_po_results_gpu,
-                                                        _b_pi_results_gpu,
-                                                        _b_gate_results_gpu,
-                                                        _b_po_results_gpu,
-                                                        _found_fault_to_pattern_gpu);
+      gpuSimulator.run_gpu_simulator_cones_gpu(_k, _num_PIs, _num_inner_gates, _num_POs, 
+                                              _sum_pi_gates_pos, 
+                                              _num_pattern, _num_rounds, _num_fault,
+                                              _pi_gate_po_gate_type_gpu, 
+                                              _patterns_gpu,
+                                              _fault_gate_idx_gpu,
+                                              _fault_SA_fault_val_gpu,
+                                              _pi_gate_po_output_res_gpu,
+                                              _numGates_per_level_gpu_of_groups,
+                                              _per_level_of_group_start_accum_gpu,
+                                              _cones_partitioned_gpu,
+                                              _total_num_levels,
+                                              _invAdj_gpu,
+                                              _invAdj_index_table_gpu,
+                                              _patterns, 
+                                              _g_pi_results_gpu,
+                                              _g_gate_results_gpu,
+                                              _g_po_results_gpu,
+                                              _b_pi_results_gpu,
+                                              _b_gate_results_gpu,
+                                              _b_po_results_gpu,
+                                              _found_fault_to_pattern_gpu);
       break;
     }
 
@@ -1177,6 +1174,14 @@ void CUDAPartitioner::_construct_partitioned_groups_gpu() {
                                           _numGates_per_level_gpu_of_groups_gpu,
                                           _per_level_of_group_start_accum_gpu);
 
+  cudaDeviceSynchronize();
+  // copy _numGates_per_level_gpu_of_groups_gpu to _numGates_per_level_gpu_of_groups
+  _numGates_per_level_gpu_of_groups.resize(_k*_total_num_levels);
+  cudaMemcpyAsync(_numGates_per_level_gpu_of_groups.data(), 
+                  _numGates_per_level_gpu_of_groups_gpu, 
+                  _k*_total_num_levels*sizeof(IndexType), cudaMemcpyDeviceToHost);
+  cudaCheckErrors("CUDA: _numGates_per_level_gpu_of_groups cudaMemcpyAsync - Failure");
+
 #ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
   cudaDeviceSynchronize();
   _print_prefix_sum <<< 1, 1 >>> (_k*_total_num_levels,
@@ -1188,12 +1193,14 @@ void CUDAPartitioner::_construct_partitioned_groups_gpu() {
 #endif                                          
   
   // Allocate memory _cones_partitioned_gpu memory accurately
-  IndexType _total_numGates_partitioned;
-  cudaMemcpyAsync(&_total_numGates_partitioned, 
+  IndexType total_numGates_partitioned;
+  cudaMemcpyAsync(&total_numGates_partitioned, 
                   _total_numGates_partitioned_gpu, 
                   1*sizeof(IndexType), cudaMemcpyDeviceToHost);
+  cudaCheckErrors("CUDA: _total_numGates_partitioned_gpu cudaMemcpyAsync - Failure");
+
   // allocat precise memory 
-  cudaMalloc((void**)&_cones_partitioned_gpu, _total_numGates_partitioned*sizeof(IndexType));
+  cudaMalloc((void**)&_cones_partitioned_gpu, total_numGates_partitioned*sizeof(IndexType));
   cudaCheckErrors("CUDA: _cones_partitioned_gpu cudaMalloc - Failure");
 
   int *pos_gpu; // tmp pos
@@ -1332,10 +1339,11 @@ void CUDAPartitioner::_move_GateType_h2d() {
 #endif 
 }
 
+template<typename IndexType>
 void CUDAPartitioner::_move_patterns_h2d() {
   std::vector<size_t> patterns_cpu;
   for (size_t i = 0; i < _num_rounds; i++) {
-    for (size_t pi = 0; pi < _num_PIs; pi++) {
+    for (IndexType pi = 0; pi < _num_PIs; pi++) {
       patterns_cpu.push_back(_patterns[i]._value[pi]);
     }
   }
@@ -1374,7 +1382,7 @@ void CUDAPartitioner::_move_faults_h2d() {
 #endif
 }
 
-void CUDAPartitioner::_prepare_gpu_simulation() {
+void CUDAPartitioner::prepare_gpu_simulation() {
   // Allocate GPU memory 
   _ask_gpu_memory_simu_0<int>();
 

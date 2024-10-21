@@ -9,26 +9,26 @@
 
 // #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
-    #define VERSION 6 // VERSION can be 0, 1, 2, 3, 4, 5, 6, 7
-    #if VERSION == 0
+    #define VERSION 1 // VERSION can be 0, 1, 2, 3, 4, 5, 6, 7
+    #if VERSION == 0   // Without Partitioner / CPU Simulation
         #define MODE 0
         #define NUM_THREADS 1
     #elif VERSION == 1
         #define MODE 1
         #define NUM_THREADS 8
-    #elif VERSION == 2
+    #elif VERSION == 2  // Pure Cones Partitioner / CPU Simulation ---> TODO: need to delete these two versions
         #define MODE 2
         #define NUM_THREADS 1
     #elif VERSION == 3
         #define MODE 3
         #define NUM_THREADS 8
-    #elif VERSION == 4
+    #elif VERSION == 4   // RepCut Partitioner / CPU Simulation
         #define MODE 4
         #define NUM_THREADS 1
     #elif VERSION == 5
         #define MODE 5
         #define NUM_THREADS 1
-    #elif VERSION == 6
+    #elif VERSION == 6   // MT-RepCut Partitioner / CPU Simulation
         #define MODE 6
         #define NUM_THREADS 1
     #else // VERSION == 7
@@ -40,7 +40,7 @@
 #ifndef CPU_PARTITIONER_VERSION
   #define GPU_PARTITIONER_VERSION
   #define NUM_THREADS 8
-  #define MODE 1
+  #define MODE 1   // MODE 0: CPU Simulator / 1: GPU Simulator 
 #endif   // #ifndef CPU_PARTITIONER_VERSION
 
 
@@ -60,8 +60,9 @@ double round_to(double value, double precision = 1.0){
 
 int main(int argc, char *argv[]) {
   // Init recording time 
-  std::chrono::duration<double> duration_read_data = chro_zero();
-  std::chrono::duration<double> duration_Partition = chro_zero();
+  std::chrono::duration<double> duration_read_data = chro_zero(); // include partition
+  std::chrono::duration<double> duration_prepare_simulation = chro_zero();
+  std::chrono::duration<double> duration_simulation = chro_zero();
 
   // Inputs 
   std::string ckt_path(argv[1]);
@@ -87,7 +88,7 @@ int main(int argc, char *argv[]) {
       start = std::chrono::steady_clock::now();
         cpuPartitioner.run(CPUPartitioner::Mode(static_cast<size_t>(MODE)), NUM_THREADS);
       end = std::chrono::steady_clock::now();
-      duration_Partition += (end - start);
+      duration_simulation += (end - start);
     }
 #endif  // CPU_PARTITIONER_VERSION
 
@@ -104,12 +105,31 @@ int main(int argc, char *argv[]) {
   auto end = std::chrono::steady_clock::now();
   duration_read_data = end - start;
   
+  // Prepare GPU Simulator
+  start = std::chrono::steady_clock::now();
+  switch (MODE) {
+    case 0: {
+      // printf("run GPU_PARTIOR_CPU_SIMUTOR");
+      cudaPartitioner.prepare_cpu_simulation();
+      break;
+    }
+    case 1: {
+      // printf("run GPU_PARTIOR_GPU_SIMUTOR");
+      cudaPartitioner.prepare_gpu_simulation();
+      break;
+    }
+  }
+
+  end = std::chrono::steady_clock::now();
+  duration_prepare_simulation = end - start;
+
+
   // Run Simulator
   for (size_t t = 0; t < TIMES; t++) {
     start = std::chrono::steady_clock::now();
     cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(MODE)), NUM_THREADS);
     end = std::chrono::steady_clock::now();
-    duration_Partition += (end - start);
+    duration_simulation += (end - start);
   }
 
   cudaPartitioner.freeMem();
@@ -125,7 +145,8 @@ int main(int argc, char *argv[]) {
 #ifdef SHOW_ALL_TIME
   std::cout << "Execution Time:\n";
   std::cout << "read_data: " << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
-  std::cout << "run_simulator: " <<  round_to(((duration_Partition.count()/TIMES))*1000, 0.001) << " ms\n";
+  std::cout << "prepare_GPU_simulation: " << round_to((duration_prepare_simulation.count())*1000, 0.001) << " ms\n";
+  std::cout << "run_simulator: " <<  round_to(((duration_simulation.count()/TIMES))*1000, 0.001) << " ms\n";
 #endif // SHOW_ALL_TIME
 
 

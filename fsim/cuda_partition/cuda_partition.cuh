@@ -198,11 +198,16 @@ class CUDAPartitioner {
 
 public:
 
-  enum class Mode { GPU_PARTIOR_CPU_SIMUTOR = 0, GPU_PARTIOR_GPU_SIMUTOR, };
+  enum class Mode { GPU_PARTIOR_CPU_SIMUTOR = 0, GPU_PARTIOR_GPU_SIMUTOR = 1, };
 
   // accessor
   void read(const std::string &ckt, const std::string &flst, const std::string &ptn);
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
+
+  // preparation 
+  void prepare_cpu_simulation();
+  void prepare_gpu_simulation();
+
   void run(Mode mode, const size_t num_threads);
   void freeMem() {
     _free();
@@ -276,6 +281,7 @@ private:
   int *_numGates_per_level_gpu; // levelize: number of gates per level
   std::vector<int> _numGates_per_level; // levelize: CPU
   int *_numGates_per_level_gpu_of_groups_gpu; // number of gates per level of each group 
+  std::vector<int> _numGates_per_level_gpu_of_groups; // partitioned cones CPU
   int *_total_numGates_partitioned_gpu;
   int *_per_level_of_group_start_accum_gpu; // start point of each level of each group in _total_numGates_partitioned_gpu
   int *_cones_partitioned_gpu; // partitioned results 
@@ -366,7 +372,6 @@ private:
 
 
   // CPU Simulation
-  void _prepare_cpu_simulation();
   void _ask_simulation_memory() {
     _g_pi_results.resize(_num_PIs);
     _g_gate_results.resize(_num_inner_gates);
@@ -378,7 +383,7 @@ private:
   }
 
   // GPU Simulator
-  void _prepare_gpu_simulation();
+  
   template<typename IndexType = int>
   void _ask_gpu_memory_simu_0();
   template<typename IndexType = int>
@@ -392,8 +397,9 @@ private:
 
   template<typename IndexType = int>
   void _move_GateType_h2d();
+  template<typename IndexType = int>
   void _move_patterns_h2d();
-  template<typename IndexType>
+  template<typename IndexType = int>
   void _move_faults_h2d();
   
 
