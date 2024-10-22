@@ -1400,6 +1400,32 @@ void CUDAPartitioner::prepare_gpu_simulation() {
   _move_GateType_h2d<int>();
   _move_patterns_h2d();
   _move_faults_h2d<int>();
+
+#ifdef CPU_PARTITIONER_PRINT_FOR_CHECK  
+  // _cones_partitioned_gpu;
+  // Allocate memory _cones_partitioned_gpu memory accurately
+  int total_numGates_partitioned;
+  cudaMemcpyAsync(&total_numGates_partitioned, 
+                  _total_numGates_partitioned_gpu, 
+                  1*sizeof(int), cudaMemcpyDeviceToHost);
+  std::vector<int> cones_partitioned_tmp; 
+  cones_partitioned_tmp.resize(total_numGates_partitioned);
+  cudaMemcpyAsync(cones_partitioned_tmp.data(), _cones_partitioned_gpu,
+                (total_numGates_partitioned)*sizeof(size_t), cudaMemcpyDeviceToHost);
+
+  size_t pis = 0, pos = 0, gatess = 0;
+  for (size_t i = 0; i < cones_partitioned_tmp.size(); i++) {
+    if (cones_partitioned_tmp[i] < _num_PIs) {
+      pis++;
+    } else if (cones_partitioned_tmp[i] < (_num_PIs+_num_POs) && cones_partitioned_tmp[i] >= _num_PIs) {
+      pos++;
+    } else {
+      gatess++;
+    }
+  }
+  printf("cones_partitioned_tmp.size() = %lu, pis = %lu, pos = %lu, gatess = %lu\n", 
+          cones_partitioned_tmp.size(), pis, pos, gatess);
+#endif
 }
 
 

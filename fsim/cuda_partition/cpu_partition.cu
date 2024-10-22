@@ -648,7 +648,7 @@ void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_0, std::chr
   if (_can_run_kahypar) {
     _construct_hyperGraph();
 end0 = std::chrono::steady_clock::now();
-duration_0 = end0 - start;    
+duration_0 = end0 - start;
     std::vector<size_t> vertex_to_partition;
     _run_KaHyPar(vertex_to_partition);
     _get_KHP_partitioning_res(vertex_to_partition);
@@ -668,7 +668,6 @@ void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_0,
 
 
   _find_clusters();
-
   if (_can_run_kahypar) {
     _construct_hyperGraph();
 end0 = std::chrono::steady_clock::now();
@@ -1208,6 +1207,7 @@ void CPUPartitioner::_ask_gpu_memory_simu_1(Mode mode){
           }
           _numGates_per_level_gpu_of_groups.push_back(in_accum);
           per_level_of_group_start_accum_tmp.push_back(accum);
+          // printf("accum = %lu, i = %lu, _RepCut_output_cones.size() = %lu\n", accum, i, _RepCut_output_cones.size());
         }
       }
       break;
@@ -1223,10 +1223,29 @@ void CPUPartitioner::_ask_gpu_memory_simu_1(Mode mode){
   // for (size_t i = 0; i < per_level_of_group_start_accum_tmp.size(); i++) {
   //   printf("per_level_of_group_start_accum_tmp[%lu] = %lu\n", i, per_level_of_group_start_accum_tmp[i]);
   // }  
+// =====================================================================================
+  size_t pis = 0, pos = 0, gatess = 0;
+  for (size_t i = 0; i < cones_partitioned_tmp.size(); i++) {
+    if (cones_partitioned_tmp[i] < _num_PIs) {
+      pis++;
+    } else if (cones_partitioned_tmp[i] < (_num_PIs+_num_POs) && cones_partitioned_tmp[i] >= _num_PIs) {
+      pos++;
+    } else {
+      gatess++;
+    }
+  }
+  printf("cones_partitioned_tmp.size() = %lu, pis = %lu, pos = %lu, gatess = %lu\n", 
+          cones_partitioned_tmp.size(), pis, pos, gatess);
+// =====================================================================================
 
   cudaMalloc((void**)&_cones_partitioned_gpu, (cones_partitioned_tmp.size())*sizeof(size_t));
   cudaMalloc((void**)&_per_level_of_group_start_accum_gpu, (_k*_total_num_levels+1)*sizeof(size_t));
   cudaCheckErrors("CUDA: _per_level_of_group_start_accum_gpu cudaMalloc - Failure");
+
+  // printf("_total_num_levels = %lu, (_k*_total_num_levels+1) = %lu, per_level_of_group_start_accum_tmp.data() = %lu\n", 
+  //       _total_num_levels, 
+  //       (_k*_total_num_levels+1), 
+  //       per_level_of_group_start_accum_tmp.data());
 
   cudaMemcpyAsync(_cones_partitioned_gpu, cones_partitioned_tmp.data(), 
                 (cones_partitioned_tmp.size())*sizeof(size_t), cudaMemcpyHostToDevice);  
@@ -1319,6 +1338,8 @@ void CPUPartitioner::run(SIMU_Mode simu_mode, Mode mode, const size_t num_thread
       return;
     }
   }
+  // printf("_num_PIs = %lu, _num_POs = %lu, _num_inner_gates = %lu, _sum_pi_gates_pos = %lu\n", 
+  //         _num_PIs, _num_POs, _num_inner_gates, _sum_pi_gates_pos);
 }
 
 void CPUPartitioner::_run_gpu_simulator() {

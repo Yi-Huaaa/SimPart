@@ -9,7 +9,7 @@
 
 #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
-    #define VERSION 1 // VERSION can be 0, 1, 2, 3, 4, 5, 6, 7
+    #define VERSION 6 // VERSION can be 0, 1, 2, 3, 4, 5, 6, 7
     #if VERSION == 0   // Without Partitioner / CPU Simulation
         #define MODE 0
         #define NUM_THREADS 1
@@ -47,7 +47,7 @@
 
 // Both Definition 
 #define SHOW_ALL_TIME
-#define TIMES 1
+#define TIMES 10
 // #define OUTPUT_VISUALIZATION_GRAPH_TO_FILE
 
 
@@ -103,6 +103,10 @@ int main(int argc, char *argv[]) {
   duration_prepare_simulation = end - start;
 
 
+    // pre-run
+    cpuPartitioner.run(CPUPartitioner::SIMU_Mode(static_cast<size_t>(SIMU_MODE)), 
+                      CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
+                      NUM_THREADS);    
     // Run Simulator
     for (size_t t = 0; t < TIMES; t++) {
       start = std::chrono::steady_clock::now();
@@ -144,7 +148,9 @@ int main(int argc, char *argv[]) {
   end = std::chrono::steady_clock::now();
   duration_prepare_simulation = end - start;
 
-
+  // pre-run
+  cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS);
+  end = std::chrono::steady_clock::now();
   // Run Simulator
   for (size_t t = 0; t < TIMES; t++) {
     start = std::chrono::steady_clock::now();
