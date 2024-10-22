@@ -38,6 +38,8 @@
 // #define PART_DEBUG_REPCUT_PRINT_FIND_CLUSTERS
 // #define PART_DEBUG_REPCUT_PRINT_KAHYPAR_RESULTS
 
+// #define CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH // run pre-construct hypergraph 
+
 // Implement your own remove_if function
 template <typename ForwardIterator, typename UnaryPredicate>
 ForwardIterator remove_if(ForwardIterator first, ForwardIterator last, UnaryPredicate pred) {
@@ -638,13 +640,23 @@ void CPUPartitioner::_construct_duplication_table(std::vector<size_t> &coneIdxTo
 
 
 void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1) {
+
+#ifdef CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH
+  printf("CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH\n");
+  _find_clusters();
+  if (_can_run_kahypar) {
+    _construct_hyperGraph();
+  } else {
+    _RepCut_output_cones = _cones;
+  }
+
+  
+#else
   auto start = std::chrono::steady_clock::now();
   auto end0 = std::chrono::steady_clock::now();
   auto end1 = std::chrono::steady_clock::now();
 
-
   _find_clusters();
-
   if (_can_run_kahypar) {
     _construct_hyperGraph();
 end0 = std::chrono::steady_clock::now();
@@ -657,6 +669,7 @@ duration_1 = end1 - start;
   } else {
     _RepCut_output_cones = _cones;
   }
+#endif 
 }
 
 void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_0, 
@@ -856,6 +869,9 @@ void CPUPartitioner::_construct_hyperedge_vertices() {
 #ifdef PART_DEBUG_REPCUT_PRINT_FIND_CLUSTERS
   print_hyperedge_vertices_details(vertex_include_which_hyperedges);
 #endif 
+#ifdef CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH
+  print_preconstruct_hyperedge_vertices_details(vertex_include_which_hyperedges);
+#endif
 }
 
 void CPUPartitioner::_compute_vertex_weight(std::vector<double> &tmp_vectices_weight, 
@@ -1049,7 +1065,7 @@ void CPUPartitioner::_run_mtKaHyPar(std::vector<size_t> &vertex_to_partition,
 
   /* Extract block weights */
   std::unique_ptr<mt_kahypar_hypernode_weight_t[]> block_weights =
-    std::make_unique<mt_kahypar_hypernode_weight_t[]>(2);  // Since we have 2 blocks
+    std::make_unique<mt_kahypar_hypernode_weight_t[]>(_k);  // Since we have _k blocks
   mt_kahypar_get_block_weights(partitioned_hg, block_weights.get());
 
   /* Compute Metrics */
@@ -2256,6 +2272,55 @@ void CPUPartitioner::print_hyperedge_vertices_details(
   } 
   printf("\n");
 
+}
+
+void CPUPartitioner::print_preconstruct_hyperedge_vertices_details(
+                    const std::vector<std::set<size_t>> &vertex_include_which_hyperedges) const {
+
+  printf("_hyperedge_include_which_vertices:\n");
+  for (size_t hyperedge = 0; hyperedge < _hyperedge_include_which_vertices.size(); hyperedge++) {
+    printf("%lu  ", hyperedge);
+    for (const auto& vertexIdx : _hyperedge_include_which_vertices[hyperedge]) {
+      printf("%lu ", vertexIdx);
+    }
+    printf("\n");
+  }
+  printf("\n");
+
+
+  printf("vertex_include_which_hyperedges:\n");
+  for (size_t vertexIdx = 0; vertexIdx < vertex_include_which_hyperedges.size(); vertexIdx++) {
+    printf("%lu  ", vertexIdx);
+    for (const auto& hyperedge : vertex_include_which_hyperedges[vertexIdx]) {
+      printf("%lu ", hyperedge);
+    }
+    printf("\n");
+  }
+  printf("\n");
+
+  printf("_hyperedges_weight: \n");
+  for (size_t i = 0; i < _hyperedges_weight.size(); i++) {
+    printf("%lu  %lu\n", i, _hyperedges_weight[i]);
+  }
+  printf("\n");
+
+  printf("_hyperedges_eptr:\n");
+  for (size_t i = 0; i < _hyperedges_eptr.size(); i++) {
+    printf("%lu\n", _hyperedges_eptr[i]);
+  } printf("\n\n");
+
+  printf("_hyperedges_eind:\n");
+  for (size_t i = 0; i < _hyperedges_eind.size(); i++) {
+    printf("%lu\n", _hyperedges_eind[i]);
+  } printf("\n\n");
+
+  printf("_vectices_weight\n");
+  for (size_t i = 0; i < _vectices_weight.size(); i++) {
+    printf("%lu  %lu\n", i, _vectices_weight[i]);
+  } 
+  printf("\n");
+
+  printf("=============================\n");
 }
 
 void CPUPartitioner::_print_RepCut_output_cones() {

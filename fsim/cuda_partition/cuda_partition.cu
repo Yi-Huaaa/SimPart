@@ -1404,6 +1404,7 @@ void CUDAPartitioner::prepare_gpu_simulation() {
 #ifdef CPU_PARTITIONER_PRINT_FOR_CHECK  
   // _cones_partitioned_gpu;
   // Allocate memory _cones_partitioned_gpu memory accurately
+  // cudaDeviceSynchronize();
   int total_numGates_partitioned;
   cudaMemcpyAsync(&total_numGates_partitioned, 
                   _total_numGates_partitioned_gpu, 
@@ -1411,10 +1412,12 @@ void CUDAPartitioner::prepare_gpu_simulation() {
   std::vector<int> cones_partitioned_tmp; 
   cones_partitioned_tmp.resize(total_numGates_partitioned);
   cudaMemcpyAsync(cones_partitioned_tmp.data(), _cones_partitioned_gpu,
-                (total_numGates_partitioned)*sizeof(size_t), cudaMemcpyDeviceToHost);
+                (total_numGates_partitioned)*sizeof(int), cudaMemcpyDeviceToHost);
 
   size_t pis = 0, pos = 0, gatess = 0;
+  // printf("total_numGates_partitioned = %d\n", total_numGates_partitioned);
   for (size_t i = 0; i < cones_partitioned_tmp.size(); i++) {
+    // printf("cones_partitioned_tmp[%d] = %d\n", i, cones_partitioned_tmp[i]);
     if (cones_partitioned_tmp[i] < _num_PIs) {
       pis++;
     } else if (cones_partitioned_tmp[i] < (_num_PIs+_num_POs) && cones_partitioned_tmp[i] >= _num_PIs) {

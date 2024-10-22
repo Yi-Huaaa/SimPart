@@ -126,8 +126,8 @@ private:
   std::vector<size_t> _hyperedges_eind;
   std::vector<size_t> _hyperedges_eptr;
   const double _imbalance = 0.015;
-  const kahypar_partition_id_t _k = 4; // number of partitions 
-  const size_t _k_sizet = 4; 
+  const kahypar_partition_id_t _k = 2; // number of partitions 
+  const size_t _k_sizet = 2; 
   size_t _KaHyPar_num_vertices = 0; // number of sinks
   size_t _KaHyPar_num_hyperedges = 0;
 
@@ -286,6 +286,7 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                                 const std::vector<size_t> &po_results) const;
   void _print_find_clusters() const;
   void print_hyperedge_vertices_details(const std::vector<std::set<size_t>> &vertex_include_which_hyperedges) const;
+  void print_preconstruct_hyperedge_vertices_details(const std::vector<std::set<size_t>> &vertex_include_which_hyperedges) const;
   void _print_RepCut_output_cones();
 
   // Check 
