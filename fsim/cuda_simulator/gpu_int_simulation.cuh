@@ -1,5 +1,5 @@
-#ifndef GALPS_GPU_SIMULATION_H
-#define GALPS_GPU_SIMULATION_H
+#ifndef GALPS_INT_GPU_SIMULATION_H
+#define GALPS_INT_GPU_SIMULATION_H
 #include <chrono>
 #include <thread>
 #include <assert.h>
@@ -50,29 +50,29 @@ const int _NUM_THREADS = 1024;
 // #define GPU_PART_DEBUG_PRINT_SIMULATION_RESULTS // print simulation resutls 
 
 // GPU functions pre-declarations
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_INV(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_AND(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_OR(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_XOR(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_NAND(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_NOR(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_XNOR(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_MUX(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_CLKBUF(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_PI(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu, size_t pattern_val);
-template<typename IndexType = size_t>
+template<typename IndexType = int>
 __device__ __forceinline__ void _apply_PO(const IndexType gate_idx, const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-template<typename IndexType>
+template<typename IndexType = int>
 __global__ void _run_gate(const IndexType *_invAdj_gpu, const IndexType *_invAdj_index_table_gpu, 
                           const IndexType *_cones_partitioned_gpu,
                           const IndexType *_per_level_of_group_start_accum_gpu, const IndexType k_level, 
@@ -82,7 +82,7 @@ __global__ void _run_gate(const IndexType *_invAdj_gpu, const IndexType *_invAdj
                           const size_t fault_num, const size_t bad_case, 
                           const IndexType num_gates_per_level, 
                           const IndexType _num_PIs);
-  template<typename IndexType>
+  template<typename IndexType = int>
   __global__ void _write_and_shift_to_array_gpu(const IndexType _num_PIs, 
                                                 const IndexType _num_inner_gates, 
                                                 const IndexType _num_POs, 
@@ -92,7 +92,7 @@ __global__ void _run_gate(const IndexType *_invAdj_gpu, const IndexType *_invAdj
 
 
 // print function 
-template<typename IndexType>
+template<typename IndexType = int>
 __global__  void _print_simulation_results(const IndexType _num_PIs, 
                                           const IndexType _num_inner_gates, 
                                           const IndexType _num_POs, 
@@ -720,4 +720,4 @@ void GALPS_GPUSimulator<IndexType>::_run_cones_gates_gpu(const std::vector<Index
     }
   }
 
-#endif  // GALPS_GPU_SIMULATION_H
+#endif  // GALPS_INT_GPU_SIMULATION_H

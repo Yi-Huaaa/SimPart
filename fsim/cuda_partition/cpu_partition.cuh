@@ -16,6 +16,8 @@
 #include <libkahypar.h> // kahypar single thread
 #include <libmtkahypar.h> // kahypar multi-threads
 
+#include "cuda_partition.cuh"
+
 
 #define ELEMENT_INDEX_TYPE size_t
 #define ELEMENT_LEVEL_TYPE size_t
@@ -25,12 +27,13 @@
 
 // Forward declaration
 class CUDASimulator;
-
+class GALPS_SIZET_GPUSimulator;
 
 class CPUPartitioner {
   
   // Declare friend class 
   friend class CUDASimulator;
+  friend class GALPS_SIZET_GPUSimulator;
 
 public:
   enum class Mode { SEQUENTIAL = 0, 
@@ -42,6 +45,10 @@ public:
                     REPCUT_MT_SEQUENTIAL = 6, 
                     REPCUT_MT_PARALLEL_OMP = 7,                     
                   };
+  enum class SIMU_Mode {CPU = 0, 
+                        GPU = 1,
+                        };
+
 
   // accessor
   void read(Mode mode, const std::string &ckt, 
@@ -49,11 +56,14 @@ public:
             const std::string &ptn,
             const size_t num_threads);
   void read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn, const size_t num_threads);
-  void run(Mode mode, const size_t num_threads);
+  void run(SIMU_Mode simu_mode, Mode mode, const size_t num_threads);
+  
   void visualization_graph(const std::string &outputFile);
   void KaHyParExample();
   void mt_KaHyParExample();
 
+  void prepare_cpu_simulation();
+  void prepare_gpu_simulation(Mode mode);
 
 
 private:
@@ -125,6 +135,26 @@ private:
   std::vector<std::set<size_t>> _hyperedge_include_which_vertices;
 
 
+  // GPU simulation
+  size_t *_pi_gate_po_gate_type_gpu;
+  size_t *_patterns_gpu;
+  size_t *_fault_gate_idx_gpu;
+  size_t *_fault_SA_fault_val_gpu;
+  size_t *_pi_gate_po_output_res_gpu;
+  size_t *_g_pi_results_gpu;
+  size_t *_g_gate_results_gpu;
+  size_t *_g_po_results_gpu;
+  size_t *_b_pi_results_gpu;
+  size_t *_b_gate_results_gpu;
+  size_t *_b_po_results_gpu;
+  size_t *_found_fault_to_pattern_gpu;
+  // TODO prepare
+  std::vector<size_t> _numGates_per_level_gpu_of_groups; // partitioned cones CPU
+  size_t *_cones_partitioned_gpu; // partitioned results 
+  size_t *_invAdj_gpu; 
+  size_t *_invAdj_index_table_gpu;
+  size_t *_per_level_of_group_start_accum_gpu;
+
 
 
 
@@ -174,19 +204,38 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                       const size_t num_threads);
   void _get_KHP_partitioning_res(std::vector<size_t> &vertex_to_partition);
 
+  // Simulator
+  void _run_cpu_simulator(Mode mode, const size_t num_threads);
+  void _run_gpu_simulator();
 
+  // GPU Simulation
+  void _ask_gpu_memory_simu_1(Mode mode);
+  void _ask_gpu_memory_simu_2();
+  void _move_GateType_h2d();
+  void _move_patterns_h2d();
+  void _move_faults_h2d();
+
+
+  // CPU Simulation
   // FSIM
   void _construct_graph();
   void _read_pattern(std::istream &ptn);
   void _read_fault(std::istream &flst);
-  void _ask_simulation_memory();
+  void _ask_simulation_memory() {
+    _g_pi_results.resize(_num_PIs);
+    _g_gate_results.resize(_num_inner_gates);
+    _g_po_results.resize(_num_POs);
+    _b_pi_results.resize(_num_PIs);
+    _b_gate_results.resize(_num_inner_gates);
+    _b_po_results.resize(_num_POs);
+    _found_fault_to_pattern.resize(2 * _faults.size());    
+  }
   void _write_to_array(std::vector<size_t> &pi_output, 
                       std::vector<size_t> &gate_output,
                       std::vector<size_t> &po_output,
                       const size_t bits);
 
   // Simulation - sequentail and parallel (without partitioning to cones)
-  void _prepare_cpu_simulation();
   void _run_fsim(const size_t num_threads);
   void _run_good_case(const Pattern pattern, const size_t bits, const size_t num_threads);
   void _run_bad_case(const Fault <FAULT_INDEX_TYPE> &fault, 

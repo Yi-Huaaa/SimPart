@@ -40,15 +40,19 @@ add_library(fsim_cuda_partition
   gate.cpp gate.hpp
   simulation.cpp simulation.hpp
   ./cpu_simulator/cpu_simulation.cuh 
-  ./cuda_simulator/gpu_simulation.cu
-  ./cuda_simulator/gpu_simulation.cuh  
+  ./cuda_simulator/gpu_int_simulation.cu
+  ./cuda_simulator/gpu_int_simulation.cuh  
+  ./cuda_simulator/gpu_sizet_simulation.cu
+  ./cuda_simulator/gpu_sizet_simulation.cuh
   )
 
 # Simulation:
 add_library(galps_simulator
   ./cpu_simulator/cpu_simulation.cuh 
-  ./cuda_simulator/gpu_simulation.cuh 
-  ./cuda_simulator/gpu_simulation.cu
+  ./cuda_simulator/gpu_int_simulation.cuh 
+  ./cuda_simulator/gpu_int_simulation.cu
+  ./cuda_simulator/gpu_sizet_simulation.cu
+  ./cuda_simulator/gpu_sizet_simulation.cuh  
 )
 
 

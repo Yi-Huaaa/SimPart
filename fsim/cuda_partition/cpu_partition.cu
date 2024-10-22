@@ -190,16 +190,6 @@ void CPUPartitioner::_read_pattern(std::istream &ptn) {
 #endif 
 }
 
-void CPUPartitioner::_ask_simulation_memory() {
-  _g_pi_results.resize(_num_PIs);
-  _g_gate_results.resize(_num_inner_gates);
-  _g_po_results.resize(_num_POs);
-  _b_pi_results.resize(_num_PIs);
-  _b_gate_results.resize(_num_inner_gates);
-  _b_po_results.resize(_num_POs);
-  _found_fault_to_pattern.resize(2 * _faults.size());
-}
-
 void CPUPartitioner::_read_graph(std::istream &ckt) {
   _sum_pi_gates_pos = _num_PIs + _num_inner_gates + _num_POs;
 
@@ -293,7 +283,7 @@ void CPUPartitioner::_construct_graph() {
     }
   }
 
-  printf("_invAdj.size() = %lu, _sum_pi_gates_pos = %lu\n", _invAdj.size(), _sum_pi_gates_pos);
+  // printf("_invAdj.size() = %lu, _sum_pi_gates_pos = %lu\n", _invAdj.size(), _sum_pi_gates_pos);
 
 #ifdef PART_DEBUG_PRINT_GRAPH
   std::cout << "\n_Gates = [\n";
@@ -974,7 +964,7 @@ void CPUPartitioner::_run_KaHyPar(std::vector<size_t> &vertex_to_partition) {
 
 void CPUPartitioner::_run_mtKaHyPar(std::vector<size_t> &vertex_to_partition, 
                                   const size_t num_threads) {
-  printf("_run_mtKaHyPar\n");
+  // printf("_run_mtKaHyPar\n");
   
   /* Construct context */
   mt_kahypar_initialize_thread_pool(
@@ -1141,51 +1131,252 @@ void CPUPartitioner::_get_KHP_partitioning_res(std::vector<size_t> &vertex_to_pa
 
 // --------------------------------------------------------------------------------------
 
-void CPUPartitioner::_prepare_cpu_simulation() {
+void CPUPartitioner::prepare_cpu_simulation() {
   _construct_graph();
   _ask_simulation_memory();
 }
 
-// Run the simulation 
-void CPUPartitioner::run(Mode mode, const size_t num_threads) {
-  _prepare_cpu_simulation();
 
+void CPUPartitioner::_ask_gpu_memory_simu_1(Mode mode){
+  // prepare _invAdj_gpu and _invAdj_index_table_gpu
+  std::vector<size_t> invAdj_tmp;
+  std::vector<size_t> invAdj_index_tmp;
+  size_t accum = 0;
+  for (size_t i = 0; i < _invAdj.size(); i++) {
+    invAdj_index_tmp.push_back(accum);
+    for (size_t j = 0; j < _invAdj[i].size(); j++) {
+      invAdj_tmp.push_back(_invAdj[i][j]);
+      accum++;
+    }
+    invAdj_index_tmp.push_back(accum);
+  }
+
+  cudaMalloc((void**)&_invAdj_gpu, (invAdj_tmp.size())*sizeof(size_t));
+  cudaMalloc((void**)&_invAdj_index_table_gpu, 2*_sum_pi_gates_pos*sizeof(size_t));
+  cudaCheckErrors("CUDA: _invAdj_gpu  cudaMalloc - Failure");
+  printf("invAdj_index_tmp.size() = %lu, 2*_sum_pi_gates_pos = %lu\n", 
+          invAdj_index_tmp.size(), 2*_sum_pi_gates_pos);
+
+  cudaMemcpyAsync(_invAdj_gpu, invAdj_tmp.data(), 
+                   (invAdj_tmp.size())*sizeof(size_t), cudaMemcpyHostToDevice);  
+  cudaMemcpyAsync(_invAdj_index_table_gpu, invAdj_index_tmp.data(), 
+                   (invAdj_index_tmp.size())*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaCheckErrors("CUDA: _invAdj_gpu cudaMemcpyAsync - Failure");
+
+  // prepare _numGates_per_level_gpu_of_groups and _cones_partitioned_gpu
+  std::vector<size_t> cones_partitioned_tmp;
+  std::vector<size_t> per_level_of_group_start_accum_tmp;
+  switch (mode) {
+    case Mode::SEQUENTIAL: 
+    case Mode::PARALLEL_OMP: {
+      accum = 0;
+      for (size_t lvl = 0; lvl < _gateIdx_in_each_level.size(); lvl++) {
+        size_t in_accum = 0;
+        for (size_t g = 0; g < _gateIdx_in_each_level[lvl].size(); g++) {
+          size_t element = _gateIdx_in_each_level[lvl][g];
+          cones_partitioned_tmp.push_back(element);
+          in_accum++;
+          accum++;
+        }
+        _numGates_per_level_gpu_of_groups.push_back(in_accum);
+        per_level_of_group_start_accum_tmp.push_back(accum);
+      }
+      per_level_of_group_start_accum_tmp.push_back(accum);
+
+      break;
+    }
+    case Mode::CONES_SEQUENTIAL: 
+    case Mode::CONES_PARALLEL_OMP: {
+      // skip 
+      break;
+    }
+    case Mode::REPCUT_SEQUENTIAL: 
+    case Mode::REPCUT_PARALLEL_OMP: 
+    case Mode::REPCUT_MT_SEQUENTIAL:
+    case Mode::REPCUT_MT_PARALLEL_OMP: {
+      accum = 0;
+      for (size_t i = 0; i < _RepCut_output_cones.size(); ++i) {
+        for (size_t lvl = 0; lvl < _RepCut_output_cones[i].size(); ++lvl) {
+          size_t in_accum = 0;
+          for (const auto& element : _RepCut_output_cones[i][lvl]) {
+            cones_partitioned_tmp.push_back(element);
+            in_accum++;
+            accum++;
+          }
+          _numGates_per_level_gpu_of_groups.push_back(accum);
+          per_level_of_group_start_accum_tmp.push_back(accum);
+        }
+      }
+      per_level_of_group_start_accum_tmp.push_back(accum);
+      break;
+    }
+    default:
+      printf("No SUCH CASES\n");
+      return; 
+  }
+
+  cudaMalloc((void**)&_cones_partitioned_gpu, (cones_partitioned_tmp.size())*sizeof(size_t));
+  cudaMalloc((void**)&_per_level_of_group_start_accum_gpu, (_k*_total_num_levels+1)*sizeof(size_t));
+  cudaCheckErrors("CUDA: _per_level_of_group_start_accum_gpu cudaMalloc - Failure");
+
+  cudaMemcpyAsync(_cones_partitioned_gpu, cones_partitioned_tmp.data(), 
+                (cones_partitioned_tmp.size())*sizeof(size_t), cudaMemcpyHostToDevice);  
+  cudaMemcpyAsync(_per_level_of_group_start_accum_gpu, per_level_of_group_start_accum_tmp.data(), 
+                (per_level_of_group_start_accum_tmp.size())*sizeof(size_t), cudaMemcpyHostToDevice);                
+  cudaCheckErrors("CUDA: _ask_gpu_memory_simu_1 cudaMemcpyAsync - Failure");
+}
+
+void CPUPartitioner::_ask_gpu_memory_simu_2(){
+  cudaMalloc((void**)&_pi_gate_po_gate_type_gpu, _sum_pi_gates_pos*sizeof(size_t));
+  cudaMalloc((void**)&_patterns_gpu, _num_rounds*_num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_fault_gate_idx_gpu, _num_fault*sizeof(size_t));
+  cudaMalloc((void**)&_fault_SA_fault_val_gpu, _num_fault*sizeof(size_t));
+  
+  cudaMalloc((void**)&_pi_gate_po_output_res_gpu, _sum_pi_gates_pos*sizeof(size_t));
+  cudaMalloc((void**)&_g_pi_results_gpu, _num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_g_gate_results_gpu, _num_inner_gates*sizeof(size_t));
+  cudaMalloc((void**)&_g_po_results_gpu, _num_POs*sizeof(size_t));
+  cudaMalloc((void**)&_b_pi_results_gpu, _num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_b_gate_results_gpu, _num_inner_gates*sizeof(size_t));
+  cudaMalloc((void**)&_b_po_results_gpu, _num_POs*sizeof(size_t));
+  cudaMalloc((void**)&_found_fault_to_pattern_gpu, 2*_num_fault*sizeof(size_t));  
+}
+
+void CPUPartitioner::_move_GateType_h2d() {
+  // pi_gate_po_gate_type_gpu
+
+  cudaMemcpyAsync(_pi_gate_po_gate_type_gpu, _gate_type.data(), 
+                   _sum_pi_gates_pos*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaCheckErrors("CUDA: _pi_gate_po_gate_type_gpu cudaMemcpy failure"); 
+}
+
+void CPUPartitioner::_move_patterns_h2d() {
+  std::vector<size_t> patterns_cpu;
+  for (size_t i = 0; i < _num_rounds; i++) {
+    for (size_t pi = 0; pi < _num_PIs; pi++) {
+      patterns_cpu.push_back(_patterns[i]._value[pi]);
+    }
+  }
+
+  cudaMemcpy(_patterns_gpu, patterns_cpu.data(), 
+            (_num_rounds*_num_PIs)*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaCheckErrors("CUDA: _patterns_gpu cudaMemcpy failure");
+}
+
+void CPUPartitioner::_move_faults_h2d() {
+  std::vector<size_t> fault_gate_idx;
+  std::vector<size_t> fault_SA_fault_val;
+
+  for (size_t i = 0; i < _num_fault; i++) {
+    fault_gate_idx.push_back(_faults[i]._gate_with_fault);
+    fault_SA_fault_val.push_back(_faults[i]._gate_SA_fault_val);
+  }
+
+  cudaMemcpy(_fault_gate_idx_gpu, fault_gate_idx.data(), _num_fault*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(_fault_SA_fault_val_gpu, fault_SA_fault_val.data(), _num_fault*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaCheckErrors("CUDA: _fault_gate_idx_gpu OR _fault_SA_fault_val_gpu cudaMemcpy failure");
+}
+
+
+void CPUPartitioner::prepare_gpu_simulation(Mode mode) {
+  printf("CPUPartitioner::prepare_gpu_simulation\n");
+  _ask_gpu_memory_simu_1(mode);
+  _ask_gpu_memory_simu_2();
+  _move_GateType_h2d();
+  _move_patterns_h2d();
+  _move_faults_h2d();
+}
+
+
+
+// Run the simulation 
+void CPUPartitioner::run(SIMU_Mode simu_mode, Mode mode, const size_t num_threads) {
+  switch (simu_mode) {
+    case SIMU_Mode::CPU: {
+      _run_cpu_simulator(mode, num_threads);
+      break;
+    }
+    case SIMU_Mode::GPU: {
+      printf("SIMU_Mode::GPU: {\n");
+      _run_gpu_simulator();
+      break;      
+    }
+    default: {
+      printf("No SUCH CASES\n");
+      return;
+    }
+  }
+}
+
+void CPUPartitioner::_run_gpu_simulator() {
+  printf("hello world\n");
+  GALPS_SIZET_GPUSimulator gpuSimulator;
+  gpuSimulator.run_gpu_simulator_cones_sizet_gpu(_k_sizet, _num_PIs, _num_inner_gates, _num_POs, 
+                                                _sum_pi_gates_pos, 
+                                                _num_pattern, _num_rounds, _num_fault,
+                                                _pi_gate_po_gate_type_gpu, 
+                                                _patterns_gpu,
+                                                _fault_gate_idx_gpu,
+                                                _fault_SA_fault_val_gpu,
+                                                _pi_gate_po_output_res_gpu,
+                                                _numGates_per_level_gpu_of_groups,
+                                                _per_level_of_group_start_accum_gpu,
+                                                _cones_partitioned_gpu,
+                                                _total_num_levels,
+                                                _invAdj_gpu,
+                                                _invAdj_index_table_gpu,
+                                                _patterns, 
+                                                _g_pi_results_gpu,
+                                                _g_gate_results_gpu,
+                                                _g_po_results_gpu,
+                                                _b_pi_results_gpu,
+                                                _b_gate_results_gpu,
+                                                _b_po_results_gpu,
+                                                _found_fault_to_pattern_gpu);
+
+
+}
+
+
+
+
+void CPUPartitioner::_run_cpu_simulator(Mode mode, const size_t num_threads) {
   switch (mode) {
     case Mode::SEQUENTIAL: {
-      std::cout << "run SEQUENTIAL\n";
+      // std::cout << "run SEQUENTIAL\n";
       assert(num_threads == 1 && "RUN SEQUENTIAL num_threads num_threads > 1");
       _run_fsim(num_threads);
       break;
     }
     case Mode::PARALLEL_OMP: {
-      std::cout << "run PARALLEL_OMP\n";
+      // std::cout << "run PARALLEL_OMP\n";
       _run_fsim(num_threads);
       break;
     }
     case Mode::CONES_SEQUENTIAL: {
-      std::cout << "run CONES_SEQUENTIAL\n";
+      // std::cout << "run CONES_SEQUENTIAL\n";
       assert(num_threads == 1 && "RUN CONES_SEQUENTIAL num_threads num_threads > 1");
       _run_cones_gates(num_threads);
       break;
     }
     case Mode::CONES_PARALLEL_OMP: {
-      std::cout << "run CONES_PARALLEL_OMP\n";
+      // std::cout << "run CONES_PARALLEL_OMP\n";
       _run_cones_gates(num_threads);
       break;
     }
     case Mode::REPCUT_SEQUENTIAL: {
-      std::cout << "run REPCUT_SEQUENTIAL = 1\n";
-      if (_can_run_kahypar) {
-        printf("_can_run_kahypar TRUE\n");
-      } else {
-        printf("_can_run_kahypar FALSE\n");
-      }
+      // std::cout << "run REPCUT_SEQUENTIAL = 1\n";
+      // if (_can_run_kahypar) {
+      //   printf("_can_run_kahypar TRUE\n");
+      // } else {
+      //   printf("_can_run_kahypar FALSE\n");
+      // }
       auto start = std::chrono::steady_clock::now();      
       _run_RepCut_cones_gates(1);
       auto end = std::chrono::steady_clock::now();      
       std::chrono::duration<double> duration_0 = end - start;
 
-      std::cout << "run REPCUT_PARALLEL_OMP, num_threads = " << num_threads << "\n";
+      // std::cout << "run REPCUT_PARALLEL_OMP, num_threads = " << num_threads << "\n";
       start = std::chrono::steady_clock::now();      
       _run_RepCut_cones_gates(num_threads);
       end = std::chrono::steady_clock::now();      
@@ -1196,28 +1387,28 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
       break;
     }
     case Mode::REPCUT_PARALLEL_OMP: {
-      std::cout << "run REPCUT_PARALLEL_OMP\n";
-      if (_can_run_kahypar) {
-        printf("_can_run_kahypar TRUE\n");
-      } else {
-        printf("_can_run_kahypar FALSE\n");
-      }
+      // std::cout << "run REPCUT_PARALLEL_OMP\n";
+      // if (_can_run_kahypar) {
+      //   printf("_can_run_kahypar TRUE\n");
+      // } else {
+      //   printf("_can_run_kahypar FALSE\n");
+      // }
       _run_RepCut_cones_gates(num_threads);
       break;      
     }
     case Mode::REPCUT_MT_SEQUENTIAL: {
-      std::cout << "run REPCUT_MT_SEQUENTIAL and REPCUT_MT_PARALLEL_OMP\n";
-      if (_can_run_kahypar) {
-        printf("_can_run_kahypar TRUE\n");
-      } else {
-        printf("_can_run_kahypar FALSE\n");
-      }
+      // std::cout << "run REPCUT_MT_SEQUENTIAL and REPCUT_MT_PARALLEL_OMP\n";
+      // if (_can_run_kahypar) {
+      //   printf("_can_run_kahypar TRUE\n");
+      // } else {
+      //   printf("_can_run_kahypar FALSE\n");
+      // }
       auto start = std::chrono::steady_clock::now();      
       _run_RepCut_cones_gates(1);
       auto end = std::chrono::steady_clock::now();      
       std::chrono::duration<double> duration_0 = end - start;
 
-      std::cout << "run REPCUT_MT_SEQUENTIAL, num_threads = " << num_threads << "\n";
+      // std::cout << "run REPCUT_MT_SEQUENTIAL, num_threads = " << num_threads << "\n";
       start = std::chrono::steady_clock::now();      
       _run_RepCut_cones_gates(num_threads);
       end = std::chrono::steady_clock::now();      
@@ -1228,12 +1419,12 @@ void CPUPartitioner::run(Mode mode, const size_t num_threads) {
       break;
     }
     case Mode::REPCUT_MT_PARALLEL_OMP: {
-      std::cout << "run REPCUT_MT_PARALLEL_OMP\n";
-      if (_can_run_kahypar) {
-        printf("_can_run_kahypar TRUE\n");
-      } else {
-        printf("_can_run_kahypar FALSE\n");
-      }
+      // std::cout << "run REPCUT_MT_PARALLEL_OMP\n";
+      // if (_can_run_kahypar) {
+      //   printf("_can_run_kahypar TRUE\n");
+      // } else {
+      //   printf("_can_run_kahypar FALSE\n");
+      // }
       _run_RepCut_cones_gates(num_threads);
       break;      
     }    
