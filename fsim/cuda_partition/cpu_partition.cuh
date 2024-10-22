@@ -126,8 +126,8 @@ private:
   std::vector<size_t> _hyperedges_eind;
   std::vector<size_t> _hyperedges_eptr;
   const double _imbalance = 0.015;
-  const kahypar_partition_id_t _k = 4; // number of partitions 
-  const size_t _k_sizet = 4; 
+  const kahypar_partition_id_t _k = 1; // number of partitions 
+  const size_t _k_sizet = 1; 
   size_t _KaHyPar_num_vertices = 0; // number of sinks
   size_t _KaHyPar_num_hyperedges = 0;
 

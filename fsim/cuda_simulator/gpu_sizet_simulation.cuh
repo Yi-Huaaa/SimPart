@@ -138,7 +138,7 @@ public:
     _num_fault = num_fault;
     
     // run simulation
-    _run_cones_gates_sizet_gpu(_numGates_per_level_gpu_of_groups,
+    _run_cones_gates_gpu(_numGates_per_level_gpu_of_groups,
                         _per_level_of_group_start_accum_gpu,
                         _cones_partitioned_gpu, 
                         _total_num_levels,
@@ -172,7 +172,7 @@ private:
   size_t _num_fault; 
 
 
-  void _run_cones_gates_sizet_gpu(const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
+  void _run_cones_gates_gpu(const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
                                   const size_t *_per_level_of_group_start_accum_gpu,
                                   const size_t *_cones_partitioned_gpu,
                                   const size_t _total_num_levels,

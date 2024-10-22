@@ -1154,8 +1154,8 @@ void CPUPartitioner::_ask_gpu_memory_simu_1(Mode mode){
   cudaMalloc((void**)&_invAdj_gpu, (invAdj_tmp.size())*sizeof(size_t));
   cudaMalloc((void**)&_invAdj_index_table_gpu, 2*_sum_pi_gates_pos*sizeof(size_t));
   cudaCheckErrors("CUDA: _invAdj_gpu  cudaMalloc - Failure");
-  printf("invAdj_index_tmp.size() = %lu, 2*_sum_pi_gates_pos = %lu\n", 
-          invAdj_index_tmp.size(), 2*_sum_pi_gates_pos);
+  // printf("invAdj_index_tmp.size() = %lu, 2*_sum_pi_gates_pos = %lu\n", 
+  //         invAdj_index_tmp.size(), 2*_sum_pi_gates_pos);
 
   cudaMemcpyAsync(_invAdj_gpu, invAdj_tmp.data(), 
                    (invAdj_tmp.size())*sizeof(size_t), cudaMemcpyHostToDevice);  
@@ -1170,6 +1170,8 @@ void CPUPartitioner::_ask_gpu_memory_simu_1(Mode mode){
     case Mode::SEQUENTIAL: 
     case Mode::PARALLEL_OMP: {
       accum = 0;
+      per_level_of_group_start_accum_tmp.push_back(accum);
+
       for (size_t lvl = 0; lvl < _gateIdx_in_each_level.size(); lvl++) {
         size_t in_accum = 0;
         for (size_t g = 0; g < _gateIdx_in_each_level[lvl].size(); g++) {
@@ -1181,7 +1183,6 @@ void CPUPartitioner::_ask_gpu_memory_simu_1(Mode mode){
         _numGates_per_level_gpu_of_groups.push_back(in_accum);
         per_level_of_group_start_accum_tmp.push_back(accum);
       }
-      per_level_of_group_start_accum_tmp.push_back(accum);
 
       break;
     }
@@ -1195,6 +1196,8 @@ void CPUPartitioner::_ask_gpu_memory_simu_1(Mode mode){
     case Mode::REPCUT_MT_SEQUENTIAL:
     case Mode::REPCUT_MT_PARALLEL_OMP: {
       accum = 0;
+      per_level_of_group_start_accum_tmp.push_back(accum);
+
       for (size_t i = 0; i < _RepCut_output_cones.size(); ++i) {
         for (size_t lvl = 0; lvl < _RepCut_output_cones[i].size(); ++lvl) {
           size_t in_accum = 0;
@@ -1203,17 +1206,23 @@ void CPUPartitioner::_ask_gpu_memory_simu_1(Mode mode){
             in_accum++;
             accum++;
           }
-          _numGates_per_level_gpu_of_groups.push_back(accum);
+          _numGates_per_level_gpu_of_groups.push_back(in_accum);
           per_level_of_group_start_accum_tmp.push_back(accum);
         }
       }
-      per_level_of_group_start_accum_tmp.push_back(accum);
       break;
     }
     default:
       printf("No SUCH CASES\n");
       return; 
   }
+
+  // for (size_t i = 0; i < cones_partitioned_tmp.size(); i++) {
+  //   printf("cones_partitioned_tmp[%lu] = %lu\n", i, cones_partitioned_tmp[i]);
+  // }
+  // for (size_t i = 0; i < per_level_of_group_start_accum_tmp.size(); i++) {
+  //   printf("per_level_of_group_start_accum_tmp[%lu] = %lu\n", i, per_level_of_group_start_accum_tmp[i]);
+  // }  
 
   cudaMalloc((void**)&_cones_partitioned_gpu, (cones_partitioned_tmp.size())*sizeof(size_t));
   cudaMalloc((void**)&_per_level_of_group_start_accum_gpu, (_k*_total_num_levels+1)*sizeof(size_t));
@@ -1244,9 +1253,14 @@ void CPUPartitioner::_ask_gpu_memory_simu_2(){
 
 void CPUPartitioner::_move_GateType_h2d() {
   // pi_gate_po_gate_type_gpu
+  std::vector<size_t>pi_gate_po_gate_type;
 
-  cudaMemcpyAsync(_pi_gate_po_gate_type_gpu, _gate_type.data(), 
-                   _sum_pi_gates_pos*sizeof(size_t), cudaMemcpyHostToDevice);
+  for (size_t g = 0; g < _sum_pi_gates_pos; g++) {
+    pi_gate_po_gate_type.push_back(static_cast<size_t>(_gate_type[g]));
+  }
+
+  cudaMemcpyAsync(_pi_gate_po_gate_type_gpu, pi_gate_po_gate_type.data(), 
+                  (pi_gate_po_gate_type.size())*sizeof(size_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("CUDA: _pi_gate_po_gate_type_gpu cudaMemcpy failure"); 
 }
 
@@ -1279,7 +1293,7 @@ void CPUPartitioner::_move_faults_h2d() {
 
 
 void CPUPartitioner::prepare_gpu_simulation(Mode mode) {
-  printf("CPUPartitioner::prepare_gpu_simulation\n");
+  // printf("CPUPartitioner::prepare_gpu_simulation\n");
   _ask_gpu_memory_simu_1(mode);
   _ask_gpu_memory_simu_2();
   _move_GateType_h2d();
@@ -1297,7 +1311,6 @@ void CPUPartitioner::run(SIMU_Mode simu_mode, Mode mode, const size_t num_thread
       break;
     }
     case SIMU_Mode::GPU: {
-      printf("SIMU_Mode::GPU: {\n");
       _run_gpu_simulator();
       break;      
     }
@@ -1309,7 +1322,6 @@ void CPUPartitioner::run(SIMU_Mode simu_mode, Mode mode, const size_t num_thread
 }
 
 void CPUPartitioner::_run_gpu_simulator() {
-  printf("hello world\n");
   GALPS_SIZET_GPUSimulator gpuSimulator;
   gpuSimulator.run_gpu_simulator_cones_sizet_gpu(_k_sizet, _num_PIs, _num_inner_gates, _num_POs, 
                                                 _sum_pi_gates_pos, 
