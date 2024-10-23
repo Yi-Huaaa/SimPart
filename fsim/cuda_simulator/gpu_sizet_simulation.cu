@@ -159,7 +159,7 @@ void GALPS_SIZET_GPUSimulator::_run_cones_good_case_gpu(const std::vector<size_t
       // printf("k = %lu, level = %lu, num_blocks = %lu, num_threads = %lu, num_gates_per_level = %lu\n", 
       //         k, level, num_blocks, num_threads, num_gates_per_level);
 
-      _run_gate <<< num_blocks, num_threads >>> (_invAdj_gpu, _invAdj_index_table_gpu, 
+      _run_gate <<< num_blocks, num_threads, 0, streams[k] >>> (_invAdj_gpu, _invAdj_index_table_gpu, 
                                                 _cones_partitioned_gpu, 
                                                 _per_level_of_group_start_accum_gpu, k*_total_num_levels+level,
                                                 _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 

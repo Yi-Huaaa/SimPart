@@ -40,7 +40,7 @@
 
 
 // constexpr
-constexpr int _k = 2; // based on the kernel concurrency
+constexpr int _k = 4; // based on the kernel concurrency
 
 // Define the enum class
 enum class gpuGateType : int {
@@ -181,7 +181,10 @@ __global__ void print_pi_gate_po_gate_type_gpu(const IndexType *_pi_gate_po_gate
 __global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs);
 template<typename IndexType>
 __global__ void print_fault_gate_idx_gpu(IndexType *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, IndexType _num_fault);
-
+__global__ void check_cones_partitioned_gpu_visited(int *visited, 
+                                                    const int *_cones_partitioned_gpu, 
+                                                    const int num1,
+                                                    const int total_numGates_partitioned);
 
 
 
@@ -207,6 +210,7 @@ public:
   // preparation 
   void prepare_cpu_simulation();
   void prepare_gpu_simulation();
+  void prepare_gpu_simulation_new_version();
 
   void run(Mode mode, const size_t num_threads);
   void freeMem() {
@@ -402,6 +406,15 @@ private:
   template<typename IndexType = int>
   void _move_faults_h2d();
   
+
+  //  1022: new version
+  void _copy_partitioned_results_back_to_host();  
+  void _ask_gpu_memory_simu_1_new_version();
+  void _ask_gpu_memory_simu_2_new_version();
+  void _move_GateType_h2d_new_version();
+  void _move_patterns_h2d_new_version();
+  void _move_faults_h2d_new_version();
+
 
 
 

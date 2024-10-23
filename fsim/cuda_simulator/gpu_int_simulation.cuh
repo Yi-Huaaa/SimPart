@@ -366,7 +366,7 @@ void GALPS_GPUSimulator<IndexType>::_run_cones_gates_gpu(const std::vector<Index
                       (num_gates_per_level);
         // printf("k = %d, level = %d, num_blocks = %d, num_threads = %d\n", k, level, num_blocks, num_threads);
 
-        _run_gate <<< num_blocks, num_threads >>> (_invAdj_gpu, _invAdj_index_table_gpu, 
+        _run_gate <<< num_blocks, num_threads, 0, streams[k] >>> (_invAdj_gpu, _invAdj_index_table_gpu, 
                                                   _cones_partitioned_gpu, 
                                                   _per_level_of_group_start_accum_gpu, k*_total_num_levels+level,
                                                   _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 

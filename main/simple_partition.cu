@@ -142,6 +142,7 @@ int main(int argc, char *argv[]) {
     case 1: {
       // printf("run GPU_PARTIOR_GPU_SIMUTOR");
       cudaPartitioner.prepare_gpu_simulation();
+      // cudaPartitioner.prepare_gpu_simulation_new_version();
       break;
     }
   }
