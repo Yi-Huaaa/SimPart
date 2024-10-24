@@ -41,7 +41,7 @@
 #ifndef CPU_PARTITIONER_VERSION
   #define GPU_PARTITIONER_VERSION
   #define NUM_THREADS 8
-  #define SIMU_MODE 1   // MODE 0: CPU Simulator / 1: GPU Simulator 
+  #define SIMU_MODE 1  // MODE 0: CPU Simulator / 1: GPU Simulator 
 #endif   // #ifndef CPU_PARTITIONER_VERSION
 
 
@@ -61,7 +61,7 @@ double round_to(double value, double precision = 1.0){
 
 int main(int argc, char *argv[]) {
   // Init recording time 
-  std::chrono::duration<double> duration_read_data = chro_zero(); // include partition
+  // std::chrono::duration<double> duration_read_data = chro_zero(); // include partition
   std::chrono::duration<double> duration_prepare_simulation = chro_zero();
   std::chrono::duration<double> duration_simulation = chro_zero();
 
@@ -78,14 +78,14 @@ int main(int argc, char *argv[]) {
   printf("RUN MODE = %d, with NUM_THREADS = %d\n", MODE, NUM_THREADS);
 
   // Read data and Run cpuPartitioner
-  auto start = std::chrono::steady_clock::now();
+  // auto start = std::chrono::steady_clock::now();
     cpuPartitioner.read(CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
                         ckt_path, flst_path, ptn_path,NUM_THREADS);
-  auto end = std::chrono::steady_clock::now();
-  duration_read_data = end - start;
+  // auto end = std::chrono::steady_clock::now();
+  // duration_read_data = end - start;
 
   // Prepare Simulator
-  start = std::chrono::steady_clock::now();
+  auto start = std::chrono::steady_clock::now();
   switch (SIMU_MODE) {
     case 0: {
         // Prepare for CPU simulation
@@ -99,23 +99,23 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  end = std::chrono::steady_clock::now();
+  auto end = std::chrono::steady_clock::now();
   duration_prepare_simulation = end - start;
 
 
-    // // pre-run
-    // cpuPartitioner.run(CPUPartitioner::SIMU_Mode(static_cast<size_t>(SIMU_MODE)), 
-    //                   CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
-    //                   NUM_THREADS);    
-    // // Run Simulator
-    // for (size_t t = 0; t < TIMES; t++) {
-    //   start = std::chrono::steady_clock::now();
-    //     cpuPartitioner.run(CPUPartitioner::SIMU_Mode(static_cast<size_t>(SIMU_MODE)), 
-    //                        CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
-    //                        NUM_THREADS);
-    //   end = std::chrono::steady_clock::now();
-    //   duration_simulation += (end - start);
-    // }
+    // pre-run
+    cpuPartitioner.run(CPUPartitioner::SIMU_Mode(static_cast<size_t>(SIMU_MODE)), 
+                      CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
+                      NUM_THREADS);    
+    // Run Simulator
+    for (size_t t = 0; t < TIMES; t++) {
+      start = std::chrono::steady_clock::now();
+        cpuPartitioner.run(CPUPartitioner::SIMU_Mode(static_cast<size_t>(SIMU_MODE)), 
+                           CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
+                           NUM_THREADS);
+      end = std::chrono::steady_clock::now();
+      duration_simulation += (end - start);
+    }
 #endif  // CPU_PARTITIONER_VERSION
 
 
@@ -126,13 +126,13 @@ int main(int argc, char *argv[]) {
   CUDAPartitioner cudaPartitioner;
 
   // Read data and Run cudaPartitioner
-  auto start = std::chrono::steady_clock::now();
+  // auto start = std::chrono::steady_clock::now();
     cudaPartitioner.read(ckt_path, flst_path, ptn_path);
-  auto end = std::chrono::steady_clock::now();
-  duration_read_data = end - start;
+  // auto end = std::chrono::steady_clock::now();
+  // duration_read_data = end - start;
   
   // Prepare Simulator
-  start = std::chrono::steady_clock::now();
+  auto start = std::chrono::steady_clock::now();
   switch (SIMU_MODE) {
     case 0: {
       // printf("run GPU_PARTIOR_CPU_SIMUTOR");
@@ -146,7 +146,7 @@ int main(int argc, char *argv[]) {
       break;
     }
   }
-  end = std::chrono::steady_clock::now();
+  auto end = std::chrono::steady_clock::now();
   duration_prepare_simulation = end - start;
 
   // pre-run
@@ -171,8 +171,8 @@ int main(int argc, char *argv[]) {
   
   // Show time 
 #ifdef SHOW_ALL_TIME
-  std::cout << "Execution Time:\n";
-  std::cout << "read_data: " << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
+  // std::cout << "Execution Time:\n";
+  // std::cout << "read_data: " << round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
   std::cout << "prepare_GPU_simulation: " << round_to((duration_prepare_simulation.count())*1000, 0.001) << " ms\n";
   std::cout << "run_simulator: " <<  round_to(((duration_simulation.count()/TIMES))*1000, 0.001) << " ms\n";
 #endif // SHOW_ALL_TIME

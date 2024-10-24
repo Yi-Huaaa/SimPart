@@ -40,7 +40,7 @@
 
 
 // constexpr
-constexpr int _k = 4; // based on the kernel concurrency
+constexpr int _k = 2; // based on the kernel concurrency
 
 // Define the enum class
 enum class gpuGateType : int {
@@ -91,57 +91,6 @@ __device__ bool _canEnqueue(const int g_idx,
                             int *_visited_gpu);
 
 
-// Prepare for simulation                           
-template<typename IndexType = int>
-__global__ void _construct_gateIdx_in_each_level_gpu(const IndexType _sum_pi_gates_pos,
-                                                    const IndexType *_total_num_levels_gpu,
-                                                    const IndexType *_level_of_gates_gpu,
-                                                    IndexType *_numGates_per_level_gpu, 
-                                                    IndexType *_gateIdx_in_each_level_gpu,
-                                                    IndexType *index_accum_gpu);
-template<typename IndexType = int>
-__device__ bool _is_k_sink_gpu(const IndexType k, 
-                          const IndexType gateIdx, 
-                          const IndexType *_adj_index_table_gpu, 
-                          const IndexType *_partitionIndex_gpu);
-template<typename IndexType = int>
-__global__ void _push_sinks_of_this_group_gpu (const IndexType _sum_pi_gates_pos, 
-                                          const IndexType k, 
-                                          const IndexType *_adj_index_table_gpu, 
-                                          const IndexType *_partitionIndex_gpu,
-                                          const IndexType *_total_num_levels_gpu, 
-                                          IndexType *_visited_gpu);
-template<typename IndexType = int>
-__global__ void _construct_numGates_per_level_gpu_of_groups_gpu(const IndexType k, const IndexType level, 
-                      const IndexType num_plms, const IndexType accum,
-                      const IndexType *_adj_gpu, 
-                      const IndexType *_adj_index_table_gpu, 
-                      const IndexType *_invAdj_gpu,
-                      const IndexType *_invAdj_index_table_gpu, 
-                      const IndexType *_gateIdx_in_each_level_gpu,
-                      const IndexType *_total_num_levels_gpu, 
-                      IndexType *_visited_gpu,
-                      IndexType *_numGates_per_level_gpu_of_groups_gpu,
-                      IndexType *_total_numGates_partitioned_gpu);
-template<typename IndexType = int>
-__global__ void _prefix_sum (IndexType *output, IndexType *input, IndexType n,
-                            const bool need_to_pad);
-template<typename IndexType>
-__global__ void _prefix_sum_single_thread(const IndexType n, 
-                                          const IndexType *input, 
-                                          IndexType *output);
-template<typename IndexType>
-__global__ void _construct_cones_partitioned_gpu(const IndexType k, const IndexType level, 
-                                                const IndexType num_plms, const IndexType accum,
-                                                const IndexType *_invAdj_gpu,
-                                                const IndexType *_invAdj_index_table_gpu, 
-                                                const IndexType *_gateIdx_in_each_level_gpu,
-                                                const IndexType *_total_num_levels_gpu, 
-                                                const IndexType *_per_level_of_group_start_accum_gpu,
-                                                IndexType *_visited_gpu,
-                                                IndexType *_cones_partitioned_gpu,
-                                                IndexType *pos);
-
 
 // For print
 __global__ void _gpu_print_read_graph(const int _sum_pi_gates_pos, 
@@ -163,16 +112,6 @@ __global__ void _check_levelize_gpu(const IndexType *_max_level_gpu,
                                     const IndexType *_total_num_levels_gpu, 
                                     const IndexType _sum_pi_gates_pos, 
                                     const IndexType *_level_of_gates_gpu);
-template<typename IndexType = int>
-__global__ void _print_construct_numGates_per_level_gpu_of_groups_gpu(const size_t sz0, 
-                                                                    const IndexType *_numGates_per_level_gpu_of_groups_gpu, 
-                                                                    const size_t sz1, 
-                                                                    const IndexType *_total_numGates_partitioned_gpu);
-template<typename IndexType>
-__global__ void _print_prefix_sum(const size_t sz0, 
-                                  const IndexType *_numGates_per_level_gpu_of_groups_gpu, 
-                                  const size_t sz1, 
-                                  const IndexType *_per_level_of_group_start_accum_gpu);
 template<typename IndexType>
 __global__ void _print_construct_cones_partitioned_gpu(IndexType *_total_numGates_partitioned_gpu,
                                                       IndexType *_cones_partitioned_gpu);
@@ -185,7 +124,10 @@ __global__ void check_cones_partitioned_gpu_visited(int *visited,
                                                     const int *_cones_partitioned_gpu, 
                                                     const int num1,
                                                     const int total_numGates_partitioned);
-
+__global__ void print_ask_gpu_simulation_memory(const size_t sz1, 
+                                                const int *_per_level_of_group_start_accum_gpu,
+                                                const size_t sz2,
+                                                const int *_cones_partitioned_gpu);
 
 
 
@@ -210,7 +152,6 @@ public:
   // preparation 
   void prepare_cpu_simulation();
   void prepare_gpu_simulation();
-  void prepare_gpu_simulation_new_version();
 
   void run(Mode mode, const size_t num_threads);
   void freeMem() {
@@ -281,13 +222,14 @@ private:
 
 
   // GPU simulation pre-process
-  int *_gateIdx_in_each_level_gpu;  // levelize restuls 
-  int *_numGates_per_level_gpu; // levelize: number of gates per level
-  std::vector<int> _numGates_per_level; // levelize: CPU
-  int *_numGates_per_level_gpu_of_groups_gpu; // number of gates per level of each group 
   std::vector<int> _numGates_per_level_gpu_of_groups; // partitioned cones CPU
+  
   int *_total_numGates_partitioned_gpu;
+  
+  std::vector<int> _per_level_of_group_start_accum_tmp;
   int *_per_level_of_group_start_accum_gpu; // start point of each level of each group in _total_numGates_partitioned_gpu
+  
+  std::vector<int> _cones_partitioned_tmp;
   int *_cones_partitioned_gpu; // partitioned results 
 
 
@@ -311,7 +253,6 @@ private:
   int *_found_fault_to_pattern_gpu;
 
 
-
   /* Read files - CPU function */
   void _read_graph(std::istream &ckt);
   void _construct_graph();
@@ -324,14 +265,24 @@ private:
   int _get_queue_size();
 
   /* Construct cones */
-  void _construct_partitioned_groups();
-  void _get_topological_sort_resutls();
-  void _copy_TS_resutls_to_Host();
-  void _levelized();
-  void _construct_groups();
-  void _construct_cones(std::vector<int> &sinks,
-                      std::vector<std::set<int>> &_cones_set_g,
-                      std::vector<bool> &visited_cpu);
+  // GPU Simulator preparation - CPU
+  void _construct_partitioned_groups(int simulator);
+    void _get_topological_sort_resutls();
+      void _copy_TS_resutls_to_Host();
+      void _levelized();
+    void _construct_groups();
+      void _get_sinks_group(std::vector<std::vector<int>> &sinks_groups);
+      void _construct_cones(std::vector<int> &sinks,
+                          std::vector<std::set<int>> &_cones_set_g,
+                          std::vector<bool> &visited_cpu);
+  // GPU Simulator preparation - GPU
+  void _ask_gpu_simulation_memory();
+  void _move_GateType_h2d();
+  void _move_patterns_h2d();
+  void _move_faults___h2d();
+
+
+
 
   void _free() {
     // Host
@@ -355,9 +306,6 @@ private:
     cudaFree(_max_level_gpu);
     cudaFree(_total_num_levels_gpu);
     cudaFree(_level_of_gates_gpu);
-    cudaFree(_numGates_per_level_gpu);
-    cudaFree(_gateIdx_in_each_level_gpu);
-    cudaFree(_numGates_per_level_gpu_of_groups_gpu);
     cudaFree(_per_level_of_group_start_accum_gpu);
     cudaFree(_total_numGates_partitioned_gpu);
     cudaFree(_pi_gate_po_gate_type_gpu);
@@ -386,47 +334,17 @@ private:
     _found_fault_to_pattern.resize(2 * _faults.size());
   }
 
-  // GPU Simulator
   
-  template<typename IndexType = int>
-  void _ask_gpu_memory_simu_0();
-  template<typename IndexType = int>
-  void _TS_levelize_gpu();
-  template<typename IndexType = int>
-  void _ask_gpu_memory_simu_1();  
-  template<typename IndexType = int>
-  void _construct_partitioned_groups_gpu();
-  template<typename IndexType = int>
-  void _ask_gpu_memory_simu_2();  
-
-  template<typename IndexType = int>
-  void _move_GateType_h2d();
-  template<typename IndexType = int>
-  void _move_patterns_h2d();
-  template<typename IndexType = int>
-  void _move_faults_h2d();
-  
-
-  //  1022: new version
-  void _copy_partitioned_results_back_to_host();  
-  void _ask_gpu_memory_simu_1_new_version();
-  void _ask_gpu_memory_simu_2_new_version();
-  void _move_GateType_h2d_new_version();
-  void _move_patterns_h2d_new_version();
-  void _move_faults_h2d_new_version();
-
-
-
 
 
   // --------------------------------------------------------------------------
 
   // Print for check 
-  std::string gateTypeToString(GateType type) const;
-  void print_patterns(const std::vector<Pattern> &patterns, const int round,
+  std::string _gateTypeToString(GateType type) const;
+  void _print_patterns(const std::vector<Pattern> &patterns, const int round,
                       const int num_PIs) const;
-  void print_bits_stack(const int size, const void *const ptr) const;
-  gpuGateType convertGateTypeToGpu(GateType gate_type);
+  void _print_bits_stack(const int size, const void *const ptr) const;
+  gpuGateType _convertGateTypeToGpu(GateType gate_type);
   void _print_read_graph() const;
   void _check_graph_connection_CPU();
   void _print_copy_TS_resutls_to_Host();
@@ -434,10 +352,14 @@ private:
   void _print_construct_groups(const std::vector<std::vector<int>> &sinks_groups);
   void _count_duplications();
   // Simulation
-  void print_simulation_results(const std::vector<size_t> &pi_results,
+  void _print_simulation_results(const std::vector<size_t> &pi_results,
                                 const std::vector<size_t> &gate_results,
                                 const std::vector<size_t> &po_results) const;
-  void print_ppg(const ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate) const;
+  void _print_ppg(const ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate) const;
+
+  double _round_to(double value, double precision = 1.0){
+    return std::round(value / precision) * precision;
+  }  
 
 };
 

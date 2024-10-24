@@ -83,16 +83,13 @@ void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &
   _read_pattern(ptn);
 
   /* Partitioning */
+  auto start = std::chrono::steady_clock::now();
   _ask_gpu_memory_part();
   _call_gpu_partitioner();
-}
+  auto end = std::chrono::steady_clock::now();
+  std::chrono::duration<double> duration_GPU_partition = end - start;
 
-/* Prepare for simulation */
-void CUDAPartitioner::prepare_cpu_simulation() {
-  _construct_partitioned_groups();
-  // Note: _construct_graph need to be run after _construct_partitioned_groups
-  _construct_graph();
-  _ask_simulation_memory();
+  std::cout << "duration_GPU_partition: " << _round_to((duration_GPU_partition.count())*1000, 0.001) << " ms\n";
 }
 
 void CUDAPartitioner::_read_graph(std::istream &ckt) {
@@ -186,40 +183,6 @@ void CUDAPartitioner::_read_graph(std::istream &ckt) {
 #endif 
 }
 
-// 20241013 Updated version
-void CUDAPartitioner::_construct_graph() {
-  _Gates.resize(_sum_pi_gates_pos);
-
-  for (int toGate = 0; toGate < _sum_pi_gates_pos; toGate++) {
-    int toGateIdx = toGate;
-    _Gates[toGate]._idx = toGateIdx;
-    _Gates[toGate]._type = _gate_type[toGate];
-    _Gates[toGate]._level = _level_of_gates[toGate];
-    _Gates[toGate]._output_value = 0;
-
-    // for (int fmGate = 0; fmGate < _invAdj[toGate].size(); fmGate++) {
-    for (int fmGate = _invAdj_index_table[2*toGate+0]; 
-        fmGate < _invAdj_index_table[2*toGate+1]; 
-        fmGate++) {
-      int fmGateIdx = _invAdj[fmGate];
-      ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &from_gate =
-        _Gates[fmGateIdx];
-      ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &to_gate =
-        _Gates[toGateIdx];
-      to_gate._inputs.push_back(&from_gate);
-    }
-  }
-
-#ifdef CPU_PART_DEBUG_PRINT_GRAPH
-  std::cout << "\n_Gates = [\n";
-  for (int i = 0; i < _sum_pi_gates_pos; i++) {
-    print_ppg(_Gates[i]);
-  }
-  std::cout << "]\n";
-#endif  
-}
-
-
 void CUDAPartitioner::_read_fault(std::istream &flst) {
   flst >> _num_fault;
   _faults.resize(_num_fault);
@@ -250,8 +213,9 @@ void CUDAPartitioner::_read_pattern(std::istream &ptn) {
   }
 }
 
+// --------------------------------------------------------------------------------------------------
 
-// GPU functions
+/* GPU Partitioner */
 void CUDAPartitioner:: _ask_gpu_memory_part() {
   // For partitioner
   cudaMalloc((void**)&_adj_gpu, _szOfAdj*sizeof(int));
@@ -270,7 +234,6 @@ void CUDAPartitioner:: _ask_gpu_memory_part() {
   cudaMalloc((void**)&_queue_size, 1*sizeof(int));
   
   cudaCheckErrors("CUDA: Asking partitioner memory - Failure");
-
   
   cudaMemcpyAsync(_adj_gpu, _adj, 
                   _szOfAdj*sizeof(int), cudaMemcpyHostToDevice);
@@ -280,7 +243,6 @@ void CUDAPartitioner:: _ask_gpu_memory_part() {
                   2*_sum_pi_gates_pos*sizeof(int), cudaMemcpyHostToDevice);
   cudaMemcpyAsync(_invAdj_index_table_gpu, _invAdj_index_table, 
                   2*_sum_pi_gates_pos*sizeof(int), cudaMemcpyHostToDevice);
-
 
   // Init queue                
   cudaMemset(_queue_data, 0, _szOfAdj*sizeof(int)); 
@@ -576,21 +538,9 @@ void CUDAPartitioner::_call_gpu_partitioner() {
 }
 
 
-void CUDAPartitioner::_construct_partitioned_groups() {
-  // Topological sort on CPU:
-    // Copy topological sort results from GPU to CPU
-    // Using topological sort results from GPU to levelize 
-  _get_topological_sort_resutls();  
+// --------------------------------------------------------------------------------------------------
 
-  // construct group and show constructed group 
-  _construct_groups();
-
-#ifdef CHECK_CONSTRUCT_PARTITIONS_DUPLICATIONS
-  _count_duplications();
-#endif 
-}
-
-
+/* Prepare for simulation */
 void CUDAPartitioner::_copy_TS_resutls_to_Host() {
   _queue_data_cpu.resize(28*_szOfAdj);
   _partitionIndex_cpu.resize(_sum_pi_gates_pos); 
@@ -637,7 +587,6 @@ void CUDAPartitioner::_levelized() {
 #endif 
 }
 
-
 void CUDAPartitioner::_get_topological_sort_resutls() {
   _copy_TS_resutls_to_Host();  
   _levelized();
@@ -679,9 +628,8 @@ void CUDAPartitioner::_construct_cones(std::vector<int> &sinks,
   }
 }
 
-void CUDAPartitioner::_construct_groups(){
+void CUDAPartitioner::_get_sinks_group(std::vector<std::vector<int>> &sinks_groups) {
   // Get the group of sinks 
-  std::vector<std::vector<int>> sinks_groups;
   sinks_groups.resize(_k);
 
   // Get sinks 
@@ -692,6 +640,11 @@ void CUDAPartitioner::_construct_groups(){
       sinks_groups[sinkGroup].push_back(sinkIdx);
     }
   }
+}
+
+void CUDAPartitioner::_construct_groups(){
+  std::vector<std::vector<int>> sinks_groups;
+  _get_sinks_group(sinks_groups);
 
   // used to check the correctness 
   std::vector<bool> visited_cpu;
@@ -708,14 +661,6 @@ void CUDAPartitioner::_construct_groups(){
     _construct_cones(sinks_groups[g], _cones_set[g], visited_cpu);
   }
 
-  // Construct _cones_partitioned
-  for (size_t i = 0; i < _cones_set.size(); ++i) {
-    for (size_t lvl = 0; lvl < _cones_set[i].size(); ++lvl) {
-      for (const auto& element : _cones_set[i][lvl]) {
-        _cones_partitioned[i][lvl].push_back(element);
-      }
-    }
-  }  
 
 #ifdef GPU_PART_CHECK_FOR_VISITED
   int accum = 0;
@@ -726,12 +671,234 @@ void CUDAPartitioner::_construct_groups(){
   }
   printf("BIBI2: visited_cpu: accum = %d\n\n", accum);
 #endif 
-
 #ifdef CPU_PRINT_CONSTRUCT_GROUPS
   _print_construct_groups(sinks_groups);
 #endif
 }
 
+void CUDAPartitioner::_construct_graph() {
+  _Gates.resize(_sum_pi_gates_pos);
+
+  for (int toGate = 0; toGate < _sum_pi_gates_pos; toGate++) {
+    int toGateIdx = toGate;
+    _Gates[toGate]._idx = toGateIdx;
+    _Gates[toGate]._type = _gate_type[toGate];
+    _Gates[toGate]._level = _level_of_gates[toGate];
+    _Gates[toGate]._output_value = 0;
+
+    // for (int fmGate = 0; fmGate < _invAdj[toGate].size(); fmGate++) {
+    for (int fmGate = _invAdj_index_table[2*toGate+0]; 
+        fmGate < _invAdj_index_table[2*toGate+1]; 
+        fmGate++) {
+      int fmGateIdx = _invAdj[fmGate];
+      ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &from_gate =
+        _Gates[fmGateIdx];
+      ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &to_gate =
+        _Gates[toGateIdx];
+      to_gate._inputs.push_back(&from_gate);
+    }
+  }
+
+#ifdef CPU_PART_DEBUG_PRINT_GRAPH
+  std::cout << "\n_Gates = [\n";
+  for (int i = 0; i < _sum_pi_gates_pos; i++) {
+    _print_ppg(_Gates[i]);
+  }
+  std::cout << "]\n";
+#endif  
+}
+
+void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
+  // Topological sort on CPU:
+    // Copy topological sort results from GPU to CPU
+    // Using topological sort results from GPU to levelize 
+  _get_topological_sort_resutls();  
+
+  // construct group and show constructed group 
+  _construct_groups();
+
+  
+  switch (simulator) {
+    case 0: { // CPU simulator
+      // Construct _cones_partitioned
+      for (size_t i = 0; i < _cones_set.size(); ++i) {
+        for (size_t lvl = 0; lvl < _cones_set[i].size(); ++lvl) {
+          for (const auto& element : _cones_set[i][lvl]) {
+            _cones_partitioned[i][lvl].push_back(element);
+          }
+        }
+      }  
+      break;  
+    }
+    case 1: { // GPU simulator 
+      // construct _cones_partitioned_tmp
+      // construct _numGates_per_level_gpu_of_groups
+      // construct _per_level_of_group_start_accum_tmp
+      int accum = 0;
+      _per_level_of_group_start_accum_tmp.push_back(accum);
+
+      for (size_t i = 0; i < _cones_set.size(); ++i) {
+        for (size_t lvl = 0; lvl < _cones_set[i].size(); ++lvl) {
+          int accum2 = 0;
+          for (const auto& element : _cones_set[i][lvl]) {
+            _cones_partitioned_tmp.push_back(element);
+            accum++;
+            accum2++;
+          }
+          _per_level_of_group_start_accum_tmp.push_back(accum);
+          _numGates_per_level_gpu_of_groups.push_back(accum2);
+        }
+      }
+
+        // printf("_numGates_per_level_gpu_of_groups = [");
+        // for (int i = 0; i < _numGates_per_level_gpu_of_groups.size(); i++) {
+        //   printf("%d, ", _numGates_per_level_gpu_of_groups[i]);
+        // } printf("]\n");
+
+        // printf("_per_level_of_group_start_accum_tmp = [");
+        // for (int i = 0; i < _per_level_of_group_start_accum_tmp.size(); i++) {
+        //   printf("%d, ", _per_level_of_group_start_accum_tmp[i]);
+        // } printf("]\n");
+
+        // printf("_cones_partitioned_tmp = [");
+        // for (int i = 0; i < _cones_partitioned_tmp.size(); i++) {
+        //   printf("%d, ", _cones_partitioned_tmp[i]);
+        // } printf("]\n");
+
+      break;
+    }
+    default: {
+      printf("No SUCH CASES\n");
+      return; 
+    }
+  }
+
+  
+
+#ifdef CHECK_CONSTRUCT_PARTITIONS_DUPLICATIONS
+  _count_duplications();
+#endif 
+}
+
+void CUDAPartitioner::prepare_cpu_simulation() {
+  _construct_partitioned_groups(0);
+  // Note: _construct_graph need to be run after _construct_partitioned_groups
+  _construct_graph();
+  _ask_simulation_memory();
+}
+
+
+// ----------------
+
+
+void CUDAPartitioner::_ask_gpu_simulation_memory() {
+  // Memory allocation
+  cudaMalloc((void**)&_pi_gate_po_gate_type_gpu, _sum_pi_gates_pos*sizeof(int));
+  cudaMalloc((void**)&_patterns_gpu, _num_rounds*_num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_fault_gate_idx_gpu, _num_fault*sizeof(int));
+  cudaMalloc((void**)&_fault_SA_fault_val_gpu, _num_fault*sizeof(size_t));
+  
+  cudaMalloc((void**)&_pi_gate_po_output_res_gpu, _sum_pi_gates_pos*sizeof(size_t));
+  cudaMalloc((void**)&_g_pi_results_gpu, _num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_g_gate_results_gpu, _num_inner_gates*sizeof(size_t));
+  cudaMalloc((void**)&_g_po_results_gpu, _num_POs*sizeof(size_t));
+  cudaMalloc((void**)&_b_pi_results_gpu, _num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_b_gate_results_gpu, _num_inner_gates*sizeof(size_t));
+  cudaMalloc((void**)&_b_po_results_gpu, _num_POs*sizeof(size_t));
+  cudaMalloc((void**)&_found_fault_to_pattern_gpu, 2*_num_fault*sizeof(int));  
+
+  cudaMalloc((void**)&_per_level_of_group_start_accum_gpu, (_per_level_of_group_start_accum_tmp.size())*sizeof(int));
+  cudaMalloc((void**)&_cones_partitioned_gpu, (_cones_partitioned_tmp.size())*sizeof(int));
+  cudaCheckErrors("CUDA: ask gpu simulation memory - cudaMalloc - Failure");
+
+  cudaMemcpyAsync(_per_level_of_group_start_accum_gpu, _per_level_of_group_start_accum_tmp.data(), 
+                  (_per_level_of_group_start_accum_tmp.size())*sizeof(int), cudaMemcpyHostToDevice); 
+  cudaMemcpyAsync(_cones_partitioned_gpu, _cones_partitioned_tmp.data(), 
+                  (_cones_partitioned_tmp.size())*sizeof(int), cudaMemcpyHostToDevice); 
+  cudaCheckErrors("CUDA: ask gpu simulation memory - cudaMemcpyAsync - Failure");                  
+}
+
+
+void CUDAPartitioner::_move_GateType_h2d() {
+  std::vector<int>pi_gate_po_gate_type;
+
+  for (int g = 0; g < _sum_pi_gates_pos; g++) {
+    pi_gate_po_gate_type.push_back(static_cast<int>(_gate_type[g]));
+  }
+
+  cudaMemcpyAsync(_pi_gate_po_gate_type_gpu, pi_gate_po_gate_type.data(), 
+                _sum_pi_gates_pos*sizeof(int), cudaMemcpyHostToDevice);
+  cudaCheckErrors("CUDA: _pi_gate_po_gate_type_gpu cudaMemcpy failure");
+
+#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
+  cudaDeviceSynchronize();
+  print_pi_gate_po_gate_type_gpu <<< 1, 1 >>> (_pi_gate_po_gate_type_gpu, _sum_pi_gates_pos);
+  cudaCheckErrors("CUDA: print_pi_gate_po_gate_type_gpu failure");
+  cudaDeviceSynchronize();
+#endif 
+}
+
+void CUDAPartitioner::_move_patterns_h2d() {
+  std::vector<size_t> patterns_cpu;
+  for (size_t i = 0; i < _num_rounds; i++) {
+    for (int pi = 0; pi < _num_PIs; pi++) {
+      patterns_cpu.push_back(_patterns[i]._value[pi]);
+    }
+  }
+
+  cudaMemcpy(_patterns_gpu, patterns_cpu.data(), 
+            (_num_rounds*_num_PIs)*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaCheckErrors("CUDA: _patterns_gpu cudaMemcpy failure");
+
+#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
+  cudaDeviceSynchronize();
+  print_patterns_gpu <<< 1, 1 >>> (_patterns_gpu, _num_rounds, _num_PIs);
+  cudaCheckErrors("CUDA: print_patterns_gpu failure");
+  cudaDeviceSynchronize();
+#endif
+}
+
+void CUDAPartitioner::_move_faults___h2d() {
+  std::vector<int> fault_gate_idx;
+  std::vector<size_t> fault_SA_fault_val;
+
+  for (int i = 0; i < _num_fault; i++) {
+    fault_gate_idx.push_back(_faults[i]._gate_with_fault);
+    fault_SA_fault_val.push_back(_faults[i]._gate_SA_fault_val);
+  }
+
+  cudaMemcpy(_fault_gate_idx_gpu, fault_gate_idx.data(), _num_fault*sizeof(int), cudaMemcpyHostToDevice);
+  cudaMemcpy(_fault_SA_fault_val_gpu, fault_SA_fault_val.data(), _num_fault*sizeof(size_t), cudaMemcpyHostToDevice);
+  cudaCheckErrors("CUDA: _fault_gate_idx_gpu OR _fault_SA_fault_val_gpu cudaMemcpy failure");
+
+#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
+  cudaDeviceSynchronize();
+  print_fault_gate_idx_gpu <<< 1, 1 >>> (_fault_gate_idx_gpu, _fault_SA_fault_val_gpu, _num_fault);
+  cudaCheckErrors("CUDA: print_patterns_gpu failure");
+  cudaDeviceSynchronize();
+#endif
+}
+
+
+void CUDAPartitioner::prepare_gpu_simulation() {
+  _construct_partitioned_groups(1);
+  // Copy data from Host to Device for GPU simulation 
+  _ask_gpu_simulation_memory();
+    // cudaDeviceSynchronize();
+    // print_ask_gpu_simulation_memory <<< 1, 1 >>> (_per_level_of_group_start_accum_tmp.size(), 
+    //                                               _per_level_of_group_start_accum_gpu,
+    //                                               _cones_partitioned_tmp.size(), 
+    //                                               _cones_partitioned_gpu);
+    // cudaCheckErrors("CUDA: print_ask_gpu_simulation_memory - Failure");
+    // cudaDeviceSynchronize();
+
+  _move_GateType_h2d();
+  _move_patterns_h2d();
+  _move_faults___h2d();  
+}
+
+
+// --------------------------------------------------------------------------------------------------
 
 // Simulation functions 
 void CUDAPartitioner::run(Mode mode, const size_t num_threads) {  
@@ -793,712 +960,11 @@ void CUDAPartitioner::run(Mode mode, const size_t num_threads) {
 }
 
 
-// Prepare for GPU simulation 
-
-
-template<typename IndexType>
-__global__ void _levelize_gpu(const IndexType *_queue_data, const IndexType *_queue_tail, 
-                              const IndexType *_invAdj_gpu,
-                              const IndexType *_invAdj_index_table_gpu,
-                              IndexType *_max_level_gpu, IndexType *_total_num_levels_gpu,
-                              IndexType *_level_of_gates_gpu) {
-  // Update _level_of_gates_gpu, _max_level_gpu, and _total_num_levels_gpu
-  /* Levelize */
-  for (IndexType i = 0; i < (*_queue_tail); i++) {
-    IndexType gateIdx = _queue_data[i];
-    // traverse its inputs 
-    for (int fmGate = _invAdj_index_table_gpu[2*gateIdx+0]; 
-        fmGate < _invAdj_index_table_gpu[2*gateIdx+1];
-        fmGate++) {
-      int fmGateIdx = _invAdj_gpu[fmGate];
-      int new_level = _level_of_gates_gpu[fmGateIdx]+1;
-      
-      // Update _level_of_gates_gpu[gateIdx]
-      _level_of_gates_gpu[gateIdx] = (new_level > _level_of_gates_gpu[gateIdx]) ? 
-                                (new_level) : 
-                                (_level_of_gates_gpu[gateIdx]);
-      *_max_level_gpu = (_level_of_gates_gpu[gateIdx] > *_max_level_gpu) ? 
-                  (_level_of_gates_gpu[gateIdx]) : 
-                  (*_max_level_gpu);
-    }
-  }
-
-  *_total_num_levels_gpu = *_max_level_gpu + 1;
-}
-
-template<typename IndexType> 
-__global__ void _construct_gateIdx_in_each_level_gpu(const IndexType _sum_pi_gates_pos,
-                                                    const IndexType *_total_num_levels_gpu,
-                                                    const IndexType *_level_of_gates_gpu,
-                                                    IndexType *_numGates_per_level_gpu, 
-                                                    IndexType *_gateIdx_in_each_level_gpu,
-                                                    IndexType *index_accum_gpu) {
-
-  /* Construct _numGates_per_level_gpu */
-  for (IndexType gateIdx = 0; gateIdx < _sum_pi_gates_pos; gateIdx++) {
-    IndexType gateLevel = _level_of_gates_gpu[gateIdx];
-    _numGates_per_level_gpu[gateLevel]++;
-  }
-
-  IndexType accum = 0;
-  for (IndexType lvl = 0; lvl < *_total_num_levels_gpu; lvl++) {
-    index_accum_gpu[lvl] = accum; 
-    accum += _numGates_per_level_gpu[lvl];
-  }
-
-  /* Construct _gateIdx_in_each_level_gpu */
-  for (IndexType gateIdx = 0; gateIdx < _sum_pi_gates_pos; gateIdx++) {
-    IndexType gateLevel = _level_of_gates_gpu[gateIdx];
-    IndexType w_loc = index_accum_gpu[gateLevel];
-    _gateIdx_in_each_level_gpu[w_loc] = gateIdx;
-
-    index_accum_gpu[gateLevel]++;
-  }  
-
-  // printf("_numGates_per_level_gpu\n");
-  // for (IndexType lvl = 0; lvl < *_total_num_levels_gpu; lvl++) {
-  //   printf("_numGates_per_level_gpu[%d] = %d\n", lvl, _numGates_per_level_gpu[lvl]);
-  // } printf("\n");
-
-  // printf("index_accum_gpu\n");
-  // for (IndexType lvl = 0; lvl < *_total_num_levels_gpu; lvl++) {
-  //   printf("index_accum_gpu[%d] = %d\n", lvl, index_accum_gpu[lvl]);
-  // } printf("\n");
-  // printf("*_total_num_levels_gpu = %d\n", *_total_num_levels_gpu);
-
-  // printf("_gateIdx_in_each_level_gpu: [");
-  // for (IndexType i = 0; i < _sum_pi_gates_pos; i++) {
-  //   printf("%d, ", _gateIdx_in_each_level_gpu[i]);
-  // } printf("]\n");
-}
-
-template<typename IndexType>
-void CUDAPartitioner::_TS_levelize_gpu() {
-  _levelize_gpu<IndexType> <<< 1, 1 >>> ( _queue_data, _queue_tail, 
-                                          _invAdj_gpu, _invAdj_index_table_gpu,
-                                          _max_level_gpu, _total_num_levels_gpu,
-                                          _level_of_gates_gpu);
-  cudaCheckErrors("CUDA: _levelize_gpu - Failure");
-
-#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA: _levelize_gpu cudaDeviceSynchronize - Failure");
-  _check_levelize_gpu<IndexType> <<< 1, 1 >>> (_max_level_gpu, _total_num_levels_gpu, 
-                                                _sum_pi_gates_pos, _level_of_gates_gpu);
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA: _check_levelize_gpu cudaDeviceSynchronize - Failure");
-#endif
-}
-
-
-template<typename IndexType>
-__device__ bool _is_k_sink_gpu(const IndexType k, 
-                          const IndexType gateIdx, 
-                          const IndexType *_adj_index_table_gpu, 
-                          const IndexType *_partitionIndex_gpu) {
-  IndexType outputSize = _adj_index_table_gpu[2*gateIdx+1] - _adj_index_table_gpu[2*gateIdx+0];
-  if ((outputSize == 0) && (_partitionIndex_gpu[gateIdx] == k)) {
-    return true;
-  }
-  return false; 
-}
-
-template<typename IndexType>
-__global__ void _push_sinks_of_this_group_gpu (const IndexType _sum_pi_gates_pos, 
-                                            const IndexType k, 
-                                            const IndexType *_adj_index_table_gpu, 
-                                            const IndexType *_partitionIndex_gpu,
-                                            const IndexType *_total_num_levels_gpu, 
-                                            IndexType *_visited_gpu) {
-  IndexType t_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  if (t_idx < _sum_pi_gates_pos) {
-    IndexType gateIdx = t_idx; 
-    if (_is_k_sink_gpu(k, gateIdx, _adj_index_table_gpu, _partitionIndex_gpu)) {
-      _visited_gpu[gateIdx] = 1; 
-      // printf("k = %d, t_idx = %d, gateIdx = %d is sink, (k+1)*(*_total_num_levels_gpu)-1 = %d\n", k, t_idx, gateIdx, (k+1)*(*_total_num_levels_gpu)-1);
-    }
-  }
-}
-
-template<typename IndexType>
-__global__ void _construct_numGates_per_level_gpu_of_groups_gpu(const IndexType k, const IndexType level, 
-                                                              const IndexType num_plms, const IndexType accum,
-                                                              const IndexType *_adj_gpu, 
-                                                              const IndexType *_adj_index_table_gpu, 
-                                                              const IndexType *_invAdj_gpu,
-                                                              const IndexType *_invAdj_index_table_gpu, 
-                                                              const IndexType *_gateIdx_in_each_level_gpu,
-                                                              const IndexType *_total_num_levels_gpu, 
-                                                              IndexType *_visited_gpu,
-                                                              IndexType *_numGates_per_level_gpu_of_groups_gpu,
-                                                              IndexType *_total_numGates_partitioned_gpu) {
-  IndexType t_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  if (t_idx < num_plms) {
-    const IndexType gateIdx = _gateIdx_in_each_level_gpu[accum+t_idx];
-
-    if (_visited_gpu[gateIdx]) {
-      // Update _numGates_per_level_gpu_of_groups_gpu
-      // printf("t_idx = %d, accum = %d, gateIdx = %d, _visited_gpu[%d] = %d, level = %d, k*(*_total_num_levels_gpu) + level = %d\n", 
-      //         t_idx, accum, gateIdx, gateIdx, _visited_gpu[gateIdx], 
-      //         level, k*(*_total_num_levels_gpu) + level);
-      atomicAdd(&_numGates_per_level_gpu_of_groups_gpu[k*(*_total_num_levels_gpu) + level], 1);
-      atomicAdd(_total_numGates_partitioned_gpu, 1);
-
-      // traverse its inputs 
-      for (IndexType fmGate = _invAdj_index_table_gpu[2*gateIdx+0]; 
-        fmGate < _invAdj_index_table_gpu[2*gateIdx+1]; fmGate++) {
-
-        IndexType fmGateIdx = _invAdj_gpu[fmGate];
-        _visited_gpu[fmGateIdx] = 1;
-      }
-    } 
-  }
-
-  // __syncthreads();
-  // if (t_idx == 0) {
-  //   printf("============\n");
-  // }
-}
-
-template<typename IndexType>
-__global__ void _prefix_sum_pow2 (IndexType *output, IndexType *input, IndexType n, 
-                            const bool need_to_pad) {
-  extern volatile __shared__ IndexType temp[];  // allocated on invocation
-  IndexType t_idx = threadIdx.x;
-  IndexType b_idx = blockDim.x;
-  IndexType offset = 1;
-  temp[t_idx] = input[t_idx]; // load input into shared memory
-  temp[b_idx + t_idx] = input[b_idx + t_idx];
-  // printf("t_idx = %d, n = %d, %d %d\n", t_idx, n, input[t_idx], input[b_idx + t_idx]);
-
-  for (IndexType d = n >> 1; d > 0; d >>= 1){ // build sum in place up the tree
-    __syncthreads();
-    if (t_idx < d) {
-      IndexType ai = offset*(2*t_idx+1)-1;
-      IndexType bi = offset*(2*t_idx+2)-1;
-      // printf("t_idx = %d, ai = %d, bi = %d\n", t_idx, ai, bi);
-      temp[bi] += temp[ai];
-    }
-    offset <<= 1; // multiply by 2 implemented as bitwise operation
-  }
-  if (t_idx == 0) {
-    temp[n - 1] = 0;
-  } // clear the last element
-  for (IndexType d = 1; d < n; d *= 2){ // traverse down tree & build scan
-    offset >>= 1;
-    __syncthreads();
-    if (t_idx < d){
-      IndexType ai = offset*(2*t_idx+1)-1;
-      IndexType bi = offset*(2*t_idx+2)-1;
-      // printf("t_idx = %d, ai = %d, bi = %d\n", t_idx, ai, bi);
-      IndexType t = temp[ai];
-      temp[ai] = temp[bi];
-      temp[bi] += t;
-    }
-  }
-  __syncthreads();
-
-  if (t_idx == 0) {
-    output[2*b_idx-1] = temp[2*b_idx-1]+input[2*b_idx-1];  // the last element
-  } else {
-    output[t_idx-1] = temp[t_idx]; // write results to device memory
-  }
-  output[b_idx+t_idx-1] = temp[b_idx+t_idx];
-
-  // need to pad 
-  __syncthreads();
-  if(need_to_pad) {
-    output[blockDim.x] = output[blockDim.x-1] + input[blockDim.x];
-  }
-}
-
-
-template<typename IndexType>
-__global__ void _prefix_sum_single_thread(const IndexType n, 
-                                          const IndexType *input, 
-                                          IndexType *output) {
-  IndexType accum = 0;
-  output[0] = accum;
-  for (IndexType i = 0; i < n; i++) {
-    accum += input[i];
-    output[i+1] = accum;
-    // printf("output[%d] = %d\n", i+1, output[i+1]);
-  }
-}
-
-
-template<typename IndexType>
-__global__ void _construct_cones_partitioned_gpu(const IndexType k, const IndexType level, 
-                                                const IndexType num_plms, const IndexType accum,
-                                                const IndexType *_invAdj_gpu,
-                                                const IndexType *_invAdj_index_table_gpu, 
-                                                const IndexType *_gateIdx_in_each_level_gpu,
-                                                const IndexType *_total_num_levels_gpu, 
-                                                const IndexType *_per_level_of_group_start_accum_gpu,
-                                                IndexType *_visited_gpu,
-                                                IndexType *_cones_partitioned_gpu,
-                                                IndexType *pos) {
-  IndexType t_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  if (t_idx < num_plms) {
-    const IndexType gateIdx = _gateIdx_in_each_level_gpu[accum+t_idx];
-    // start position + t_idx
-    *pos = _per_level_of_group_start_accum_gpu[k*(*_total_num_levels_gpu)+level];
-
-    if (_visited_gpu[gateIdx]) {
-      // Update _cones_partitioned_gpu
-      IndexType w_pos = atomicAdd(pos, 1);
-      _cones_partitioned_gpu[w_pos] = gateIdx;
-      // printf("t_idx = %d, accum = %d, gateIdx = %d, _visited_gpu[%d] = %d, _cones_partitioned_gpu[%d] = %d\n", 
-      //         t_idx, accum, gateIdx, gateIdx, _visited_gpu[gateIdx], 
-      //         w_pos, _cones_partitioned_gpu[w_pos]);
-
-      // traverse its inputs 
-      for (IndexType fmGate = _invAdj_index_table_gpu[2*gateIdx+0]; 
-        fmGate < _invAdj_index_table_gpu[2*gateIdx+1]; fmGate++) {
-
-        IndexType fmGateIdx = _invAdj_gpu[fmGate];
-        _visited_gpu[fmGateIdx] = 1;
-      }
-    } 
-  }
-
-  // __syncthreads();
-  // if (t_idx == 0) {
-  //   printf("============\n");
-  // }
-}
-
-
-template<typename IndexType>
-void CUDAPartitioner::_construct_partitioned_groups_gpu() {
-  int *index_accum_gpu; // tmp array
-  cudaMalloc((void**)&index_accum_gpu, _sum_pi_gates_pos*sizeof(IndexType));
-  cudaCheckErrors("CUDA: index_accum_gpu cudaMalloc - Failure");
-  
-  _construct_gateIdx_in_each_level_gpu <<< 1, 1 >>> (_sum_pi_gates_pos,
-                                                      _total_num_levels_gpu,
-                                                      _level_of_gates_gpu, 
-                                                      _numGates_per_level_gpu, 
-                                                      _gateIdx_in_each_level_gpu, 
-                                                      index_accum_gpu);
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA: _construct_gateIdx_in_each_level_gpu - Failure");
-
-  cudaFree(index_accum_gpu);
-  cudaCheckErrors("CUDA: index_accum_gpu free - Failure");
-
-  // Construct _numGates_per_level_gpu_of_groups_gpu first 
-  _numGates_per_level.resize(_total_num_levels);
-  cudaMemcpy(_numGates_per_level.data(), _numGates_per_level_gpu, 
-            _total_num_levels*sizeof(IndexType), cudaMemcpyDeviceToHost);
-  cudaCheckErrors("CUDA: _numGates_per_level copy - Failure");
-
-  // construct _cones_partitioned_gpu
-  IndexType init_accum = 0;
-  for (size_t level = 0; level < (_numGates_per_level.size()-1); level++) {
-    init_accum += _numGates_per_level[level];
-  }
-  // printf("init_accum = %d\n", init_accum);
-  size_t num_blocks = 0, num_threads = 0;
-
-  for (IndexType k = 0; k < _k; k++) {
-    IndexType accum = init_accum; 
-    
-    cudaMemset(_visited_gpu, 0, _sum_pi_gates_pos*sizeof(IndexType)); 
-    cudaCheckErrors("CUDA: _visited_gpu cudaMemset - Failure");
-    
-    // Backward BFS - last level 
-    num_blocks = (_sum_pi_gates_pos + _NUM_THREADS - 1)/_NUM_THREADS;
-    num_threads = _NUM_THREADS;
-    _push_sinks_of_this_group_gpu<IndexType> <<< num_blocks, num_threads >>> (_sum_pi_gates_pos, k, 
-                                                                              _adj_index_table_gpu, 
-                                                                              _partitionIndex_gpu,
-                                                                              _total_num_levels_gpu,
-                                                                              _visited_gpu);
-    cudaCheckErrors("CUDA: _push_sinks_of_this_group_gpu - Failure");
-
-    // Backward BFS - Remaining levels 
-    for (IndexType level = (_total_num_levels-1); level >= 0; level--) {
-      // printf("level = %d, accum = %d\n", level, accum);
-
-      num_blocks  = (_numGates_per_level[level] + _NUM_THREADS - 1)/_NUM_THREADS;
-      num_threads = _NUM_THREADS;
-      _construct_numGates_per_level_gpu_of_groups_gpu<IndexType> <<< num_blocks, num_threads >>> (k, 
-                                                        level, 
-                                                        _numGates_per_level[level],
-                                                        accum,
-                                                        _adj_gpu, 
-                                                        _adj_index_table_gpu, 
-                                                        _invAdj_gpu,
-                                                        _invAdj_index_table_gpu, 
-                                                        _gateIdx_in_each_level_gpu,
-                                                        _total_num_levels_gpu, 
-                                                        _visited_gpu,
-                                                        _numGates_per_level_gpu_of_groups_gpu,
-                                                        _total_numGates_partitioned_gpu);
-      // Update accum
-      accum -= _numGates_per_level[level-1];
-      // printf("level = %d, new accum = %d, _numGates_per_level[%d] = %d\n", level, accum, level, _numGates_per_level[level]);
-    }
-  }
-
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA: _construct_numGates_per_level_gpu_of_groups_gpu cudaDeviceSynchronize - Failure");
-
-#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
-  cudaDeviceSynchronize();
-  _print_construct_numGates_per_level_gpu_of_groups_gpu <<< 1, 1 >>> (_k*_total_num_levels,
-                                                                      _numGates_per_level_gpu_of_groups_gpu, 
-                                                                      1,
-                                                                      _total_numGates_partitioned_gpu);
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA: _print_construct_numGates_per_level_gpu_of_groups_gpu - Failure");
-#endif 
-  
-// // ------------------------ TODO ------------------------
-// // The prefix sum now needs to pad to len = power of 2 
-// // And also, the length should <= 1024
-//   // Update _per_level_of_group_start_accum_gpu
-//   int len = (_k*_total_num_levels);
-//   assert(len <= 1024 && "len needs to be <= 1024");
-//   bool need_to_pad = ((_k*_total_num_levels)%2 != 0); 
-//   unsigned int smem_sz = len*sizeof(IndexType);
-//   printf("len = %d, _k = %d, _total_num_levels = %d\n", len, _k, _total_num_levels);
-//   _prefix_sum_pow2 <<< 1, (len/2), smem_sz >>> (_per_level_of_group_start_accum_gpu,
-//                                            _numGates_per_level_gpu_of_groups_gpu,
-//                                            (_k*_total_num_levels), 
-//                                            need_to_pad);
-//   cudaDeviceSynchronize();
-//   cudaCheckErrors("CUDA: _prefix_sum_pow2 - Failure");
-// // ------------------------ TODO ------------------------
-
-  _prefix_sum_single_thread <<< 1, 1 >>> ((_k*_total_num_levels), 
-                                          _numGates_per_level_gpu_of_groups_gpu,
-                                          _per_level_of_group_start_accum_gpu);
-
-  cudaDeviceSynchronize();
-  // copy _numGates_per_level_gpu_of_groups_gpu to _numGates_per_level_gpu_of_groups
-  _numGates_per_level_gpu_of_groups.resize(_k*_total_num_levels);
-  cudaMemcpyAsync(_numGates_per_level_gpu_of_groups.data(), 
-                  _numGates_per_level_gpu_of_groups_gpu, 
-                  _k*_total_num_levels*sizeof(IndexType), cudaMemcpyDeviceToHost);
-  cudaCheckErrors("CUDA: _numGates_per_level_gpu_of_groups cudaMemcpyAsync - Failure");
-
-#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
-  cudaDeviceSynchronize();
-  _print_prefix_sum <<< 1, 1 >>> (_k*_total_num_levels,
-                                  _numGates_per_level_gpu_of_groups_gpu, 
-                                  _k*_total_num_levels+1,
-                                  _per_level_of_group_start_accum_gpu);
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA: _print_prefix_sum - Failure");
-#endif                                          
-  
-  // Allocate memory _cones_partitioned_gpu memory accurately
-  IndexType total_numGates_partitioned;
-  cudaMemcpyAsync(&total_numGates_partitioned, 
-                  _total_numGates_partitioned_gpu, 
-                  1*sizeof(IndexType), cudaMemcpyDeviceToHost);
-  cudaCheckErrors("CUDA: _total_numGates_partitioned_gpu cudaMemcpyAsync - Failure");
-
-  // allocat precise memory 
-  cudaMalloc((void**)&_cones_partitioned_gpu, total_numGates_partitioned*sizeof(IndexType));
-  cudaCheckErrors("CUDA: _cones_partitioned_gpu cudaMalloc - Failure");
-
-  int *pos_gpu; // tmp pos
-  cudaMalloc((void**)&pos_gpu, 1*sizeof(IndexType));
-  cudaCheckErrors("CUDA: pos_gpu cudaMalloc - Failure");
-
-  // Construct _cones_partitioned_gpu
-  for (IndexType k = 0; k < _k; k++) {
-    IndexType accum = init_accum; 
-
-    cudaMemset(_visited_gpu, 0, _sum_pi_gates_pos*sizeof(IndexType)); 
-    cudaCheckErrors("CUDA: _visited_gpu cudaMemset - Failure");
-    
-    // Backward BFS - last level 
-    num_blocks = (_sum_pi_gates_pos + _NUM_THREADS - 1)/_NUM_THREADS;
-    num_threads = _NUM_THREADS;    
-    _push_sinks_of_this_group_gpu<IndexType> <<< num_blocks, num_threads >>> (_sum_pi_gates_pos, k, 
-                                                                              _adj_index_table_gpu, 
-                                                                              _partitionIndex_gpu,
-                                                                              _total_num_levels_gpu,
-                                                                              _visited_gpu);
-    cudaCheckErrors("CUDA: _push_sinks_of_this_group_gpu - Failure");
-
-    // Backward BFS - Remaining levels 
-    for (IndexType level = (_total_num_levels-1); level >= 0; level--) {
-      // printf("level = %d, accum = %d\n", level, accum);
-
-      num_blocks  = (_numGates_per_level[level] + _NUM_THREADS - 1)/_NUM_THREADS;
-      num_threads = _NUM_THREADS;
-      _construct_cones_partitioned_gpu<IndexType> <<< num_blocks, num_threads >>> (k, 
-                                                        level, 
-                                                        _numGates_per_level[level],
-                                                        accum,
-                                                        _invAdj_gpu,
-                                                        _invAdj_index_table_gpu, 
-                                                        _gateIdx_in_each_level_gpu,
-                                                        _total_num_levels_gpu, 
-                                                        _per_level_of_group_start_accum_gpu,
-                                                        _visited_gpu,
-                                                        _cones_partitioned_gpu,
-                                                        pos_gpu);
-      // Update accum
-      accum -= _numGates_per_level[level-1];
-    }
-  }
-
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA:  cudaDeviceSynchronize - Failure");
-  cudaFree(pos_gpu);
-
-#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
-  cudaDeviceSynchronize();
-  _print_construct_cones_partitioned_gpu <<< 1, 1 >>> (_total_numGates_partitioned_gpu,
-                                                      _cones_partitioned_gpu);
-  cudaDeviceSynchronize();
-  cudaCheckErrors("CUDA: _print_construct_numGates_per_level_gpu_of_groups_gpu - Failure");
-#endif 
-}
-
-
-
-template<typename IndexType>
-void CUDAPartitioner::_ask_gpu_memory_simu_0() {
-  // Memory allocation
-  cudaMalloc((void**)&_max_level_gpu, 1*sizeof(IndexType));
-  cudaMalloc((void**)&_total_num_levels_gpu, 1*sizeof(IndexType));
-  cudaMalloc((void**)&_level_of_gates_gpu, _sum_pi_gates_pos*sizeof(IndexType));
-
-  cudaCheckErrors("CUDA: Asking simulation memory - Failure");
-
-  cudaMemset(_max_level_gpu, 0, 1*sizeof(int)); 
-  cudaMemset(_total_num_levels_gpu, 0, 1*sizeof(int)); 
-
-  cudaCheckErrors("CUDA: cudaMemset - Failure");
-}
-
-
-template<typename IndexType>
-void CUDAPartitioner::_ask_gpu_memory_simu_1() {
-  cudaMemcpy(&_total_num_levels, _total_num_levels_gpu, 1*sizeof(IndexType),  cudaMemcpyDeviceToHost);
-
-  cudaMalloc((void**)&_numGates_per_level_gpu, _total_num_levels*sizeof(IndexType));
-  cudaMalloc((void**)&_gateIdx_in_each_level_gpu, _sum_pi_gates_pos*sizeof(IndexType));
-  cudaMalloc((void**)&_numGates_per_level_gpu_of_groups_gpu, _k*_total_num_levels*sizeof(IndexType));
-  cudaMalloc((void**)&_per_level_of_group_start_accum_gpu, (_k*_total_num_levels+1)*sizeof(IndexType));
-  cudaMalloc((void**)&_total_numGates_partitioned_gpu, 1*sizeof(IndexType));
-
-  cudaCheckErrors("CUDA: BIBI Asking simulation memory - Failure");
-
-  cudaMemset(_numGates_per_level_gpu, 0, _total_num_levels*sizeof(IndexType));
-  cudaMemset(_numGates_per_level_gpu_of_groups_gpu, 0, _k*_total_num_levels*sizeof(IndexType));
-  cudaMemset(_total_numGates_partitioned_gpu, 0, 1*sizeof(IndexType));
-  cudaMemset(_per_level_of_group_start_accum_gpu, 0, (_k*_total_num_levels+1)*sizeof(IndexType));
-
-  cudaCheckErrors("CUDA: cudaMemset - Failure");
-}
-
-template<typename IndexType>
-void CUDAPartitioner::_ask_gpu_memory_simu_2(){
-  cudaMalloc((void**)&_pi_gate_po_gate_type_gpu, _sum_pi_gates_pos*sizeof(int));
-  cudaMalloc((void**)&_patterns_gpu, _num_rounds*_num_PIs*sizeof(size_t));
-  cudaMalloc((void**)&_fault_gate_idx_gpu, _num_fault*sizeof(int));
-  cudaMalloc((void**)&_fault_SA_fault_val_gpu, _num_fault*sizeof(size_t));
-  
-  cudaMalloc((void**)&_pi_gate_po_output_res_gpu, _sum_pi_gates_pos*sizeof(size_t));
-  cudaMalloc((void**)&_g_pi_results_gpu, _num_PIs*sizeof(size_t));
-  cudaMalloc((void**)&_g_gate_results_gpu, _num_inner_gates*sizeof(size_t));
-  cudaMalloc((void**)&_g_po_results_gpu, _num_POs*sizeof(size_t));
-  cudaMalloc((void**)&_b_pi_results_gpu, _num_PIs*sizeof(size_t));
-  cudaMalloc((void**)&_b_gate_results_gpu, _num_inner_gates*sizeof(size_t));
-  cudaMalloc((void**)&_b_po_results_gpu, _num_POs*sizeof(size_t));
-  cudaMalloc((void**)&_found_fault_to_pattern_gpu, 2*_num_fault*sizeof(int));  
-}
-
-template<typename IndexType>
-void CUDAPartitioner::_move_GateType_h2d() {
-  // pi_gate_po_gate_type_gpu
-  std::vector<IndexType>pi_gate_po_gate_type;
-  // IndexType *pi_gate_po_gate_type = (IndexType *)malloc(_sum_pi_gates_pos*sizeof(IndexType));
-  // memset(pi_gate_po_gate_type, 0, (_sum_pi_gates_pos)*sizeof(IndexType));
-
-  for (IndexType g = 0; g < _sum_pi_gates_pos; g++) {
-    pi_gate_po_gate_type.push_back(static_cast<IndexType>(_gate_type[g]));
-  }
-
-  cudaMemcpyAsync(_pi_gate_po_gate_type_gpu, pi_gate_po_gate_type.data(), 
-                _sum_pi_gates_pos*sizeof(IndexType), cudaMemcpyHostToDevice);
-  cudaCheckErrors("CUDA: _pi_gate_po_gate_type_gpu cudaMemcpy failure");
-
-#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
-  cudaDeviceSynchronize();
-  print_pi_gate_po_gate_type_gpu <<< 1, 1 >>> (_pi_gate_po_gate_type_gpu, _sum_pi_gates_pos);
-  cudaCheckErrors("CUDA: print_pi_gate_po_gate_type_gpu failure");
-  cudaDeviceSynchronize();
-#endif 
-}
-
-template<typename IndexType>
-void CUDAPartitioner::_move_patterns_h2d() {
-  std::vector<size_t> patterns_cpu;
-  for (size_t i = 0; i < _num_rounds; i++) {
-    for (IndexType pi = 0; pi < _num_PIs; pi++) {
-      patterns_cpu.push_back(_patterns[i]._value[pi]);
-    }
-  }
-
-  cudaMemcpy(_patterns_gpu, patterns_cpu.data(), 
-            (_num_rounds*_num_PIs)*sizeof(size_t), cudaMemcpyHostToDevice);
-  cudaCheckErrors("CUDA: _patterns_gpu cudaMemcpy failure");
-
-#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
-  cudaDeviceSynchronize();
-  print_patterns_gpu <<< 1, 1 >>> (_patterns_gpu, _num_rounds, _num_PIs);
-  cudaCheckErrors("CUDA: print_patterns_gpu failure");
-  cudaDeviceSynchronize();
-#endif
-}
-
-template<typename IndexType>
-void CUDAPartitioner::_move_faults_h2d() {
-  std::vector<IndexType> fault_gate_idx;
-  std::vector<size_t> fault_SA_fault_val;
-
-  for (IndexType i = 0; i < _num_fault; i++) {
-    fault_gate_idx.push_back(_faults[i]._gate_with_fault);
-    fault_SA_fault_val.push_back(_faults[i]._gate_SA_fault_val);
-  }
-
-  cudaMemcpy(_fault_gate_idx_gpu, fault_gate_idx.data(), _num_fault*sizeof(IndexType), cudaMemcpyHostToDevice);
-  cudaMemcpy(_fault_SA_fault_val_gpu, fault_SA_fault_val.data(), _num_fault*sizeof(size_t), cudaMemcpyHostToDevice);
-  cudaCheckErrors("CUDA: _fault_gate_idx_gpu OR _fault_SA_fault_val_gpu cudaMemcpy failure");
-
-#ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
-  cudaDeviceSynchronize();
-  print_fault_gate_idx_gpu <<< 1, 1 >>> (_fault_gate_idx_gpu, _fault_SA_fault_val_gpu, _num_fault);
-  cudaCheckErrors("CUDA: print_patterns_gpu failure");
-  cudaDeviceSynchronize();
-#endif
-}
-
-// TODO: 1022 fix this function 
-void CUDAPartitioner::prepare_gpu_simulation() {
-  // Allocate GPU memory 
-  _ask_gpu_memory_simu_0<int>();
-
-  // Get topological sort results and get the results of levelization
-  _TS_levelize_gpu();
-  cudaCheckErrors("CUDA: _TS_levelize_gpu - Failure");
-
-  // Construct multiple independent cones 
-  // Update _numGates_per_level_gpu, 
-  _ask_gpu_memory_simu_1<int>();
-  _construct_partitioned_groups_gpu<int>();
-
-  // Ask gpu memory needed by simulation
-  _ask_gpu_memory_simu_2<int>();
-  _move_GateType_h2d<int>();
-  _move_patterns_h2d();
-  _move_faults_h2d<int>();
-
-#ifdef CPU_PARTITIONER_PRINT_FOR_CHECK  
-  cudaDeviceSynchronize();
-  int total_numGates_partitioned;
-  cudaMemcpyAsync(&total_numGates_partitioned, 
-                  _total_numGates_partitioned_gpu, 
-                  1*sizeof(int), cudaMemcpyDeviceToHost);
-  std::vector<int> cones_partitioned_tmp; 
-  cones_partitioned_tmp.resize(total_numGates_partitioned);
-  cudaMemcpyAsync(cones_partitioned_tmp.data(), _cones_partitioned_gpu,
-                (total_numGates_partitioned)*sizeof(int), cudaMemcpyDeviceToHost);
-
-  size_t pis = 0, pos = 0, gatess = 0;
-
-  for (size_t i = 0; i < cones_partitioned_tmp.size(); i++) {
-    if (cones_partitioned_tmp[i] < _num_PIs) {
-      pis++;
-    } else if (cones_partitioned_tmp[i] < (_num_PIs+_num_POs) && cones_partitioned_tmp[i] >= _num_PIs) {
-      pos++;
-    } else {
-      gatess++;
-    }
-  }
-
-  std::vector<bool> visited_tmp; visited_tmp.resize(_sum_pi_gates_pos, false);
-  for (const auto& element : cones_partitioned_tmp) {
-    visited_tmp[element] = true;
-  }
-
-  size_t miss_accum = 0;
-  for (int i = 0; i < visited_tmp.size(); i++) {
-    if (visited_tmp[i] == false) {
-      miss_accum++;
-    }
-  }  
-  printf("miss_accum = %lu\n", miss_accum);
-
-
-  printf("cones_partitioned_tmp.size() = %lu, pis = %lu, pos = %lu, gatess = %lu\n", 
-          cones_partitioned_tmp.size(), pis, pos, gatess);
-
-  cudaDeviceSynchronize();
-  int *aaa_tmp;
-  cudaMalloc((void**)&aaa_tmp, 1498565*sizeof(int));
-  check_cones_partitioned_gpu_visited <<< 1, 1 >>> (aaa_tmp, 
-                                                    _cones_partitioned_gpu, 
-                                                    _sum_pi_gates_pos,
-                                                    total_numGates_partitioned);
-  cudaCheckErrors("CUDA: check_cones_partitioned_gpu_visited failure");                                                    
-  cudaDeviceSynchronize();
-#endif
-}
-
-
-//  1022: new version
-void CUDAPartitioner::prepare_gpu_simulation_new_version() {
-  printf("bibi world\n");
-
-  _copy_partitioned_results_back_to_host();  
-  _ask_gpu_memory_simu_1_new_version();
-  _ask_gpu_memory_simu_2_new_version();
-  _move_GateType_h2d_new_version();
-  _move_patterns_h2d_new_version();
-  _move_faults_h2d_new_version();
-}
-
-
-void CUDAPartitioner::_copy_partitioned_results_back_to_host() {
-  
-}
-
-void CUDAPartitioner::_ask_gpu_memory_simu_1_new_version() {
-  
-}
-
-void CUDAPartitioner::_ask_gpu_memory_simu_2_new_version() {
-  
-}
-
-void CUDAPartitioner::_move_GateType_h2d_new_version() {
-  
-}
-
-void CUDAPartitioner::_move_patterns_h2d_new_version() {
-  
-}
-
-void CUDAPartitioner::_move_faults_h2d_new_version() {
-  
-}
-
-
 
 
 // --------------- PRINT FUNCTIONS FOR CHECK THE CORRECTNESS ---------------
 
-void CUDAPartitioner::print_patterns(const std::vector<Pattern> &patterns,
+void CUDAPartitioner::_print_patterns(const std::vector<Pattern> &patterns,
                                     const int round,
                                     const int num_PIs) const {
   std::cout << "\n=====\n\n";
@@ -1506,13 +972,13 @@ void CUDAPartitioner::print_patterns(const std::vector<Pattern> &patterns,
       std::cout << "[" << SIZE_T_BITS * i << ", " << SIZE_T_BITS * (i + 1)
                 << "] bits = [\n";
       for (int j = 0; j < num_PIs; j++) {
-        print_bits_stack(sizeof(patterns[i]._value[j]), &patterns[i]._value[j]);
+        _print_bits_stack(sizeof(patterns[i]._value[j]), &patterns[i]._value[j]);
       }
     std::cout << "]\n";
   }
 }
 
-void CUDAPartitioner::print_bits_stack(const int size,
+void CUDAPartitioner::_print_bits_stack(const int size,
                                       const void *const ptr) const {
   unsigned char *b = (unsigned char *)ptr;
   unsigned char byte;
@@ -1530,7 +996,7 @@ void CUDAPartitioner::print_bits_stack(const int size,
 
 
 // Function to convert GateType to gpuGateType
-gpuGateType CUDAPartitioner::convertGateTypeToGpu(GateType gate_type) {
+gpuGateType CUDAPartitioner::_convertGateTypeToGpu(GateType gate_type) {
   switch (gate_type) {
     case GateType::INV: return gpuGateType::INV; // 0
     case GateType::AND: return gpuGateType::AND; // 1
@@ -1548,7 +1014,7 @@ gpuGateType CUDAPartitioner::convertGateTypeToGpu(GateType gate_type) {
 }
 
 // Function to convert GateType to string
-std::string CUDAPartitioner::gateTypeToString(GateType type) const {
+std::string CUDAPartitioner::_gateTypeToString(GateType type) const {
   switch (type) {
   case GateType::INV:
     return "INV"; // 0
@@ -1616,7 +1082,7 @@ void CUDAPartitioner::_print_read_graph() const {
 
   printf("_gate_type:\n");
   for (size_t i = 0; i < _gate_type.size(); i++) {
-    std::cout << "Gate_" << i << ", _gate_type = " << gateTypeToString(_gate_type[i]) << "\n";
+    std::cout << "Gate_" << i << ", _gate_type = " << _gateTypeToString(_gate_type[i]) << "\n";
   } printf("\n");
   
   printf("\n---------\n");
@@ -1965,7 +1431,7 @@ void CUDAPartitioner::_check_graph_connection_CPU() {
 
 }
 
-void CUDAPartitioner::print_simulation_results(
+void CUDAPartitioner::_print_simulation_results(
                       const std::vector<size_t> &pi_results,
                       const std::vector<size_t> &gate_results,
                       const std::vector<size_t> &po_results) const {
@@ -1982,7 +1448,7 @@ void CUDAPartitioner::print_simulation_results(
 }
 
 
-void CUDAPartitioner::print_ppg(const ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate) const {
+void CUDAPartitioner::_print_ppg(const ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate) const {
   std::cout << "\n=====\n\n";
   std::cout << "mem_id: " << &gate << "\n";
   std::cout << "idx: " << gate._idx << "\n";
@@ -2011,40 +1477,6 @@ __global__ void _check_levelize_gpu(const IndexType *_max_level_gpu,
   printf("\n");  
 }
 
-template<typename IndexType>
-__global__ void _print_construct_numGates_per_level_gpu_of_groups_gpu(const size_t sz0, 
-                                                                    const IndexType *_numGates_per_level_gpu_of_groups_gpu, 
-                                                                    const size_t sz1, 
-                                                                    const IndexType *_total_numGates_partitioned_gpu){
-  printf("_print_construct_numGates_per_level_gpu_of_groups_gpu\n");
-  
-  for (size_t i = 0; i < sz0; i++) {
-    printf("_numGates_per_level_gpu_of_groups_gpu[%lu] = %d\n", i, _numGates_per_level_gpu_of_groups_gpu[i]);
-  } printf("\n");
-
-  for (size_t i = 0; i < sz1; i++) {
-    printf("_total_numGates_partitioned_gpu[%lu] = %d\n", i, _total_numGates_partitioned_gpu[i]);
-  } printf("\n");
-}
-
-
-template<typename IndexType>
-__global__ void _print_prefix_sum(const size_t sz0, 
-                                  const IndexType *_numGates_per_level_gpu_of_groups_gpu, 
-                                  const size_t sz1, 
-                                  const IndexType *_per_level_of_group_start_accum_gpu) {
-  printf("_print_prefix_sum\n");
-  
-  printf("_numGates_per_level_gpu_of_groups_gpu = [");
-  for (size_t i = 0; i < sz0; i++) {
-    printf("%d, ", _numGates_per_level_gpu_of_groups_gpu[i]);
-  } printf("]\n\n");
-
-  printf("_per_level_of_group_start_accum_gpu = [");
-  for (size_t i = 0; i < sz1; i++) {
-    printf("%d, ", _per_level_of_group_start_accum_gpu[i]);
-  } printf("]\n\n");
-}
 
 
 template<typename IndexType>
@@ -2148,3 +1580,19 @@ __global__ void check_cones_partitioned_gpu_visited(int *visited,
   printf("GPU miss_accum = %lu\n", miss_accum);
 }
 
+
+
+__global__ void print_ask_gpu_simulation_memory(const size_t sz1, 
+                                                const int *_per_level_of_group_start_accum_gpu,
+                                                const size_t sz2,
+                                                const int *_cones_partitioned_gpu) {
+  printf("_per_level_of_group_start_accum_gpu :[");
+  for (int i = 0; i < sz1; i++) {
+    printf("%d, ", _per_level_of_group_start_accum_gpu[i]);  
+  } printf("]\n");
+
+  printf("_cones_partitioned_gpu :[");
+  for (int i = 0; i < sz2; i++) {
+    printf("%d, ", _cones_partitioned_gpu[i]);  
+  } printf("]\n");  
+}

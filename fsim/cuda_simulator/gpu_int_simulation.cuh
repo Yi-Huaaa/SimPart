@@ -46,8 +46,7 @@
 // constexpr
 const int _NUM_THREADS = 1024;
 
-// #define GPU_PART_DEBUG_PRINT_SIMULATION
-// #define GPU_PART_DEBUG_PRINT_SIMULATION_RESULTS // print simulation resutls 
+// #define GPU_PART_DEBUG_PRINT_SIMULATION // print simulation resutls 
 
 // GPU functions pre-declarations
 template<typename IndexType = int>
