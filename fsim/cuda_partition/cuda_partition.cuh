@@ -223,6 +223,7 @@ private:
 
   // GPU simulation pre-process
   std::vector<int> _numGates_per_level_gpu_of_groups; // partitioned cones CPU
+  int *_numGates_per_level_gpu_of_groups_gpu;
   
   int *_total_numGates_partitioned_gpu;
   
