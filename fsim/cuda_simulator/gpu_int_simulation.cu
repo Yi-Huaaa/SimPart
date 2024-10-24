@@ -372,7 +372,7 @@ void GALPS_GPUSimulator::_run_cones_good_case_part_gpu(const int *_numGates_per_
                                           fault_num, bad_case);
 
   cudaCheckErrors("CUDA: _run_gate_part launch- Failure");
-  cudaDeviceSynchronize(); // remove
+  // cudaDeviceSynchronize(); // remove
 
 
   // shift and copy answer to the good results
@@ -621,12 +621,12 @@ __global__ void _run_gate_part(const int _num_PIs,
     int num_gates_this_level = _numGates_per_level_gpu_of_groups_gpu[k_level];
     int gateRounds = (num_gates_this_level + blockDim.x - 1)/blockDim.x;
 
-    // remove
-    if ((threadIdx.x) == 0) {
-      printf("k = %d, level = %d, gateRounds = %d, num_gates_this_level = %d\n", 
-              k, level, gateRounds, num_gates_this_level);
-    }
-    // remove
+    // // remove
+    // if ((threadIdx.x) == 0) {
+    //   printf("k = %d, level = %d, gateRounds = %d, num_gates_this_level = %d\n", 
+    //           k, level, gateRounds, num_gates_this_level);
+    // }
+    // // remove
 
     for (int gateRd = 0; gateRd < gateRounds; gateRd++) {
       if (num_gates_this_level > t_idx) {
