@@ -350,7 +350,7 @@ private:
   void _print_copy_TS_resutls_to_Host();
   void _print_levelized();
   void _print_construct_groups(const std::vector<std::vector<int>> &sinks_groups);
-  void _count_duplications();
+  void _count_duplications(int simulator);
   // Simulation
   void _print_simulation_results(const std::vector<size_t> &pi_results,
                                 const std::vector<size_t> &gate_results,

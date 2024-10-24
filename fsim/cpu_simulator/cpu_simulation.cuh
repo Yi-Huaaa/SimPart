@@ -27,8 +27,8 @@
 
 #include <fsim/fsim.hpp>
 
-// print for check 
-// #define CPU_PART_DEBUG_PRINT_SIMULATION
+
+// #define CPU_PART_DEBUG_PRINT_SIMULATION  // print answer for check 
 
 
 // Forward declaration of CUDAPartitioner
