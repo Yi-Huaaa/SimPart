@@ -1250,8 +1250,8 @@ void CPUPartitioner::_ask_gpu_memory_simu_1(Mode mode){
       gatess++;
     }
   }
-  printf("cones_partitioned_tmp.size() = %lu, pis = %lu, pos = %lu, gatess = %lu\n", 
-          cones_partitioned_tmp.size(), pis, pos, gatess);
+  // printf("cones_partitioned_tmp.size() = %lu, pis = %lu, pos = %lu, gatess = %lu\n", 
+  //         cones_partitioned_tmp.size(), pis, pos, gatess);
 // =====================================================================================
 
   cudaMalloc((void**)&_cones_partitioned_gpu, (cones_partitioned_tmp.size())*sizeof(size_t));
@@ -1382,8 +1382,7 @@ void CPUPartitioner::_run_gpu_simulator() {
                                                 _b_gate_results_gpu,
                                                 _b_po_results_gpu,
                                                 _found_fault_to_pattern_gpu);
-
-
+  cudaDeviceSynchronize();
 }
 
 

@@ -104,7 +104,6 @@ int main(int argc, char *argv[]) {
   auto end = std::chrono::steady_clock::now();
   duration_prepare_simulation = end - start;
 
-
     // pre-run
     cpuPartitioner.run(CPUPartitioner::SIMU_Mode(static_cast<size_t>(SIMU_MODE)), 
                       CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
@@ -125,8 +124,6 @@ int main(int argc, char *argv[]) {
 
 
 #ifdef GPU_PARTITIONER_VERSION
-  printf("GPU_PARTITIONER_VERSION\n");
-  
   // user perspective
   CUDAPartitioner cudaPartitioner;
 

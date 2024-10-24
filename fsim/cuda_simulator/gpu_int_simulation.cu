@@ -295,7 +295,7 @@ void GALPS_GPUSimulator::_run_cones_gates_part_gpu(const int *_numGates_per_leve
                                               int *_found_fault_to_pattern_gpu,
                                               size_t *_pi_gate_po_output_res_gpu) {
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
-  std::cout << "execute simulation._run_cones_gates_ori_gpu();\n";
+  std::cout << "execute simulation._run_cones_gates_part_gpu();\n";
 #endif
 
   // Simulation
@@ -359,17 +359,19 @@ void GALPS_GPUSimulator::_run_cones_good_case_part_gpu(const int *_numGates_per_
 #endif 
 
   // Copy data to the device and launch kernels in different streams
-    const size_t fault_num = 0; const size_t bad_case = 0;
-    _run_gate_part <<< _k, _NUM_THREADS >>> (_num_PIs, _total_num_levels, 
-                                            _invAdj_gpu, _invAdj_index_table_gpu,
-                                            _numGates_per_level_gpu_of_groups_gpu,
-                                            _cones_partitioned_gpu, 
-                                            _per_level_of_group_start_accum_gpu, 
-                                            _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
-                                            _patterns_gpu, rd, 
-                                            _fault_gate_idx_gpu, _fault_SA_fault_val_gpu, 
-                                            fault_num, bad_case);
-    cudaCheckErrors("CUDA: _run_gate_part launch- Failure");
+  const size_t fault_num = 0; const size_t bad_case = 0;
+  
+  _run_gate_part <<< _k, _NUM_THREADS >>> (_num_PIs, _total_num_levels, 
+                                          _invAdj_gpu, _invAdj_index_table_gpu,
+                                          _numGates_per_level_gpu_of_groups_gpu,
+                                          _cones_partitioned_gpu, 
+                                          _per_level_of_group_start_accum_gpu, 
+                                          _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
+                                          _patterns_gpu, rd, 
+                                          _fault_gate_idx_gpu, _fault_SA_fault_val_gpu, 
+                                          fault_num, bad_case);
+
+  cudaCheckErrors("CUDA: _run_gate_part launch- Failure");
 
   // shift and copy answer to the good results
   int num_blocks = (_sum_pi_gates_pos > _NUM_THREADS) ? 
@@ -633,8 +635,8 @@ __global__ void _run_gate_part(const int _num_PIs,
         int type = _pi_gate_po_gate_type_gpu[real_g_idx];
         
         // if (k == 0) {
-        //   printf("k = %d, t_idx = %d, k_level = %d, num_gates_this_level = %d, gateRd = %d (%d), type = %d, real_g_idx = %d\n", 
-        //   k, t_idx, k_level, num_gates_this_level, gateRd, gateRounds, type, real_g_idx);
+          // printf("k = %d, t_idx = %d, k_level = %d, num_gates_this_level = %d, gateRd = %d (%d), type = %d, real_g_idx = %d\n", 
+          // k, t_idx, k_level, num_gates_this_level, gateRd, gateRounds, type, real_g_idx);
         // }
 
 

@@ -754,32 +754,32 @@ void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
 
       // _count_duplications(simulator);
 
-        // printf("_numGates_per_level_gpu_of_groups = [");
-        // for (size_t i = 0; i < _numGates_per_level_gpu_of_groups.size(); i++) {
-        //   printf("%d, ", _numGates_per_level_gpu_of_groups[i]);
-        // } printf("]\n");
+      //   printf("_numGates_per_level_gpu_of_groups = [");
+      //   for (size_t i = 0; i < _numGates_per_level_gpu_of_groups.size(); i++) {
+      //     printf("%d, ", _numGates_per_level_gpu_of_groups[i]);
+      //   } printf("]\n");
 
-        // printf("_per_level_of_group_start_accum_tmp = [");
-        // for (size_t i = 0; i < _per_level_of_group_start_accum_tmp.size(); i++) {
-        //   printf("%d, ", _per_level_of_group_start_accum_tmp[i]);
-        // } printf("]\n");
+      //   printf("_per_level_of_group_start_accum_tmp = [");
+      //   for (size_t i = 0; i < _per_level_of_group_start_accum_tmp.size(); i++) {
+      //     printf("%d, ", _per_level_of_group_start_accum_tmp[i]);
+      //   } printf("]\n");
 
-        // // printf("_cones_partitioned_tmp = [");
-        // // for (size_t i = 0; i < _cones_partitioned_tmp.size(); i++) {
-        // //   printf("%d, ", _cones_partitioned_tmp[i]);
-        // // } printf("]\n");
+      //   printf("_cones_partitioned_tmp = [");
+      //   for (size_t i = 0; i < _cones_partitioned_tmp.size(); i++) {
+      //     printf("%d, ", _cones_partitioned_tmp[i]);
+      //   } printf("]\n");
 
-        // std::vector<bool> vv; vv.resize(_sum_pi_gates_pos, false);
-        // for (size_t i = 0; i < _cones_partitioned_tmp.size(); i++) {
-        //   vv[_cones_partitioned_tmp[i]] = true;
-        // }
-        // size_t acc = 0;
-        // for (size_t i = 0; i < vv.size(); i++) {
-        //   if (!vv[i]) {
-        //     acc++;
-        //   }
-        // } 
-        // printf("haha acc = %lu QQ\n", acc);
+      //   std::vector<bool> vv; vv.resize(_sum_pi_gates_pos, false);
+      //   for (size_t i = 0; i < _cones_partitioned_tmp.size(); i++) {
+      //     vv[_cones_partitioned_tmp[i]] = true;
+      //   }
+      //   size_t acc = 0;
+      //   for (size_t i = 0; i < vv.size(); i++) {
+      //     if (!vv[i]) {
+      //       acc++;
+      //     }
+      //   } 
+      //   printf("haha acc = %lu (should == 0)\n", acc);
         
 
 
@@ -1367,7 +1367,7 @@ void CUDAPartitioner::_count_duplications(int simulator) {
         printf("_part_Gates = %lu, %d\n", numGates[1], _num_inner_gates);
         printf("_part_POs = %lu, %d\n", numGates[2], _num_POs);
         printf("_part_sum_pi_gates_pos = %lu, %d\n", numGates[3], _sum_pi_gates_pos);
-        printf("_part_visited_cpu: accum = %d\n", accum);
+        printf("_part_visited_cpu: accum = %d (should == 0)\n", accum);
       break;  
     }
     case 1: { // GPU simulator 
@@ -1396,13 +1396,13 @@ void CUDAPartitioner::_count_duplications(int simulator) {
           accum++;
         }
       }
-    
+      
       printf("Partitioned:\n");
-      printf("_part_PIs = %lu\n", numGates[0]);
-      printf("_part_Gates = %lu\n", numGates[1]);
-      printf("_part_POs = %lu\n", numGates[2]);
-      printf("_part_sum_pi_gates_pos = %lu\n", numGates[3]);
-      printf("_part_visited_cpu: accum = %d (accum should == 0)\n", accum);
+      printf("_part_PIs = %lu, %d\n", numGates[0], _num_PIs);
+      printf("_part_Gates = %lu, %d\n", numGates[1], _num_inner_gates);
+      printf("_part_POs = %lu, %d\n", numGates[2], _num_POs);
+      printf("_part_sum_pi_gates_pos = %lu, %d\n", numGates[3], _sum_pi_gates_pos);
+      printf("_part_visited_cpu: accum = %d (should == 0)\n", accum);
 
       break;
     }

@@ -28,31 +28,30 @@
 
 #include "./gpu_sizet_simulation.cuh"
 
-// #define GPU_PART_DEBUG_PRINT_SIMULATION
-// #define GPU_PART_DEBUG_PRINT_SIMULATION_RESULTS // print simulation resutls 
+// #define GPU_PART_DEBUG_PRINT_SIMULATION // print simulation resutls 
 
 
-void GALPS_SIZET_GPUSimulator::_run_cones_gates_gpu(const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
-                                                    const size_t *_per_level_of_group_start_accum_gpu,
-                                                    const size_t *_cones_partitioned_gpu,
-                                                    const size_t _total_num_levels,
-                                                    const size_t *_invAdj_gpu,
-                                                    const size_t *_invAdj_index_table_gpu,
-                                                    const size_t *_pi_gate_po_gate_type_gpu,
-                                                    const size_t *_patterns_gpu,
-                                                    const std::vector<Pattern> _patterns,
-                                                    const size_t *_fault_gate_idx_gpu,
-                                                    const size_t *_fault_SA_fault_val_gpu,
-                                                    size_t *_g_pi_results_gpu,
-                                                    size_t *_g_gate_results_gpu,
-                                                    size_t *_g_po_results_gpu,
-                                                    size_t *_b_pi_results_gpu,
-                                                    size_t *_b_gate_results_gpu,
-                                                    size_t *_b_po_results_gpu,
-                                                    size_t *_found_fault_to_pattern_gpu,
-                                                    size_t *_pi_gate_po_output_res_gpu) {
+void GALPS_SIZET_GPUSimulator::_run_cones_gates_level_gpu(const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
+                                                          const size_t *_per_level_of_group_start_accum_gpu,
+                                                          const size_t *_cones_partitioned_gpu,
+                                                          const size_t _total_num_levels,
+                                                          const size_t *_invAdj_gpu,
+                                                          const size_t *_invAdj_index_table_gpu,
+                                                          const size_t *_pi_gate_po_gate_type_gpu,
+                                                          const size_t *_patterns_gpu,
+                                                          const std::vector<Pattern> _patterns,
+                                                          const size_t *_fault_gate_idx_gpu,
+                                                          const size_t *_fault_SA_fault_val_gpu,
+                                                          size_t *_g_pi_results_gpu,
+                                                          size_t *_g_gate_results_gpu,
+                                                          size_t *_g_po_results_gpu,
+                                                          size_t *_b_pi_results_gpu,
+                                                          size_t *_b_gate_results_gpu,
+                                                          size_t *_b_po_results_gpu,
+                                                          size_t *_found_fault_to_pattern_gpu,
+                                                          size_t *_pi_gate_po_output_res_gpu) {
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
-std::cout << "execute simulation._run_cones_gates_gpu();\n";
+std::cout << "execute simulation._run_cones_gates_level_gpu();\n";
 #endif
 
   // Simulation
@@ -64,7 +63,7 @@ std::cout << "execute simulation._run_cones_gates_gpu();\n";
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
     // std::cout << "Run Good case with threads = " << _NUM_THREADS_SIZET << std::endl;
 #endif
-    _run_cones_good_case_gpu(_numGates_per_level_gpu_of_groups,
+    _run_cones_good_case_level_gpu(_numGates_per_level_gpu_of_groups,
                             _per_level_of_group_start_accum_gpu,
                             _cones_partitioned_gpu, 
                             _total_num_levels,
@@ -83,7 +82,7 @@ std::cout << "execute simulation._run_cones_gates_gpu();\n";
 
     // // bad simulation (fault simulation)
     // for (size_t j = 0; j < _faults.size(); j++) {
-    //   _run_cones_bad_case_gpu(_Gates, _faults[j], _patterns[rd], 
+    //   _run_cones_bad_case_level_gpu(_Gates, _faults[j], _patterns[rd], 
     //                       num_testcases_this_round,
     //                       _b_pi_results, _b_gate_results, _b_po_results);
 
@@ -116,103 +115,79 @@ std::cout << "execute simulation._run_cones_gates_gpu();\n";
   }
 }
 
-void GALPS_SIZET_GPUSimulator::_run_cones_good_case_gpu(const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
-                                                            const size_t *_per_level_of_group_start_accum_gpu,
-                                                            const size_t *_cones_partitioned_gpu,
-                                                            const size_t _total_num_levels,
-                                                            const size_t *_invAdj_gpu,
-                                                            const size_t *_invAdj_index_table_gpu,
-                                                            const size_t *_pi_gate_po_gate_type_gpu,
-                                                            const size_t *_patterns_gpu,
-                                                            const size_t *_fault_gate_idx_gpu,
-                                                            const size_t *_fault_SA_fault_val_gpu,
-                                                            const size_t bits,
-                                                            const size_t rd, 
-                                                            size_t *_g_pi_results_gpu,
-                                                            size_t *_g_gate_results_gpu,
-                                                            size_t *_g_po_results_gpu,
-                                                            size_t *_pi_gate_po_output_res_gpu) {
+void GALPS_SIZET_GPUSimulator::_run_cones_good_case_level_gpu(const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
+                                                              const size_t *_per_level_of_group_start_accum_gpu,
+                                                              const size_t *_cones_partitioned_gpu,
+                                                              const size_t _total_num_levels,
+                                                              const size_t *_invAdj_gpu,
+                                                              const size_t *_invAdj_index_table_gpu,
+                                                              const size_t *_pi_gate_po_gate_type_gpu,
+                                                              const size_t *_patterns_gpu,
+                                                              const size_t *_fault_gate_idx_gpu,
+                                                              const size_t *_fault_SA_fault_val_gpu,
+                                                              const size_t bits,
+                                                              const size_t rd, 
+                                                              size_t *_g_pi_results_gpu,
+                                                              size_t *_g_gate_results_gpu,
+                                                              size_t *_g_po_results_gpu,
+                                                              size_t *_pi_gate_po_output_res_gpu) {
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
-    printf("Getting inside _run_cones_good_case_gpu\n");
+    printf("Getting inside _run_cones_good_case_level_gpu\n");
 #endif 
-  // Create multiple streams using an array
-  const size_t numStreams = _k;
-  cudaStream_t streams[numStreams];
-  for (size_t i = 0; i < numStreams; ++i) {
-    cudaStreamCreate(&streams[i]);
-  }
-  // printf("numStreams = %lu\n", numStreams);
 
-  // Copy data to the device and launch kernels in different streams
-  for (size_t k = 0; k < numStreams; k++) {
-    const size_t fault_num = 0; const size_t bad_case = 0;
-    size_t num_blocks, num_threads;
+  const size_t fault_num = 0; const size_t bad_case = 0;
+  size_t num_blocks, num_threads;
 
-    for (size_t level = 0; level < _total_num_levels ; level++) {
-      const size_t num_gates_per_level = (_numGates_per_level_gpu_of_groups[k*_total_num_levels+level]);
-      num_blocks  = (num_gates_per_level > _NUM_THREADS_SIZET) ? 
-                    (num_gates_per_level + _NUM_THREADS_SIZET - 1)/_NUM_THREADS_SIZET : 
-                    (1);
-      num_threads = (num_gates_per_level > _NUM_THREADS_SIZET) ? 
-                    (_NUM_THREADS_SIZET) : 
-                    (num_gates_per_level);
-      // printf("k = %lu, level = %lu, num_blocks = %lu, num_threads = %lu, num_gates_per_level = %lu\n", 
-      //         k, level, num_blocks, num_threads, num_gates_per_level);
+  for (size_t level = 0; level < _total_num_levels ; level++) {
+    const size_t num_gates_per_level = (_numGates_per_level_gpu_of_groups[level]);
+    num_blocks  = (num_gates_per_level > _NUM_THREADS_SIZET) ? 
+                  (num_gates_per_level + _NUM_THREADS_SIZET - 1)/_NUM_THREADS_SIZET : 
+                  (1);
+    num_threads = (num_gates_per_level > _NUM_THREADS_SIZET) ? 
+                  (_NUM_THREADS_SIZET) : 
+                  (num_gates_per_level);
+    // printf("k = %lu, level = %lu, num_blocks = %lu, num_threads = %lu, num_gates_per_level = %lu\n", 
+    //         k, level, num_blocks, num_threads, num_gates_per_level);
 
-      _run_gate <<< num_blocks, num_threads, 0, streams[k] >>> (_invAdj_gpu, _invAdj_index_table_gpu, 
-                                                _cones_partitioned_gpu, 
-                                                _per_level_of_group_start_accum_gpu, k*_total_num_levels+level,
-                                                _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
-                                                _patterns_gpu, rd, 
-                                                _fault_gate_idx_gpu, _fault_SA_fault_val_gpu, 
-                                                fault_num, bad_case, 
-                                                num_gates_per_level, 
-                                                _num_PIs);
+    _run_gate <<< num_blocks, num_threads >>> (_invAdj_gpu, _invAdj_index_table_gpu, 
+                                              _cones_partitioned_gpu, 
+                                              _per_level_of_group_start_accum_gpu, level,
+                                              _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
+                                              _patterns_gpu, rd, 
+                                              _fault_gate_idx_gpu, _fault_SA_fault_val_gpu, 
+                                              fault_num, bad_case, 
+                                              num_gates_per_level, 
+                                              _num_PIs);
+
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
   cudaDeviceSynchronize();
-  printf("---\n");
 #endif      
-    }
-  }
-
-
-  // Synchronize all streams
-  for (size_t i = 0; i < numStreams; ++i) {
-    cudaStreamSynchronize(streams[i]);
-  }
-
-  // Cleanup: destroy streams
-  for (size_t i = 0; i < numStreams; ++i) {
-    cudaStreamDestroy(streams[i]);
   }
 
   // shift and copy answer to the good results
-  if (bits < SIZE_T_BITS) {
-    size_t num_blocks = (_sum_pi_gates_pos > _NUM_THREADS_SIZET) ? 
-                  (_sum_pi_gates_pos + _NUM_THREADS_SIZET - 1)/_NUM_THREADS_SIZET : 
-                  (1);//1;
-    size_t num_threads = (_sum_pi_gates_pos > _NUM_THREADS_SIZET) ? 
-                  (_NUM_THREADS_SIZET) : 
-                  (_sum_pi_gates_pos);    
-    _write_and_shift_to_array_gpu <<< num_blocks, num_threads >>> (_num_PIs, 
-                                                                  _num_inner_gates, 
-                                                                  _num_POs,
-                                                                  bits, 
-                                                                  _pi_gate_po_output_res_gpu,
-                                                                  _sum_pi_gates_pos,
-                                                                  _g_pi_results_gpu,
-                                                                  _g_gate_results_gpu,
-                                                                  _g_po_results_gpu);
-  }
+  num_blocks = (_sum_pi_gates_pos > _NUM_THREADS_SIZET) ? 
+                (_sum_pi_gates_pos + _NUM_THREADS_SIZET - 1)/_NUM_THREADS_SIZET : 
+                (1);//1;
+  num_threads = (_sum_pi_gates_pos > _NUM_THREADS_SIZET) ? 
+                (_NUM_THREADS_SIZET) : 
+                (_sum_pi_gates_pos);    
+  _write_and_shift_to_array_gpu <<< num_blocks, num_threads >>> (_num_PIs, 
+                                                                _num_inner_gates, 
+                                                                _num_POs,
+                                                                bits, 
+                                                                _pi_gate_po_output_res_gpu,
+                                                                _sum_pi_gates_pos,
+                                                                _g_pi_results_gpu,
+                                                                _g_gate_results_gpu,
+                                                                _g_po_results_gpu);
 
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
   cudaDeviceSynchronize();  
-  printf("---\n");
 #endif  
 }
 
 
-// void GALPS_SIZET_GPUSimulator::_run_cones_bad_case_gpu(std::vector<ElementBase<size_t, size_t>> &_Gates,
+// void GALPS_SIZET_GPUSimulator::_run_cones_bad_case_level_gpu(std::vector<ElementBase<size_t, size_t>> &_Gates,
 //                                           const Fault<size_t> &fault, 
 //                                           const Pattern pattern,
 //                                           const size_t bits,
@@ -363,7 +338,6 @@ __device__ __forceinline__ void _apply_XNOR(const size_t gate_idx, const size_t 
 
 __device__ __forceinline__ void _apply_MUX(const size_t gate_idx, const size_t *_invAdj_gpu, const size_t *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu) {
   const size_t s_loc = _invAdj_index_table_gpu[2*gate_idx+0]; 
-  // const size_t e_loc = _invAdj_index_table_gpu[2*gate_idx+1]; 
 
   const size_t a = _pi_gate_po_output_res_gpu[_invAdj_gpu[s_loc+0]];
   const size_t b = _pi_gate_po_output_res_gpu[_invAdj_gpu[s_loc+1]];
@@ -375,7 +349,9 @@ __device__ __forceinline__ void _apply_MUX(const size_t gate_idx, const size_t *
 }
 
 __device__ __forceinline__ void _apply_CLKBUF(const size_t gate_idx, const size_t *_invAdj_gpu, const size_t *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu) {
-  _pi_gate_po_output_res_gpu[gate_idx] = _pi_gate_po_output_res_gpu[gate_idx];
+  const int s_loc = _invAdj_index_table_gpu[2*gate_idx+0]; 
+  size_t ret = _pi_gate_po_output_res_gpu[_invAdj_gpu[s_loc+0]];
+  _pi_gate_po_output_res_gpu[gate_idx] = ret;
 }
 
 __device__ __forceinline__ void _apply_PI(const size_t gate_idx, const size_t *_invAdj_gpu, const size_t *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu, size_t pattern_val) {
@@ -399,12 +375,9 @@ __global__ void _run_gate(const size_t *_invAdj_gpu, const size_t *_invAdj_index
                           const size_t _num_PIs) {  
   size_t t_idx = blockDim.x*blockIdx.x + threadIdx.x;
 
-  
-
   if (num_gates_per_level > t_idx) {
     size_t k_accum_gates = _per_level_of_group_start_accum_gpu[k_level];
     size_t real_g_idx = _cones_partitioned_gpu[t_idx + k_accum_gates]; // tmp
-    // printf("Hello world, real_g_idx = %lu, type = %lu\n", real_g_idx, _pi_gate_po_gate_type_gpu[real_g_idx]);
 
     size_t SA_fault = (((real_g_idx) == _fault_gate_idx_gpu[fault_num]) & bad_case);
     
@@ -453,6 +426,7 @@ __global__ void _run_gate(const size_t *_invAdj_gpu, const size_t *_invAdj_index
       break;
       }      
   }
+  __syncthreads();
 }
 
 __global__ void _write_and_shift_to_array_gpu(const size_t _num_PIs, 

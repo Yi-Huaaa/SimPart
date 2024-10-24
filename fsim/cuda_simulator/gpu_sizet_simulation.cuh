@@ -138,7 +138,7 @@ public:
     _num_fault = num_fault;
     
     // run simulation
-    _run_cones_gates_gpu(_numGates_per_level_gpu_of_groups,
+    _run_cones_gates_level_gpu(_numGates_per_level_gpu_of_groups,
                         _per_level_of_group_start_accum_gpu,
                         _cones_partitioned_gpu, 
                         _total_num_levels,
@@ -172,27 +172,27 @@ private:
   size_t _num_fault; 
 
 
-  void _run_cones_gates_gpu(const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
-                                  const size_t *_per_level_of_group_start_accum_gpu,
-                                  const size_t *_cones_partitioned_gpu,
-                                  const size_t _total_num_levels,
-                                  const size_t *_invAdj_gpu,
-                                  const size_t *_invAdj_index_table_gpu,
-                                  const size_t *_pi_gate_po_gate_type_gpu,
-                                  const size_t *_patterns_gpu,
-                                  const std::vector<Pattern> _patterns,
-                                  const size_t *_fault_gate_idx_gpu,
-                                  const size_t *_fault_SA_fault_val_gpu,                            
-                                  size_t *_g_pi_results_gpu,
-                                  size_t *_g_gate_results_gpu,
-                                  size_t *_g_po_results_gpu,
-                                  size_t *_b_pi_results_gpu,
-                                  size_t *_b_gate_results_gpu,
-                                  size_t *_b_po_results_gpu,
-                                  size_t *_found_fault_to_pattern_gpu,
-                                  size_t *_pi_gate_po_output_res_gpu);
+  void _run_cones_gates_level_gpu(const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
+                            const size_t *_per_level_of_group_start_accum_gpu,
+                            const size_t *_cones_partitioned_gpu,
+                            const size_t _total_num_levels,
+                            const size_t *_invAdj_gpu,
+                            const size_t *_invAdj_index_table_gpu,
+                            const size_t *_pi_gate_po_gate_type_gpu,
+                            const size_t *_patterns_gpu,
+                            const std::vector<Pattern> _patterns,
+                            const size_t *_fault_gate_idx_gpu,
+                            const size_t *_fault_SA_fault_val_gpu,                            
+                            size_t *_g_pi_results_gpu,
+                            size_t *_g_gate_results_gpu,
+                            size_t *_g_po_results_gpu,
+                            size_t *_b_pi_results_gpu,
+                            size_t *_b_gate_results_gpu,
+                            size_t *_b_po_results_gpu,
+                            size_t *_found_fault_to_pattern_gpu,
+                            size_t *_pi_gate_po_output_res_gpu);
 
-  void _run_cones_good_case_gpu(const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
+  void _run_cones_good_case_level_gpu(const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
                                 const size_t *_per_level_of_group_start_accum_gpu,
                                 const size_t *_cones_partitioned_gpu,
                                 const size_t _total_num_levels,
@@ -210,7 +210,7 @@ private:
                                 size_t *_pi_gate_po_output_res_gpu);
 
 
-  // void _run_cones_bad_case_gpu(const Fault<size_t> &fault, 
+  // void _run_cones_bad_case_level_gpu(const Fault<size_t> &fault, 
   //                             const Pattern pattern,
   //                             const size_t bits,
   //                             std::vector<size_t> &_b_pi_results,
