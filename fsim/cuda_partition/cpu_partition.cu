@@ -640,7 +640,6 @@ void CPUPartitioner::_construct_duplication_table(std::vector<size_t> &coneIdxTo
 
 
 void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1) {
-
 #ifdef CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH
   printf("CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH\n");
   _find_clusters();
@@ -650,7 +649,6 @@ void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_0, std::chr
     _RepCut_output_cones = _cones;
   }
 
-  
 #else
   auto start = std::chrono::steady_clock::now();
   auto end0 = std::chrono::steady_clock::now();
@@ -1346,7 +1344,7 @@ void CPUPartitioner::run(SIMU_Mode simu_mode, Mode mode, const size_t num_thread
       break;
     }
     case SIMU_Mode::GPU: {
-      _run_gpu_simulator();
+      _run_gpu_simulator(mode);
       break;      
     }
     default: {
@@ -1358,30 +1356,73 @@ void CPUPartitioner::run(SIMU_Mode simu_mode, Mode mode, const size_t num_thread
   //         _num_PIs, _num_POs, _num_inner_gates, _sum_pi_gates_pos);
 }
 
-void CPUPartitioner::_run_gpu_simulator() {
-  GALPS_SIZET_GPUSimulator gpuSimulator;
-  gpuSimulator.run_gpu_simulator_cones_sizet_gpu(_k_sizet, _num_PIs, _num_inner_gates, _num_POs, 
-                                                _sum_pi_gates_pos, 
-                                                _num_pattern, _num_rounds, _num_fault,
-                                                _pi_gate_po_gate_type_gpu, 
-                                                _patterns_gpu,
-                                                _fault_gate_idx_gpu,
-                                                _fault_SA_fault_val_gpu,
-                                                _pi_gate_po_output_res_gpu,
-                                                _numGates_per_level_gpu_of_groups,
-                                                _per_level_of_group_start_accum_gpu,
-                                                _cones_partitioned_gpu,
-                                                _total_num_levels,
-                                                _invAdj_gpu,
-                                                _invAdj_index_table_gpu,
-                                                _patterns, 
-                                                _g_pi_results_gpu,
-                                                _g_gate_results_gpu,
-                                                _g_po_results_gpu,
-                                                _b_pi_results_gpu,
-                                                _b_gate_results_gpu,
-                                                _b_po_results_gpu,
-                                                _found_fault_to_pattern_gpu);
+void CPUPartitioner::_run_gpu_simulator(Mode mode) {
+  switch (mode) {
+    case Mode::SEQUENTIAL: 
+    case Mode::PARALLEL_OMP: {
+      GALPS_SIZET_GPUSimulator gpuSimulator;
+      gpuSimulator.run_gpu_simulator_cones_sizet_gpu(_k_sizet, _num_PIs, _num_inner_gates, _num_POs, 
+                                                    _sum_pi_gates_pos, 
+                                                    _num_pattern, _num_rounds, _num_fault,
+                                                    _pi_gate_po_gate_type_gpu, 
+                                                    _patterns_gpu,
+                                                    _fault_gate_idx_gpu,
+                                                    _fault_SA_fault_val_gpu,
+                                                    _pi_gate_po_output_res_gpu,
+                                                    _numGates_per_level_gpu_of_groups,
+                                                    _per_level_of_group_start_accum_gpu,
+                                                    _cones_partitioned_gpu,
+                                                    _total_num_levels,
+                                                    _invAdj_gpu,
+                                                    _invAdj_index_table_gpu,
+                                                    _patterns, 
+                                                    _g_pi_results_gpu,
+                                                    _g_gate_results_gpu,
+                                                    _g_po_results_gpu,
+                                                    _b_pi_results_gpu,
+                                                    _b_gate_results_gpu,
+                                                    _b_po_results_gpu,
+                                                    _found_fault_to_pattern_gpu);
+
+      break;
+    }
+    case Mode::REPCUT_SEQUENTIAL: 
+    case Mode::REPCUT_PARALLEL_OMP: 
+    case Mode::REPCUT_MT_SEQUENTIAL: 
+    case Mode::REPCUT_MT_PARALLEL_OMP: {
+      GALPS_SIZET_GPUSimulator gpuSimulator;
+      gpuSimulator.run_gpu_simulator_cones_part_sizet_gpu(_k_sizet, _num_PIs, _num_inner_gates, _num_POs, 
+                                                    _sum_pi_gates_pos, 
+                                                    _num_pattern, _num_rounds, _num_fault,
+                                                    _pi_gate_po_gate_type_gpu, 
+                                                    _patterns_gpu,
+                                                    _fault_gate_idx_gpu,
+                                                    _fault_SA_fault_val_gpu,
+                                                    _pi_gate_po_output_res_gpu,
+                                                    _numGates_per_level_gpu_of_groups,
+                                                    _per_level_of_group_start_accum_gpu,
+                                                    _cones_partitioned_gpu,
+                                                    _total_num_levels,
+                                                    _invAdj_gpu,
+                                                    _invAdj_index_table_gpu,
+                                                    _patterns, 
+                                                    _g_pi_results_gpu,
+                                                    _g_gate_results_gpu,
+                                                    _g_po_results_gpu,
+                                                    _b_pi_results_gpu,
+                                                    _b_gate_results_gpu,
+                                                    _b_po_results_gpu,
+                                                    _found_fault_to_pattern_gpu);
+      break;      
+    }
+
+    default: {
+      printf("No SUCH CASES\n");
+      return;
+    }
+  }
+
+
   cudaDeviceSynchronize();
 }
 

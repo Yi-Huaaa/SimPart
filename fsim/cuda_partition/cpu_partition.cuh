@@ -206,7 +206,7 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
 
   // Simulator
   void _run_cpu_simulator(Mode mode, const size_t num_threads);
-  void _run_gpu_simulator();
+  void _run_gpu_simulator(Mode mode);
 
   // GPU Simulation
   void _ask_gpu_memory_simu_1(Mode mode);

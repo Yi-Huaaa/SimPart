@@ -159,6 +159,38 @@ public:
                         _pi_gate_po_output_res_gpu);
   }
 
+  void run_gpu_simulator_cones_part_sizet_gpu(const size_t k,
+                                              const size_t num_PIs, 
+                                              const size_t num_inner_gates,
+                                              const size_t num_POs, 
+                                              const size_t sum_pi_gates_pos,
+                                              const size_t num_pattern, 
+                                              const size_t num_rounds,
+                                              const size_t num_fault, 
+                                              const size_t *_pi_gate_po_gate_type_gpu,
+                                              const size_t *_patterns_gpu,
+                                              const size_t *_fault_gate_idx_gpu,
+                                              const size_t *_fault_SA_fault_val_gpu,
+                                              size_t *_pi_gate_po_output_res_gpu,
+                                              const std::vector<size_t> &_numGates_per_level_gpu_of_groups,
+                                              const size_t *_per_level_of_group_start_accum_gpu,
+                                              const size_t *_cones_partitioned_gpu,
+                                              const size_t _total_num_levels,
+                                              const size_t *_invAdj_gpu,
+                                              const size_t *_invAdj_index_table_gpu,
+                                              const std::vector<Pattern> _patterns,
+                                              size_t *_g_pi_results_gpu,
+                                              size_t *_g_gate_results_gpu,
+                                              size_t *_g_po_results_gpu,
+                                              size_t *_b_pi_results_gpu,
+                                              size_t *_b_gate_results_gpu,
+                                              size_t *_b_po_results_gpu,
+                                              size_t *_found_fault_to_pattern_gpu) {
+    printf("run_gpu_simulator_cones_part_sizet_gpu\n\n");;
+
+
+    
+  }
 
 private:
   // vars
