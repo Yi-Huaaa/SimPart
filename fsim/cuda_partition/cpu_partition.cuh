@@ -56,7 +56,7 @@ public:
             const std::string &ptn,
             const size_t num_threads);
   void read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn, const size_t num_threads);
-  void run(SIMU_Mode simu_mode, Mode mode, const size_t num_threads);
+  void run(SIMU_Mode simu_mode, Mode mode, const size_t num_threads, const size_t NUM_SIMULATION_RDS);
   
   void visualization_graph(const std::string &outputFile);
   void KaHyParExample();
@@ -206,7 +206,7 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
 
   // Simulator
   void _run_cpu_simulator(Mode mode, const size_t num_threads);
-  void _run_gpu_simulator(Mode mode);
+  void _run_gpu_simulator(Mode mode, const size_t NUM_SIMULATION_RDS);
 
   // GPU Simulation
   void _ask_gpu_memory_simu_1(Mode mode);

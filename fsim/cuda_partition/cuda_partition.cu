@@ -595,10 +595,17 @@ void CUDAPartitioner::_levelized() {
 
   // Construct _gateIdx_in_each_level
   _gateIdx_in_each_level.resize(_total_num_levels);
-  for (size_t gateIdx = 0; gateIdx < _level_of_gates.size(); gateIdx++) {
-    size_t gateLvl = _level_of_gates[gateIdx];
+  for (int gateIdx = 0; gateIdx < _level_of_gates.size(); gateIdx++) {
+    int gateLvl = _level_of_gates[gateIdx];
     _gateIdx_in_each_level[gateLvl].push_back(gateIdx);
   }
+
+  _threshold_0_level = _max_level;
+  while(_threshold_0_level != -1 && 
+        _gateIdx_in_each_level[_threshold_0_level].size() <= _THRESHOLD_0) {
+    _threshold_0_level--;
+  }  
+
 
 #ifdef CPU_PRINT_LEVELIZED
   _print_levelized();
@@ -751,10 +758,27 @@ void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
       break;  
     }
     case 1: { // GPU simulator 
-      // construct _cones_partitioned_tmp
-      // construct _numGates_per_level_gpu_of_groups
-      // construct _per_level_of_group_start_accum_tmp
+      // Prepare for the part of levelization
+        // construct _per_level_of_group_start_accum_level_tmp
+        // construct _gateIdx_in_each_level_tmp
       int accum = 0;
+      _per_level_of_group_start_accum_level_tmp.push_back(accum);
+
+      for (size_t level = 0; level < _gateIdx_in_each_level.size(); level++) {
+        for (size_t gate = 0; gate < _gateIdx_in_each_level[level].size(); gate++) {
+          int gateIdx = _gateIdx_in_each_level[level][gate];
+          _gateIdx_in_each_level_tmp.push_back(gateIdx);
+          accum++;
+        }
+        _per_level_of_group_start_accum_level_tmp.push_back(accum);
+      }
+   
+
+      // Prepare for the part of partitioned groups
+        // construct _cones_partitioned_tmp
+        // construct _numGates_per_level_gpu_of_groups
+        // construct _per_level_of_group_start_accum_tmp
+      accum = 0;
       _per_level_of_group_start_accum_tmp.push_back(accum);
 
       for (size_t i = 0; i < _cones_set.size(); ++i) {
@@ -770,6 +794,9 @@ void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
         }
       }
 
+      // TODO: need to update this _count_duplications for leveraging:
+      // (1) levelization and 
+      // (2) GPU partitioning algo
       _count_duplications(simulator);
 
       //   printf("_numGates_per_level_gpu_of_groups = [");
@@ -845,6 +872,9 @@ void CUDAPartitioner::_ask_gpu_simulation_memory() {
   cudaMalloc((void**)&_per_level_of_group_start_accum_gpu, (_per_level_of_group_start_accum_tmp.size())*sizeof(int));
   cudaMalloc((void**)&_cones_partitioned_gpu, (_cones_partitioned_tmp.size())*sizeof(int));
   cudaMalloc((void**)&_numGates_per_level_gpu_of_groups_gpu, (_numGates_per_level_gpu_of_groups.size())*sizeof(int));
+  
+  cudaMalloc((void**)&_per_level_of_group_start_accum_level_gpu, (_per_level_of_group_start_accum_level_tmp.size())*sizeof(int));
+  cudaMalloc((void**)&_gateIdx_in_each_level_gpu, (_gateIdx_in_each_level_tmp.size())*sizeof(int));
   cudaCheckErrors("CUDA: ask gpu simulation memory - cudaMalloc - Failure");
 
   cudaMemcpyAsync(_per_level_of_group_start_accum_gpu, _per_level_of_group_start_accum_tmp.data(), 
@@ -853,8 +883,11 @@ void CUDAPartitioner::_ask_gpu_simulation_memory() {
                   (_cones_partitioned_tmp.size())*sizeof(int), cudaMemcpyHostToDevice); 
   cudaMemcpyAsync(_numGates_per_level_gpu_of_groups_gpu, _numGates_per_level_gpu_of_groups.data(), 
                   (_numGates_per_level_gpu_of_groups.size())*sizeof(int), cudaMemcpyHostToDevice); 
-
-  cudaCheckErrors("CUDA: ask gpu simulation memory - cudaMemcpyAsync - Failure");                  
+  cudaMemcpyAsync(_per_level_of_group_start_accum_level_gpu, _per_level_of_group_start_accum_level_tmp.data(), 
+                  (_per_level_of_group_start_accum_level_tmp.size())*sizeof(int), cudaMemcpyHostToDevice); 
+  cudaMemcpyAsync(_gateIdx_in_each_level_gpu, _gateIdx_in_each_level_tmp.data(), 
+                  (_gateIdx_in_each_level_tmp.size())*sizeof(int), cudaMemcpyHostToDevice);                   
+  cudaCheckErrors("CUDA: ask gpu simulation memory - cudaMemcpyAsync - Failure");
 }
 
 void CUDAPartitioner::_move_GateType_h2d() {
@@ -942,7 +975,7 @@ void CUDAPartitioner::prepare_gpu_simulation() {
 // --------------------------------------------------------------------------------------------------
 
 // Simulation functions 
-void CUDAPartitioner::run(Mode mode, const size_t num_threads) {  
+void CUDAPartitioner::run(Mode mode, const size_t num_threads, const size_t NUM_SIMULATION_RDS) {  
   // int m = static_cast<int>(mode);
 
   switch (mode) {
@@ -976,6 +1009,10 @@ void CUDAPartitioner::run(Mode mode, const size_t num_threads) {
                                                     _fault_gate_idx_gpu,
                                                     _fault_SA_fault_val_gpu,
                                                     _pi_gate_po_output_res_gpu,
+                                                    _gateIdx_in_each_level,
+                                                    _gateIdx_in_each_level_gpu,
+                                                    _per_level_of_group_start_accum_level_gpu,
+                                                    _threshold_0_level,
                                                     _numGates_per_level_gpu_of_groups_gpu,
                                                     _per_level_of_group_start_accum_gpu,
                                                     _cones_partitioned_gpu,
@@ -989,8 +1026,10 @@ void CUDAPartitioner::run(Mode mode, const size_t num_threads) {
                                                     _b_pi_results_gpu,
                                                     _b_gate_results_gpu,
                                                     _b_po_results_gpu,
-                                                    _found_fault_to_pattern_gpu);
-      cudaDeviceSynchronize();  // Ask can we revmoe ??                                         
+                                                    _found_fault_to_pattern_gpu,
+                                                    NUM_SIMULATION_RDS);
+
+      cudaDeviceSynchronize();
       break;
     }
 
@@ -1295,6 +1334,11 @@ void CUDAPartitioner::_print_levelized(){
     printf("_level_of_gates[%lu] = %d\n", i, _level_of_gates[i]);
   }
   printf("\n");
+
+  printf("_threshold_0_level = %d\n", _threshold_0_level);
+  for (size_t i = 0; i < _gateIdx_in_each_level.size(); i++) {
+    printf("level_%lu, size = %lu\n", i, _gateIdx_in_each_level[i].size());
+  }  
 }
 
 void CUDAPartitioner::_print_construct_groups(const std::vector<std::vector<int>> &sinks_groups) {
@@ -1368,19 +1412,40 @@ void CUDAPartitioner::_count_duplications(int simulator) {
       visited_cpu.resize(_sum_pi_gates_pos, false);
       std::vector<int> numGates; 
       numGates.resize(4, 0);
-    
-      for (size_t i = 0; i < _cones_partitioned_tmp.size(); i++) {
-        int element = _cones_partitioned_tmp[i];
-        visited_cpu[element] = true; 
-        if (element < _num_PIs) { // is PI
-          numGates[0]++;
-        } else if (element >= _num_PIs && element < (_num_PIs+_num_POs)) { // is PO
-          numGates[2]++;
-        } else { // is Gate
-          numGates[1]++;
+
+      // Levelize
+      for (int level = 0; level < (_threshold_0_level+1); level++) {
+        for (size_t gate = 0; gate < _gateIdx_in_each_level[level].size(); gate++) {
+          int element = _gateIdx_in_each_level[level][gate];
+          visited_cpu[element] = true; 
+          if (element < _num_PIs) { // is PI
+            numGates[0]++;
+          } else if (element >= _num_PIs && element < (_num_PIs+_num_POs)) { // is PO
+            numGates[2]++;
+          } else { // is Gate
+            numGates[1]++;
+          }
         }
       }
-    
+
+      // Partitioning
+      for (int k = 0; k < _k; k++) {
+        size_t s_loc = _per_level_of_group_start_accum_tmp[k*_total_num_levels+_threshold_0_level+1];
+        size_t e_loc = _per_level_of_group_start_accum_tmp[(k+1)*_total_num_levels];
+        // printf("k = %d, s_loc = %lu, e_loc = %lu\n", k, s_loc, e_loc);
+        for (size_t i = s_loc; i < e_loc; i++) {
+          int element = _cones_partitioned_tmp[i];
+          visited_cpu[element] = true; 
+          if (element < _num_PIs) { // is PI
+            numGates[0]++;
+          } else if (element >= _num_PIs && element < (_num_PIs+_num_POs)) { // is PO
+            numGates[2]++;
+          } else { // is Gate
+            numGates[1]++;
+          }
+        }
+      }
+
       numGates[3] = numGates[0]+numGates[1]+numGates[2];
     
       int accum = 0;
@@ -1391,10 +1456,14 @@ void CUDAPartitioner::_count_duplications(int simulator) {
       }
       
       printf("Partitioned:\n");
-      printf("_part_PIs = %d, %d\n", numGates[0], _num_PIs);
-      printf("_part_Gates = %d, %d\n", numGates[1], _num_inner_gates);
-      printf("_part_POs = %d, %d\n", numGates[2], _num_POs);
-      printf("_part_sum_pi_gates_pos = %d, %d\n", numGates[3], _sum_pi_gates_pos);
+      // printf("_part_PIs = %d, %d\n", numGates[0], _num_PIs);
+      // printf("_part_Gates = %d, %d\n", numGates[1], _num_inner_gates);
+      // printf("_part_POs = %d, %d\n", numGates[2], _num_POs);
+      if (numGates[3] == _sum_pi_gates_pos) {
+        printf("The same! _sum_pi_gates_pos = %d\n", _sum_pi_gates_pos);
+      } else {
+        printf("_part_sum_pi_gates_pos = %d, %d\n", numGates[3], _sum_pi_gates_pos);
+      }
       printf("_part_visited_cpu: accum = %d (should == 0)\n", accum);
       printf("_total_num_levels = %d\n", _total_num_levels);
 

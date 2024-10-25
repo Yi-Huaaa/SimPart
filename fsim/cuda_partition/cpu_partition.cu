@@ -1337,14 +1337,14 @@ void CPUPartitioner::prepare_gpu_simulation(Mode mode) {
 
 
 // Run the simulation 
-void CPUPartitioner::run(SIMU_Mode simu_mode, Mode mode, const size_t num_threads) {
+void CPUPartitioner::run(SIMU_Mode simu_mode, Mode mode, const size_t num_threads, const size_t NUM_SIMULATION_RDS) {
   switch (simu_mode) {
     case SIMU_Mode::CPU: {
       _run_cpu_simulator(mode, num_threads);
       break;
     }
     case SIMU_Mode::GPU: {
-      _run_gpu_simulator(mode);
+      _run_gpu_simulator(mode, NUM_SIMULATION_RDS);
       break;      
     }
     default: {
@@ -1356,7 +1356,7 @@ void CPUPartitioner::run(SIMU_Mode simu_mode, Mode mode, const size_t num_thread
   //         _num_PIs, _num_POs, _num_inner_gates, _sum_pi_gates_pos);
 }
 
-void CPUPartitioner::_run_gpu_simulator(Mode mode) {
+void CPUPartitioner::_run_gpu_simulator(Mode mode, const size_t NUM_SIMULATION_RDS) {
   switch (mode) {
     case Mode::SEQUENTIAL: 
     case Mode::PARALLEL_OMP: {
@@ -1382,7 +1382,8 @@ void CPUPartitioner::_run_gpu_simulator(Mode mode) {
                                                     _b_pi_results_gpu,
                                                     _b_gate_results_gpu,
                                                     _b_po_results_gpu,
-                                                    _found_fault_to_pattern_gpu);
+                                                    _found_fault_to_pattern_gpu,
+                                                    NUM_SIMULATION_RDS);
       cudaDeviceSynchronize(); 
       break;
     }

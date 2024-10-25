@@ -40,7 +40,8 @@
 
 
 // constexpr
-constexpr int _k = 8; // based on the kernel concurrency
+// 16, 4096
+constexpr int _k = 16; // based on the kernel concurrency
 constexpr int _THRESHOLD_0 = 4096; // until which level should use levelization 
 // constexpr int _THRESHOLD_1 = 1024; // until which level should use tailend 
 
@@ -156,7 +157,7 @@ public:
   void prepare_cpu_simulation();
   void prepare_gpu_simulation();
 
-  void run(Mode mode, const size_t num_threads);
+  void run(Mode mode, const size_t num_threads, const size_t NUM_SIMULATION_RDS);
   void freeMem() {
     _free();
   }
@@ -195,9 +196,10 @@ private:
   int _max_level;
   int _total_num_levels;
   std::vector<int> _level_of_gates;
-  std::vector<std::vector<size_t>> _gateIdx_in_each_level;
+  std::vector<std::vector<int>> _gateIdx_in_each_level;
   std::vector<std::vector<std::set<int>>> _cones_set;
   std::vector<std::vector<std::vector<int>>> _cones_partitioned;
+  int _threshold_0_level;
   
   // CPU Simulation
   std::vector<size_t> _g_pi_results;
@@ -239,6 +241,12 @@ private:
   std::vector<int> _cones_partitioned_tmp;
   int *_cones_partitioned_gpu; // partitioned results 
 
+  std::vector<int> _per_level_of_group_start_accum_level_tmp;
+  int *_per_level_of_group_start_accum_level_gpu;
+  
+  std::vector<int> _gateIdx_in_each_level_tmp;
+  int *_gateIdx_in_each_level_gpu; 
+  
 
   // GPU Simulation: 
   int *_max_level_gpu;
@@ -327,6 +335,8 @@ private:
     cudaFree(_b_gate_results_gpu);
     cudaFree(_b_po_results_gpu);
     cudaFree(_found_fault_to_pattern_gpu);
+    cudaFree(_per_level_of_group_start_accum_level_gpu);
+    cudaFree(_gateIdx_in_each_level_gpu);
   }
 
 

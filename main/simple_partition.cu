@@ -7,6 +7,10 @@
 #include <vector>
 #include <iostream>
 
+constexpr size_t _NUM_SIMULATION_RDS = 1;
+constexpr size_t TIMES = 1;
+
+
 // #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
     #define VERSION 1 // VERSION can be 0, 1, 2, 3, 4, 5, 6, 7
@@ -47,7 +51,6 @@
 
 // Both Definition 
 #define SHOW_ALL_TIME
-#define TIMES 10
 // #define OUTPUT_VISUALIZATION_GRAPH_TO_FILE
 
 
@@ -107,13 +110,13 @@ int main(int argc, char *argv[]) {
     // pre-run
     cpuPartitioner.run(CPUPartitioner::SIMU_Mode(static_cast<size_t>(SIMU_MODE)), 
                       CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
-                      NUM_THREADS);    
+                      NUM_THREADS, _NUM_SIMULATION_RDS);    
     // Run Simulator
     for (size_t t = 0; t < TIMES; t++) {
       start = std::chrono::steady_clock::now();
         cpuPartitioner.run(CPUPartitioner::SIMU_Mode(static_cast<size_t>(SIMU_MODE)), 
                            CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
-                           NUM_THREADS);
+                           NUM_THREADS, _NUM_SIMULATION_RDS);
       end = std::chrono::steady_clock::now();
       duration_simulation += (end - start);
     }
@@ -146,12 +149,12 @@ int main(int argc, char *argv[]) {
   }
 
   // pre-run
-  cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS);
+  cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS, _NUM_SIMULATION_RDS);
   
   // Run Simulator
   for (size_t t = 0; t < TIMES; t++) {
     auto start = std::chrono::steady_clock::now();
-    cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS);
+    cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS, _NUM_SIMULATION_RDS);
     auto end = std::chrono::steady_clock::now();
     duration_simulation += (end - start);
   }

@@ -44,7 +44,7 @@
 
 
 // constexpr
-const size_t _NUM_THREADS_SIZET = 1024;
+constexpr size_t _NUM_THREADS_SIZET = 1024;
 
 // GPU functions pre-declarations
 __device__ __forceinline__ void _apply_INV(const size_t gate_idx, const size_t *_invAdj_gpu, const size_t *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
@@ -126,7 +126,8 @@ public:
                                         size_t *_b_pi_results_gpu,
                                         size_t *_b_gate_results_gpu,
                                         size_t *_b_po_results_gpu,
-                                        size_t *_found_fault_to_pattern_gpu) {
+                                        size_t *_found_fault_to_pattern_gpu,
+                                        const size_t NUM_SIMULATION_RDS) {
     // Get vars   
     _k = k;       
     _num_PIs = num_PIs;
@@ -137,26 +138,29 @@ public:
     _num_rounds = num_rounds;
     _num_fault = num_fault;
     
-    // run simulation
-    _run_cones_gates_level_gpu(_numGates_per_level_gpu_of_groups,
-                        _per_level_of_group_start_accum_gpu,
-                        _cones_partitioned_gpu, 
-                        _total_num_levels,
-                        _invAdj_gpu,
-                        _invAdj_index_table_gpu,
-                        _pi_gate_po_gate_type_gpu, 
-                        _patterns_gpu,
-                        _patterns,
-                        _fault_gate_idx_gpu,
-                        _fault_SA_fault_val_gpu,
-                        _g_pi_results_gpu,
-                        _g_gate_results_gpu,
-                        _g_po_results_gpu,
-                        _b_pi_results_gpu,
-                        _b_gate_results_gpu,
-                        _b_po_results_gpu,
-                        _found_fault_to_pattern_gpu,
-                        _pi_gate_po_output_res_gpu);
+    // Run simulation
+    for (size_t rd = 0; rd < NUM_SIMULATION_RDS; rd++) {
+      // Levelization
+      _run_cones_gates_level_gpu(_numGates_per_level_gpu_of_groups,
+                          _per_level_of_group_start_accum_gpu,
+                          _cones_partitioned_gpu, 
+                          _total_num_levels,
+                          _invAdj_gpu,
+                          _invAdj_index_table_gpu,
+                          _pi_gate_po_gate_type_gpu, 
+                          _patterns_gpu,
+                          _patterns,
+                          _fault_gate_idx_gpu,
+                          _fault_SA_fault_val_gpu,
+                          _g_pi_results_gpu,
+                          _g_gate_results_gpu,
+                          _g_po_results_gpu,
+                          _b_pi_results_gpu,
+                          _b_gate_results_gpu,
+                          _b_po_results_gpu,
+                          _found_fault_to_pattern_gpu,
+                          _pi_gate_po_output_res_gpu);
+    } // NUM_SIMULATION_RDS
   }
 
   void run_gpu_simulator_cones_part_sizet_gpu(const size_t k,
