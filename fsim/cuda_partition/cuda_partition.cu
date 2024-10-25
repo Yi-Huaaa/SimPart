@@ -794,9 +794,6 @@ void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
         }
       }
 
-      // TODO: need to update this _count_duplications for leveraging:
-      // (1) levelization and 
-      // (2) GPU partitioning algo
       _count_duplications(simulator);
 
       //   printf("_numGates_per_level_gpu_of_groups = [");
@@ -1465,7 +1462,8 @@ void CUDAPartitioner::_count_duplications(int simulator) {
         printf("_part_sum_pi_gates_pos = %d, %d\n", numGates[3], _sum_pi_gates_pos);
       }
       printf("_part_visited_cpu: accum = %d (should == 0)\n", accum);
-      printf("_total_num_levels = %d\n", _total_num_levels);
+      printf("_threshold_0_level = %d, _total_num_levels = %d\n", 
+              _threshold_0_level, _total_num_levels);
 
       break;
     }
