@@ -187,8 +187,6 @@ public:
                                               size_t *_b_po_results_gpu,
                                               size_t *_found_fault_to_pattern_gpu) {
     printf("run_gpu_simulator_cones_part_sizet_gpu\n\n");;
-
-
     
   }
 

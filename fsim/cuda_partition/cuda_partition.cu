@@ -86,6 +86,12 @@ void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &
   auto start = std::chrono::steady_clock::now();
   _ask_gpu_memory_part();
   _call_gpu_partitioner();
+
+  // Topological sort on CPU:
+    // Copy topological sort results from GPU to CPU
+    // Using topological sort results from GPU to levelize 
+  _get_topological_sort_resutls();  
+
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_GPU_partition = end - start;
 
@@ -357,6 +363,7 @@ __global__ void _frist_level(const int _num_PIs,
         toGate < _adj_index_table_gpu[2*g_idx+1]; toGate++) {
       int toGateIdx = _adj_gpu[toGate];
       int toGateMod = toGateIdx%_k;
+
       groupIdxAccum[toGateMod]++;
       maxGroupIdx = (groupIdxAccum[toGateMod] > maxGroupAccum) ? 
                     (toGateMod) : 
@@ -371,6 +378,9 @@ __global__ void _frist_level(const int _num_PIs,
         // printf("\t_enqueue t_idx = %d, toGateIdx = %d\n", t_idx, toGateIdx);
       }
     }
+
+    // int maxGroupIdx = int((static_cast<double>(toGateIdx/_num_PIs))*8);
+    
 
     // Update _partitionIndex_gpu
     _partitionIndex_gpu[g_idx] = maxGroupIdx;
@@ -564,7 +574,7 @@ void CUDAPartitioner::_levelized() {
   
   for (int i = 0; i < _queue_tail_cpu; i++) {
     int gateIdx = _queue_data_cpu[i];
-    // travverse its inputs 
+    // traverse its inputs 
     for (int fmGate = _invAdj_index_table[2*gateIdx+0]; 
         fmGate < _invAdj_index_table[2*gateIdx+1];
         fmGate++) {
@@ -581,6 +591,14 @@ void CUDAPartitioner::_levelized() {
     }
   } 
   _total_num_levels = _max_level + 1;
+
+
+  // Construct _gateIdx_in_each_level
+  _gateIdx_in_each_level.resize(_total_num_levels);
+  for (size_t gateIdx = 0; gateIdx < _level_of_gates.size(); gateIdx++) {
+    size_t gateLvl = _level_of_gates[gateIdx];
+    _gateIdx_in_each_level[gateLvl].push_back(gateIdx);
+  }
 
 #ifdef CPU_PRINT_LEVELIZED
   _print_levelized();
@@ -709,10 +727,10 @@ void CUDAPartitioner::_construct_graph() {
 }
 
 void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
-  // Topological sort on CPU:
-    // Copy topological sort results from GPU to CPU
-    // Using topological sort results from GPU to levelize 
-  _get_topological_sort_resutls();  
+  // // Topological sort on CPU:
+  //   // Copy topological sort results from GPU to CPU
+  //   // Using topological sort results from GPU to levelize 
+  // _get_topological_sort_resutls();  
 
   // construct group and show constructed group 
   _construct_groups();
@@ -752,7 +770,7 @@ void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
         }
       }
 
-      // _count_duplications(simulator);
+      _count_duplications(simulator);
 
       //   printf("_numGates_per_level_gpu_of_groups = [");
       //   for (size_t i = 0; i < _numGates_per_level_gpu_of_groups.size(); i++) {
@@ -950,29 +968,6 @@ void CUDAPartitioner::run(Mode mode, const size_t num_threads) {
     case Mode::GPU_PARTIOR_GPU_SIMUTOR: {
       // std::cout << "Mode: " << m << " (run GPU_PARTIOR_GPU_SIMUTOR)\n";
       GALPS_GPUSimulator gpuSimulator;
-      // gpuSimulator.run_gpu_simulator_cones_level_gpu(_k, _num_PIs, _num_inner_gates, _num_POs, 
-      //                                         _sum_pi_gates_pos, 
-      //                                         _num_pattern, _num_rounds, _num_fault,
-      //                                         _pi_gate_po_gate_type_gpu, 
-      //                                         _patterns_gpu,
-      //                                         _fault_gate_idx_gpu,
-      //                                         _fault_SA_fault_val_gpu,
-      //                                         _pi_gate_po_output_res_gpu,
-      //                                         _numGates_per_level_gpu_of_groups,
-      //                                         _per_level_of_group_start_accum_gpu,
-      //                                         _cones_partitioned_gpu,
-      //                                         _total_num_levels,
-      //                                         _invAdj_gpu,
-      //                                         _invAdj_index_table_gpu,
-      //                                         _patterns, 
-      //                                         _g_pi_results_gpu,
-      //                                         _g_gate_results_gpu,
-      //                                         _g_po_results_gpu,
-      //                                         _b_pi_results_gpu,
-      //                                         _b_gate_results_gpu,
-      //                                         _b_po_results_gpu,
-      //                                         _found_fault_to_pattern_gpu);
-
       gpuSimulator.run_gpu_simulator_cones_part_gpu(_k, _num_PIs, _num_inner_gates, _num_POs, 
                                                     _sum_pi_gates_pos, 
                                                     _num_pattern, _num_rounds, _num_fault,
@@ -996,8 +991,6 @@ void CUDAPartitioner::run(Mode mode, const size_t num_threads) {
                                                     _b_po_results_gpu,
                                                     _found_fault_to_pattern_gpu);
       cudaDeviceSynchronize();  // Ask can we revmoe ??                                         
-
-
       break;
     }
 
@@ -1373,7 +1366,7 @@ void CUDAPartitioner::_count_duplications(int simulator) {
     case 1: { // GPU simulator 
       std::vector<bool> visited_cpu;
       visited_cpu.resize(_sum_pi_gates_pos, false);
-      std::vector<size_t> numGates; 
+      std::vector<int> numGates; 
       numGates.resize(4, 0);
     
       for (size_t i = 0; i < _cones_partitioned_tmp.size(); i++) {
@@ -1398,11 +1391,12 @@ void CUDAPartitioner::_count_duplications(int simulator) {
       }
       
       printf("Partitioned:\n");
-      printf("_part_PIs = %lu, %d\n", numGates[0], _num_PIs);
-      printf("_part_Gates = %lu, %d\n", numGates[1], _num_inner_gates);
-      printf("_part_POs = %lu, %d\n", numGates[2], _num_POs);
-      printf("_part_sum_pi_gates_pos = %lu, %d\n", numGates[3], _sum_pi_gates_pos);
+      printf("_part_PIs = %d, %d\n", numGates[0], _num_PIs);
+      printf("_part_Gates = %d, %d\n", numGates[1], _num_inner_gates);
+      printf("_part_POs = %d, %d\n", numGates[2], _num_POs);
+      printf("_part_sum_pi_gates_pos = %d, %d\n", numGates[3], _sum_pi_gates_pos);
       printf("_part_visited_cpu: accum = %d (should == 0)\n", accum);
+      printf("_total_num_levels = %d\n", _total_num_levels);
 
       break;
     }

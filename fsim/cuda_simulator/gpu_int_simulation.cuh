@@ -204,7 +204,7 @@ public:
     _num_pattern = num_pattern;
     _num_rounds = num_rounds;
     _num_fault = num_fault;
-    // printf("Get inside run_gpu_simulator_cones_part_gpu\n");;
+    // printf("Get inside run_gpu_simulator_cones_part_gpu\n");
 
     // run simulation
     _run_cones_gates_part_gpu(_numGates_per_level_gpu_of_groups_gpu,

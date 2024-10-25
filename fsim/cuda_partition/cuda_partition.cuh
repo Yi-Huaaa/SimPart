@@ -40,7 +40,10 @@
 
 
 // constexpr
-constexpr int _k = 2; // based on the kernel concurrency
+constexpr int _k = 8; // based on the kernel concurrency
+constexpr int _THRESHOLD_0 = 4096; // until which level should use levelization 
+// constexpr int _THRESHOLD_1 = 1024; // until which level should use tailend 
+
 
 // Define the enum class
 enum class gpuGateType : int {
@@ -192,6 +195,7 @@ private:
   int _max_level;
   int _total_num_levels;
   std::vector<int> _level_of_gates;
+  std::vector<std::vector<size_t>> _gateIdx_in_each_level;
   std::vector<std::vector<std::set<int>>> _cones_set;
   std::vector<std::vector<std::vector<int>>> _cones_partitioned;
   
@@ -213,6 +217,8 @@ private:
   int *_visited_gpu;
 
   const int _NUM_THREADS = 1024;
+
+
   
   // GPU partitioner: New Queue for processing nodes on GPU
   int *_queue_data;

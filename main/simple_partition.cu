@@ -9,7 +9,7 @@
 
 // #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
-    #define VERSION 6 // VERSION can be 0, 1, 2, 3, 4, 5, 6, 7
+    #define VERSION 1 // VERSION can be 0, 1, 2, 3, 4, 5, 6, 7
     #if VERSION == 0   // Without Partitioner / CPU Simulation
         #define MODE 0
         #define NUM_THREADS 1
@@ -47,7 +47,7 @@
 
 // Both Definition 
 #define SHOW_ALL_TIME
-#define TIMES 1
+#define TIMES 10
 // #define OUTPUT_VISUALIZATION_GRAPH_TO_FILE
 
 

@@ -1383,7 +1383,7 @@ void CPUPartitioner::_run_gpu_simulator(Mode mode) {
                                                     _b_gate_results_gpu,
                                                     _b_po_results_gpu,
                                                     _found_fault_to_pattern_gpu);
-
+      cudaDeviceSynchronize(); 
       break;
     }
     case Mode::REPCUT_SEQUENTIAL: 
@@ -1413,6 +1413,7 @@ void CPUPartitioner::_run_gpu_simulator(Mode mode) {
                                                     _b_gate_results_gpu,
                                                     _b_po_results_gpu,
                                                     _found_fault_to_pattern_gpu);
+      cudaDeviceSynchronize();                                               
       break;      
     }
 

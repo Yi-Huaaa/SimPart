@@ -54,6 +54,16 @@ void GALPS_SIZET_GPUSimulator::_run_cones_gates_level_gpu(const std::vector<size
 std::cout << "execute simulation._run_cones_gates_level_gpu();\n";
 #endif
 
+  // for (size_t g = 0; g < _numGates_per_level_gpu_of_groups.size(); g+=_total_num_levels) {
+  //   printf("g = %lu\n", g/_total_num_levels);
+  //   for (size_t level = 0; level < _total_num_levels; level++) {
+  //     printf("\tlevel_%d__sz = %lu, over 1024 = %lu\n", 
+  //               level, 
+  //               _numGates_per_level_gpu_of_groups[g*_total_num_levels+level],
+  //               (_numGates_per_level_gpu_of_groups[g*_total_num_levels+level]+1024-1)/1024);
+  //   }
+  // }
+
   // Simulation
   for (size_t rd = 0; rd < _num_rounds; rd++) {
     size_t num_testcases_this_round =
@@ -138,7 +148,7 @@ void GALPS_SIZET_GPUSimulator::_run_cones_good_case_level_gpu(const std::vector<
   const size_t fault_num = 0; const size_t bad_case = 0;
   size_t num_blocks, num_threads;
 
-  for (size_t level = 0; level < _total_num_levels ; level++) {
+  for (size_t level = 0; level < _total_num_levels; level++) {
     const size_t num_gates_per_level = (_numGates_per_level_gpu_of_groups[level]);
     num_blocks  = (num_gates_per_level > _NUM_THREADS_SIZET) ? 
                   (num_gates_per_level + _NUM_THREADS_SIZET - 1)/_NUM_THREADS_SIZET : 
@@ -146,8 +156,8 @@ void GALPS_SIZET_GPUSimulator::_run_cones_good_case_level_gpu(const std::vector<
     num_threads = (num_gates_per_level > _NUM_THREADS_SIZET) ? 
                   (_NUM_THREADS_SIZET) : 
                   (num_gates_per_level);
-    // printf("k = %lu, level = %lu, num_blocks = %lu, num_threads = %lu, num_gates_per_level = %lu\n", 
-    //         k, level, num_blocks, num_threads, num_gates_per_level);
+    // printf("level = %lu, num_blocks = %lu, num_threads = %lu, num_gates_per_level = %lu\n", 
+    //         level, num_blocks, num_threads, num_gates_per_level);
 
     _run_gate <<< num_blocks, num_threads >>> (_invAdj_gpu, _invAdj_index_table_gpu, 
                                               _cones_partitioned_gpu, 
@@ -158,7 +168,6 @@ void GALPS_SIZET_GPUSimulator::_run_cones_good_case_level_gpu(const std::vector<
                                               fault_num, bad_case, 
                                               num_gates_per_level, 
                                               _num_PIs);
-
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
   cudaDeviceSynchronize();
 #endif      
