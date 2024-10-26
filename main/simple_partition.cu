@@ -28,7 +28,7 @@ constexpr size_t TIMES = 1;
         #define MODE 3
         #define NUM_THREADS 8
     #endif
-    #define SIMU_MODE 0   // MODE 0: CPU Simulator / 1: GPU Simulator 
+    #define SIMU_MODE 1   // MODE 0: CPU Simulator / 1: GPU Simulator 
   #endif
   
 #ifndef CPU_PARTITIONER_VERSION

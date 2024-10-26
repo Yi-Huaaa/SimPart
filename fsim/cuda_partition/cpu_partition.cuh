@@ -155,6 +155,7 @@ private:
   size_t *_found_fault_to_pattern_gpu;
   // TODO prepare
   std::vector<size_t> _numGates_per_level_gpu_of_groups; // partitioned cones CPU
+  size_t *_numGates_per_level_gpu_of_groups_gpu;
   size_t *_cones_partitioned_gpu; // partitioned results 
   size_t *_invAdj_gpu; 
   size_t *_invAdj_index_table_gpu;
