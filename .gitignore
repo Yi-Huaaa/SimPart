@@ -35,3 +35,6 @@ benchmark/large_circuits/mgc_edit_dist_iccad.flst
 benchmark/large_circuits/mgc_edit_dist_iccad.ptn
 benchmark/large_circuits/mgc_matrix_mult_iccad.flst
 benchmark/large_circuits/mgc_matrix_mult_iccad.ptn
+
+benchmark/pre_construct_hypergraph/*.txt
+benchmark/pre_construct_hypergraph/ok_inputs/*.txt
