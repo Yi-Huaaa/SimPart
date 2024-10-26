@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cstddef>  // For size_t and SIZE_MAX
 #include <cstdio>
+#include <cstdlib>
 
 #include "cpu_partition.cuh"
 
@@ -59,12 +60,14 @@ void CPUPartitioner::read(Mode mode,
                           const std::string &ckt_path, 
                           const std::string &flst_path, 
                           const std::string &ptn_path,
-                          const size_t num_threads) {
+                          const std::string &hyg_path,
+                          const size_t num_threads,
+                          const int hypergraph_construct_mode) {
   // printf("Get inside CPUPartitioner::read first\n");
 
   using std::string_literals::operator""s;
 
-  std::ifstream ckt(ckt_path), flst(flst_path), ptn(ptn_path);
+  std::ifstream ckt(ckt_path), flst(flst_path), ptn(ptn_path), hyg(hyg_path);
 
   if (!ckt)
     throw std::runtime_error("cannot open circut file "s + ckt_path);
@@ -72,19 +75,21 @@ void CPUPartitioner::read(Mode mode,
     throw std::runtime_error("cannot open fault file "s + flst_path);
   if (!ptn)
     throw std::runtime_error("cannot open pattern file "s + ptn_path);
+  if (!ptn)
+    throw std::runtime_error("cannot open pattern file "s + ptn_path);
 
-  read(mode, ckt, flst, ptn, num_threads);
+  read(mode, ckt, flst, ptn, hyg, num_threads, hypergraph_construct_mode);
 }
 
 void CPUPartitioner::read(Mode mode, 
                           std::istream &ckt, 
                           std::istream &flst, 
                           std::istream &ptn, 
-                          const size_t num_threads) {
+                          std::istream &hyg, 
+                          const size_t num_threads,
+                          const int hypergraph_construct_mode) {
   auto start = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_0;
-  std::chrono::duration<double> duration_1;
-
 
   // Read gate 
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
@@ -96,40 +101,23 @@ void CPUPartitioner::read(Mode mode,
 
   // whether partitioning
   switch (mode) {
-    case Mode::SEQUENTIAL:
+    case Mode::SEQUENTIAL: // 0
       break;
-    case Mode::PARALLEL_OMP:
+    case Mode::PARALLEL_OMP: // 1
       break;
-    case Mode::CONES_SEQUENTIAL:
+    case Mode::REPCUT_PARALLEL_OMP: { // 2
       /* Partitioning */
+      // printf("REPCUT_PARALLEL_OMP\n");
       _partition();
-      break;
-    case Mode::CONES_PARALLEL_OMP:
-      /* Partitioning */
-      _partition();
-      break;
-    case Mode::REPCUT_SEQUENTIAL: {
-      /* Partitioning */
-      _partition();
-      _RepCut(duration_0, duration_1);
-      break;
-    }
-    case Mode::REPCUT_PARALLEL_OMP: {
-      /* Partitioning */
-      _partition();
-      _RepCut(duration_0, duration_1);
+      _get_hypergraph(hypergraph_construct_mode, hyg);
+      _RepCut(duration_0);
       break;  
     }
-    case Mode::REPCUT_MT_SEQUENTIAL: {
+    case Mode::MT_REPCUT_PARALLEL_OMP: { // 3
       /* Partitioning */
-      _partition();
-      _RepCut_MT(duration_0, duration_1, num_threads);
-      break;
-    }
-    case Mode::REPCUT_MT_PARALLEL_OMP: {
-      /* Partitioning */
-      _partition();
-      _RepCut_MT(duration_0, duration_1, num_threads);
+      // _partition();
+      // _get_hypergraph(hypergraph_construct_mode, hyg);
+      // _RepCut_MT(duration_0, num_threads);
       break;  
     }    
     default:
@@ -147,10 +135,12 @@ void CPUPartitioner::read(Mode mode,
 
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_read_data = end - start;
+
+
+#ifndef CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH  
   std::cout << "Inside read_data: " << _round_to((duration_0.count())*1000, 0.001) << " ms\n";
-  std::cout << "Inside read_data: " << _round_to((duration_1.count())*1000, 0.001) << " ms\n";
   std::cout << "Inside read_data: " << _round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
-  
+#endif 
 
 
   // _print_num_PIs_Gates_POs(mode);
@@ -638,64 +628,132 @@ void CPUPartitioner::_construct_duplication_table(std::vector<size_t> &coneIdxTo
 #endif 
 }
 
+void CPUPartitioner::_load_constructed_hypergraph(std::istream &hyg) {
+  // printf("Get inside _load_constructed_hypergraph\n");
+  // Load _hyperedge_include_which_vertices
+  size_t sz0, sz1, vertexIdx, element; 
+  hyg >> sz0;
+  _hyperedge_include_which_vertices.resize(sz0);
+  for (size_t i = 0; i < sz0; i++) {
+    hyg >> sz1;
+    for (size_t j = 0; j < sz1; j++) {
+      hyg >> vertexIdx;
+      _hyperedge_include_which_vertices[i].insert(vertexIdx);
+    }
+  }
 
-void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1) {
+  // Load vertex_include_which_hyperedges
+  std::vector<std::set<size_t>> vertex_include_which_hyperedges;
+  hyg >> sz0;
+  vertex_include_which_hyperedges.resize(sz0);
+  for (size_t i = 0; i < sz0; i++) {
+    hyg >> sz1;
+    for (size_t j = 0; j < sz1; j++) {
+      hyg >> element;
+      vertex_include_which_hyperedges[i].insert(element);
+    }
+  }
+
+  // Load _hyperedges_weight
+  hyg >> sz0;
+  for (size_t i = 0; i < sz0; i++) {
+    hyg >> element;
+    _hyperedges_weight.push_back(element);
+  }
+
+  // Load _hyperedges_eptr
+  hyg >> sz0;
+  for (size_t i = 0; i < sz0; i++) {
+    hyg >> element;
+    _hyperedges_eptr.push_back(element);
+  }
+
+  // Load _hyperedges_eind
+  hyg >> sz0;
+  for (size_t i = 0; i < sz0; i++) {
+    hyg >> element;
+    _hyperedges_eind.push_back(element);
+  }  
+  
+  // Load _vectices_weight
+  hyg >> sz0;  
+  for (size_t i = 0; i < sz0; i++) {
+    hyg >> element;
+    _vectices_weight.push_back(element);
+  }  
+
+  // Load _vertexIdx_to_sinkGateIdx
+  hyg >> sz0;  
+  for (size_t i = 0; i < sz0; i++) {
+    hyg >> element;
+    _vertexIdx_to_sinkGateIdx.push_back(element);
+  }  
+  
+  // Load _sinkGateIdx_to_vertexIdx
+  hyg >> sz0;  
+  for (size_t i = 0; i < sz0; i++) {
+    hyg >> element;
+    _sinkGateIdx_to_vertexIdx.push_back(element);
+  }  
+
+
 #ifdef CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH
-  printf("CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH\n");
-  _find_clusters();
-  if (_can_run_kahypar) {
-    _construct_hyperGraph();
-  } else {
-    _RepCut_output_cones = _cones;
-  }
+  print_preconstruct_hyperedge_vertices_details(vertex_include_which_hyperedges);
+#endif
+}
 
-#else
+void CPUPartitioner::_get_hypergraph(const int mode, std::istream &hyg) {
+  // printf("_get_hypergraph\n");
+
+  switch (mode) {
+    case 0: { // construct hypergraph 
+      _find_clusters();
+      if (_can_run_kahypar) {
+        _construct_hyperGraph();
+      } 
+      break;
+    }
+    case 1: { // load pre-construct hypergraph 
+      size_t tmp;
+      hyg >> tmp; 
+      if (tmp == 1) {
+        _load_constructed_hypergraph(hyg);
+        _can_run_kahypar = true; 
+      } else { // tmp == 0
+        _find_clusters();
+        _can_run_kahypar = false; 
+      }
+      break;
+    }
+    default:
+      printf("No SUCH CASES\n");
+      return; 
+  }
+}
+
+void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_0) {
   auto start = std::chrono::steady_clock::now();
-  auto end0 = std::chrono::steady_clock::now();
-  auto end1 = std::chrono::steady_clock::now();
-
-  _find_clusters();
   if (_can_run_kahypar) {
-    _construct_hyperGraph();
-end0 = std::chrono::steady_clock::now();
-duration_0 = end0 - start;
-    std::vector<size_t> vertex_to_partition;
-    _run_KaHyPar(vertex_to_partition);
-    _get_KHP_partitioning_res(vertex_to_partition);
-end1 = std::chrono::steady_clock::now();
-duration_1 = end1 - start;        
-  } else {
-    _RepCut_output_cones = _cones;
-  }
-#endif 
+    _run_KaHyPar();
+  } 
+  auto end0 = std::chrono::steady_clock::now();
+  duration_0 = end0 - start;
 }
 
 void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_0, 
-                                std::chrono::duration<double> &duration_1,
                                 const size_t num_threads) {
   auto start = std::chrono::steady_clock::now();
-  auto end0 = std::chrono::steady_clock::now();
-  auto end1 = std::chrono::steady_clock::now();
-
-
-  _find_clusters();
   if (_can_run_kahypar) {
-    _construct_hyperGraph();
-end0 = std::chrono::steady_clock::now();
-duration_0 = end0 - start;    
-    std::vector<size_t> vertex_to_partition;
-    _run_mtKaHyPar(vertex_to_partition, num_threads);
-    _get_KHP_partitioning_res(vertex_to_partition);
-end1 = std::chrono::steady_clock::now();
-duration_1 = end1 - start;        
-  } else {
-    _RepCut_output_cones = _cones;
-  }
+    _run_mtKaHyPar(num_threads);
+  } 
+  auto end0 = std::chrono::steady_clock::now();
+  duration_0 = end0 - start;
 }
 
 
 /* For those gates who belong to the same cones belong to the same cluster */
 void CPUPartitioner::_find_clusters() {
+  // printf("_find_clusters\n");
   _gate_to_cones.resize(_sum_pi_gates_pos);
 
   // Get _gate_to_cones
@@ -799,6 +857,7 @@ void CPUPartitioner::_construct_hyperedge_vertices() {
   /* To know for each hyperedge, it connects to which vertices */
 
   _vertexIdx_to_sinkGateIdx.resize(_is_sink_clusters_idx.size()); 
+  _sinkGateIdx_to_vertexIdx.resize(_sum_pi_gates_pos, 0);
 
   // Get _hyperedge_include_which_vertices
   _hyperedge_include_which_vertices.resize(_non_sink_clusters_idx.size()); 
@@ -817,6 +876,7 @@ void CPUPartitioner::_construct_hyperedge_vertices() {
     size_t conSymbolCluster = _gate_to_cluster[sinkIdx];
     size_t vertexIdx = _to_hypergraph_vertex_idx[conSymbolCluster];
     _vertexIdx_to_sinkGateIdx[vertexIdx] = sinkIdx;
+    _sinkGateIdx_to_vertexIdx[sinkIdx] = vertexIdx;
 
     for (size_t lvl = 0; lvl < _cones[c].size(); lvl++) {
       for (size_t g = 0; g < _cones[c][lvl].size(); g++) {
@@ -905,7 +965,7 @@ void CPUPartitioner::_multiple_100(std::vector<double> &tmp_vectices_weight) {
   }
 }
 
-void CPUPartitioner::_run_KaHyPar(std::vector<size_t> &vertex_to_partition) {
+void CPUPartitioner::_run_KaHyPar() {
   // printf("_run_KaHyPar\n");
 
   kahypar_context_t* context = kahypar_context_new();
@@ -914,13 +974,10 @@ void CPUPartitioner::_run_KaHyPar(std::vector<size_t> &vertex_to_partition) {
   kahypar_set_seed(context, -1);
 
   /* Settings of #V and #he of H */
-  const kahypar_hypernode_id_t num_vertices = _KaHyPar_num_vertices;
-  const kahypar_hyperedge_id_t num_hyperedges = _KaHyPar_num_hyperedges;
-  
-  assert(_vectices_weight.size() == _KaHyPar_num_vertices 
-        && "_vectices_weight.size() == _KaHyPar_num_vertices ERROR"); 
-  assert(_hyperedges_weight.size() == _KaHyPar_num_hyperedges 
-        && "_hyperedges_weight.size() == _KaHyPar_num_hyperedges ERROR"); 
+  const kahypar_hypernode_id_t num_vertices = _vectices_weight.size();
+  const kahypar_hyperedge_id_t num_hyperedges = _hyperedges_weight.size();
+  // printf("_vectices_weight.size() = %lu, _hyperedges_weight.size() = %lu\n", 
+  //         _vectices_weight.size(), _hyperedges_weight.size());
 
   /* Inputs of vertex weights - bibi */
   std::unique_ptr<kahypar_hypernode_weight_t[]> vertex_weights = 
@@ -962,21 +1019,20 @@ void CPUPartitioner::_run_KaHyPar(std::vector<size_t> &vertex_to_partition) {
        	            &objective, context, partition.data());
 
   for(size_t i = 0; i < num_vertices; i++) {
-    vertex_to_partition.push_back(size_t(partition[i]));
+    _vertex_to_partition.push_back(size_t(partition[i]));
   }
 
   kahypar_context_free(context);
 
 #ifdef PART_DEBUG_REPCUT_PRINT_KAHYPAR_RESULTS
   printf("KaHyPar results\n");
-  for(size_t i = 0; i < vertex_to_partition.size(); i++) {
-    std::cout << i << ":" << vertex_to_partition[i] << std::endl;
+  for(size_t i = 0; i < _vertex_to_partition.size(); i++) {
+    std::cout << i << ":" << _vertex_to_partition[i] << std::endl;
   }  
 #endif
 }
 
-void CPUPartitioner::_run_mtKaHyPar(std::vector<size_t> &vertex_to_partition, 
-                                  const size_t num_threads) {
+void CPUPartitioner::_run_mtKaHyPar(const size_t num_threads) {
   // printf("_run_mtKaHyPar\n");
   
   /* Construct context */
@@ -1071,7 +1127,7 @@ void CPUPartitioner::_run_mtKaHyPar(std::vector<size_t> &vertex_to_partition,
   const double km1_2 = mt_kahypar_km1(partitioned_hg);
 
   for(size_t i = 0; i < num_vertices; i++) {
-    vertex_to_partition.push_back(size_t(partition[i]));
+    _vertex_to_partition.push_back(size_t(partition[i]));
   }
 
 
@@ -1097,44 +1153,150 @@ void CPUPartitioner::_run_mtKaHyPar(std::vector<size_t> &vertex_to_partition,
     std::cout << "Vertex " << i << " is in partition " << partition[i] << std::endl;
   }  
 
-  // for(size_t i = 0; i < vertex_to_partition.size(); i++) {
-  //   std::cout << i << ":" << vertex_to_partition[i] << std::endl;
+  // for(size_t i = 0; i < _vertex_to_partition.size(); i++) {
+  //   std::cout << i << ":" << _vertex_to_partition[i] << std::endl;
   // }  
 #endif
 }
 
-void CPUPartitioner::_get_KHP_partitioning_res(std::vector<size_t> &vertex_to_partition) {
-  _RepCut_output_cones_set.resize(_k);
-  _RepCut_output_cones.resize(_k);
-  for (size_t i = 0; i < _k_sizet; i++) {
-    _RepCut_output_cones_set[i].resize(_total_num_levels);
-    _RepCut_output_cones[i].resize(_total_num_levels);
-  }
 
-  for (size_t i = 0; i < _is_sink_clusters_idx.size(); i++) {
-    size_t clusterIdx = _is_sink_clusters_idx[i];
-    size_t vertexIdx = _to_hypergraph_vertex_idx[clusterIdx];
-    size_t partitionIdx = vertex_to_partition[vertexIdx];
-    size_t sinkIdx = _vertexIdx_to_sinkGateIdx[vertexIdx];
+void CPUPartitioner::_construct_cones(std::vector<size_t> &sinks,
+                                       std::vector<std::set<size_t>> &cones_set_g,
+                                       std::vector<bool> &visited_cpu) {
 
-    // traverse the cone of the sinkGate
-    for (size_t c = 0; c < _gate_to_cones[sinkIdx].size(); c++) {
-      size_t coneIdx = _gate_to_cones[sinkIdx][c];
-      for (size_t lvl = 0; lvl < _cones[coneIdx].size(); lvl++) {
-        for (size_t g = 0; g < _cones[coneIdx][lvl].size(); g++) {
-          size_t gateIdx = _cones[coneIdx][lvl][g];
-          _RepCut_output_cones_set[partitionIdx][lvl].insert(gateIdx);
-        }
+  // printf("sinks.size() = %lu\n", sinks.size());
+  for (size_t sink = 0; sink < sinks.size(); sink++) {
+    size_t sinkIdx = sinks[sink];
+    std::queue<size_t> preGates; 
+    preGates.push(sinkIdx);
+    // used to check the correctness 
+    visited_cpu[sinkIdx] = true;
+    // used to check the correctness 
+
+    size_t sourceLevel = _level_of_gates[sinkIdx];
+    cones_set_g[sourceLevel].insert(sinkIdx);
+
+
+    while (!preGates.empty()) {
+      size_t startGateIdx = preGates.front(); 
+      preGates.pop();
+      visited_cpu[startGateIdx] = true;
+
+      for (size_t j = 0; j < _invAdj[startGateIdx].size(); j++) {
+        size_t preGateIdx = _invAdj[startGateIdx][j];
+        size_t preGateLevel = _level_of_gates[preGateIdx];
+        cones_set_g[preGateLevel].insert(preGateIdx);
+        preGates.push(preGateIdx);
       }
     }
   }
+}
 
+void CPUPartitioner::_get_sinks_group(std::vector<std::vector<size_t>> &sinks_groups) {
+  // Get the group of sinks 
+  sinks_groups.resize(_k_sizet);
+
+  // Get sinks 
+  for (size_t sinkIdx = 0; sinkIdx < _sum_pi_gates_pos; sinkIdx++) {
+    size_t outputSize = _adj[sinkIdx].size();
+    if (outputSize == 0) {
+      // TODO DOING
+      size_t vertexIdx = _sinkGateIdx_to_vertexIdx[sinkIdx];
+      size_t sinkGroup = _vertex_to_partition[vertexIdx];
+      sinks_groups[sinkGroup].push_back(sinkIdx);
+    }
+  }
+}
+
+void CPUPartitioner::_construct_groups(){
+  std::vector<std::vector<size_t>> sinks_groups;
+  _get_sinks_group(sinks_groups);
+
+  // used to check the correctness 
+  std::vector<bool> visited_cpu;
+  visited_cpu.resize(_sum_pi_gates_pos, false);
+  // used to check the correctness 
+
+  // Construct cones 
+  _RepCut_output_cones_set.resize(_k_sizet);
+  _RepCut_output_cones.resize(_k_sizet);
+  for (size_t g = 0; g < sinks_groups.size(); g++) {
+    // Push in NULL cone
+    _RepCut_output_cones_set[g].resize(_total_num_levels);
+    _RepCut_output_cones[g].resize(_total_num_levels);
+    _construct_cones(sinks_groups[g], _RepCut_output_cones_set[g], visited_cpu);
+  }
+}
+
+void CPUPartitioner::_construct_partitioned_groups() {
+  // Construct group and show constructed group 
+  _construct_groups();
+
+  // Construct _RepCut_output_cones
   for (size_t i = 0; i < _RepCut_output_cones_set.size(); ++i) {
     for (size_t lvl = 0; lvl < _RepCut_output_cones_set[i].size(); ++lvl) {
       for (const auto& element : _RepCut_output_cones_set[i][lvl]) {
-        _RepCut_output_cones[i][lvl].push_back(element);
+        size_t w_level = _max_level - lvl;
+        _RepCut_output_cones[i][w_level].push_back(element);
       }
     }
+  }
+}
+
+void CPUPartitioner::_get_KHP_partitioning_res(const int hypergraph_construct_mode) {
+  // printf("hypergraph_construct_mode = %d\n", hypergraph_construct_mode);
+
+  switch (hypergraph_construct_mode) {
+    case 0: { // construct the hypergraph in the code
+      if (!_can_run_kahypar) {
+        _RepCut_output_cones = _cones;
+      } else {
+        _RepCut_output_cones_set.resize(_k);
+        _RepCut_output_cones.resize(_k);
+        for (size_t i = 0; i < _k_sizet; i++) {
+          _RepCut_output_cones_set[i].resize(_total_num_levels);
+          _RepCut_output_cones[i].resize(_total_num_levels);
+        }
+      
+        for (size_t i = 0; i < _is_sink_clusters_idx.size(); i++) {
+          size_t clusterIdx = _is_sink_clusters_idx[i];
+          size_t vertexIdx = _to_hypergraph_vertex_idx[clusterIdx];
+          size_t partitionIdx = _vertex_to_partition[vertexIdx];
+          size_t sinkIdx = _vertexIdx_to_sinkGateIdx[vertexIdx];
+      
+          // traverse the cone of the sinkGate
+          for (size_t c = 0; c < _gate_to_cones[sinkIdx].size(); c++) {
+            size_t coneIdx = _gate_to_cones[sinkIdx][c];
+            for (size_t lvl = 0; lvl < _cones[coneIdx].size(); lvl++) {
+              for (size_t g = 0; g < _cones[coneIdx][lvl].size(); g++) {
+                size_t gateIdx = _cones[coneIdx][lvl][g];
+                _RepCut_output_cones_set[partitionIdx][lvl].insert(gateIdx);
+              }
+            }
+          }
+        }
+      
+        for (size_t i = 0; i < _RepCut_output_cones_set.size(); ++i) {
+          for (size_t lvl = 0; lvl < _RepCut_output_cones_set[i].size(); ++lvl) {
+            for (const auto& element : _RepCut_output_cones_set[i][lvl]) {
+              _RepCut_output_cones[i][lvl].push_back(element);
+            }
+          }
+        }
+      }
+      break;
+    }
+    case 1: { // load pre-computed hypergraph 
+      if (!_can_run_kahypar) {
+        _RepCut_output_cones = _cones;
+      } else {
+        _construct_partitioned_groups();
+      }
+      break;
+    }
+    default:
+      printf("No SUCH CASES\n");
+      return; 
   }
 
 #ifdef PART_DEBUG_REPCUT_PRINT_KAHYPAR_RESULTS
@@ -1144,7 +1306,9 @@ void CPUPartitioner::_get_KHP_partitioning_res(std::vector<size_t> &vertex_to_pa
 
 // --------------------------------------------------------------------------------------
 
-void CPUPartitioner::prepare_cpu_simulation() {
+void CPUPartitioner::prepare_cpu_simulation(const int hypergraph_construct_mode) {
+  _get_KHP_partitioning_res(hypergraph_construct_mode);
+
   _construct_graph();
   _ask_simulation_memory();
 }
@@ -1199,20 +1363,13 @@ void CPUPartitioner::_ask_gpu_memory_simu_1(Mode mode){
 
       break;
     }
-    case Mode::CONES_SEQUENTIAL: 
-    case Mode::CONES_PARALLEL_OMP: {
-      // skip 
-      break;
-    }
-    case Mode::REPCUT_SEQUENTIAL: 
     case Mode::REPCUT_PARALLEL_OMP: 
-    case Mode::REPCUT_MT_SEQUENTIAL:
-    case Mode::REPCUT_MT_PARALLEL_OMP: {
+    case Mode::MT_REPCUT_PARALLEL_OMP: {
       accum = 0;
       per_level_of_group_start_accum_tmp.push_back(accum);
 
       for (size_t i = 0; i < _RepCut_output_cones.size(); ++i) {
-        for (size_t lvl = 0; lvl < _RepCut_output_cones[i].size(); ++lvl) {
+        for (int lvl = _RepCut_output_cones[i].size()-1; lvl > -1; lvl--) {
           size_t in_accum = 0;
           for (const auto& element : _RepCut_output_cones[i][lvl]) {
             cones_partitioned_tmp.push_back(element);
@@ -1325,8 +1482,10 @@ void CPUPartitioner::_move_faults_h2d() {
 }
 
 
-void CPUPartitioner::prepare_gpu_simulation(Mode mode) {
+void CPUPartitioner::prepare_gpu_simulation(Mode mode, const int hypergraph_construct_mode) {
   // printf("CPUPartitioner::prepare_gpu_simulation\n");
+  _get_KHP_partitioning_res(hypergraph_construct_mode);
+
   _ask_gpu_memory_simu_1(mode);
   _ask_gpu_memory_simu_2();
   _move_GateType_h2d();
@@ -1387,10 +1546,8 @@ void CPUPartitioner::_run_gpu_simulator(Mode mode, const size_t NUM_SIMULATION_R
       cudaDeviceSynchronize(); 
       break;
     }
-    case Mode::REPCUT_SEQUENTIAL: 
     case Mode::REPCUT_PARALLEL_OMP: 
-    case Mode::REPCUT_MT_SEQUENTIAL: 
-    case Mode::REPCUT_MT_PARALLEL_OMP: {
+    case Mode::MT_REPCUT_PARALLEL_OMP: {
       GALPS_SIZET_GPUSimulator gpuSimulator;
       gpuSimulator.run_gpu_simulator_cones_part_sizet_gpu(_k_sizet, _num_PIs, _num_inner_gates, _num_POs, 
                                                     _sum_pi_gates_pos, 
@@ -1444,80 +1601,25 @@ void CPUPartitioner::_run_cpu_simulator(Mode mode, const size_t num_threads) {
       _run_fsim(num_threads);
       break;
     }
-    case Mode::CONES_SEQUENTIAL: {
-      // std::cout << "run CONES_SEQUENTIAL\n";
-      assert(num_threads == 1 && "RUN CONES_SEQUENTIAL num_threads num_threads > 1");
-      _run_cones_gates(num_threads);
-      break;
-    }
-    case Mode::CONES_PARALLEL_OMP: {
-      // std::cout << "run CONES_PARALLEL_OMP\n";
-      _run_cones_gates(num_threads);
-      break;
-    }
-    case Mode::REPCUT_SEQUENTIAL: {
-      // std::cout << "run REPCUT_SEQUENTIAL = 1\n";
-      // if (_can_run_kahypar) {
-      //   printf("_can_run_kahypar TRUE\n");
-      // } else {
-      //   printf("_can_run_kahypar FALSE\n");
-      // }
-      auto start = std::chrono::steady_clock::now();      
-      _run_RepCut_cones_gates(1);
-      auto end = std::chrono::steady_clock::now();      
-      std::chrono::duration<double> duration_0 = end - start;
-
-      // std::cout << "run REPCUT_PARALLEL_OMP, num_threads = " << num_threads << "\n";
-      start = std::chrono::steady_clock::now();      
-      _run_RepCut_cones_gates(num_threads);
-      end = std::chrono::steady_clock::now();      
-      std::chrono::duration<double> duration_1 = end - start;
-      
-      std::cout << "BIBI run_CUDA SEQ: " << _round_to((duration_0.count())*1000, 0.001) << " ms\n";
-      std::cout << "BIBI run_CUDA OMP: " << _round_to((duration_1.count())*1000, 0.001) << " ms\n";
-      break;
-    }
     case Mode::REPCUT_PARALLEL_OMP: {
-      // std::cout << "run REPCUT_PARALLEL_OMP\n";
-      // if (_can_run_kahypar) {
-      //   printf("_can_run_kahypar TRUE\n");
-      // } else {
-      //   printf("_can_run_kahypar FALSE\n");
-      // }
-      _run_RepCut_cones_gates(num_threads);
-      break;      
-    }
-    case Mode::REPCUT_MT_SEQUENTIAL: {
-      // std::cout << "run REPCUT_MT_SEQUENTIAL and REPCUT_MT_PARALLEL_OMP\n";
-      // if (_can_run_kahypar) {
-      //   printf("_can_run_kahypar TRUE\n");
-      // } else {
-      //   printf("_can_run_kahypar FALSE\n");
-      // }
+      // std::cout << "run REPCUT_PARALLEL_OMP, num_threads = " << num_threads << "\n";
       auto start = std::chrono::steady_clock::now();      
-      _run_RepCut_cones_gates(1);
-      auto end = std::chrono::steady_clock::now();      
-      std::chrono::duration<double> duration_0 = end - start;
-
-      // std::cout << "run REPCUT_MT_SEQUENTIAL, num_threads = " << num_threads << "\n";
-      start = std::chrono::steady_clock::now();      
       _run_RepCut_cones_gates(num_threads);
-      end = std::chrono::steady_clock::now();      
+      auto end = std::chrono::steady_clock::now();      
       std::chrono::duration<double> duration_1 = end - start;
       
-      std::cout << "BIBI run_CUDA SEQ: " << _round_to((duration_0.count())*1000, 0.001) << " ms\n";
       std::cout << "BIBI run_CUDA OMP: " << _round_to((duration_1.count())*1000, 0.001) << " ms\n";
-      break;
-    }
-    case Mode::REPCUT_MT_PARALLEL_OMP: {
-      // std::cout << "run REPCUT_MT_PARALLEL_OMP\n";
-      // if (_can_run_kahypar) {
-      //   printf("_can_run_kahypar TRUE\n");
-      // } else {
-      //   printf("_can_run_kahypar FALSE\n");
-      // }
-      _run_RepCut_cones_gates(num_threads);
       break;      
+    }
+    case Mode::MT_REPCUT_PARALLEL_OMP: {
+      // std::cout << "run MT_REPCUT_PARALLEL_OMP, num_threads = " << num_threads << "\n";
+      auto start = std::chrono::steady_clock::now();      
+      _run_RepCut_cones_gates(num_threads);
+      auto end = std::chrono::steady_clock::now();      
+      std::chrono::duration<double> duration_1 = end - start;
+      
+      std::cout << "BIBI run_CUDA OMP: " << _round_to((duration_1.count())*1000, 0.001) << " ms\n";
+      break;     
     }    
     default:
       printf("No SUCH CASES\n");
@@ -1812,6 +1914,7 @@ void CPUPartitioner::_run_RepCut_cones_good_case(const Pattern pattern,
       // Parallelize across gates within the same cone and level
       #pragma omp parallel for
       for (const auto& gateIdx : _RepCut_output_cones[c][lvl]) {
+        // printf("c = %lu, lvl = %d, gateIdx = %lu\n", c, lvl, gateIdx);
         
         // Select the correct element (PI, PO, or gate)
         ElementBase<> &tmp = _Gates[gateIdx];
@@ -2318,7 +2421,6 @@ void CPUPartitioner::print_hyperedge_vertices_details(
 
 void CPUPartitioner::print_preconstruct_hyperedge_vertices_details(
                     const std::vector<std::set<size_t>> &vertex_include_which_hyperedges) const {
-
   printf("_hyperedge_include_which_vertices:\n");
   for (size_t hyperedge = 0; hyperedge < _hyperedge_include_which_vertices.size(); hyperedge++) {
     printf("%lu  ", hyperedge);
@@ -2349,12 +2451,12 @@ void CPUPartitioner::print_preconstruct_hyperedge_vertices_details(
   printf("_hyperedges_eptr:\n");
   for (size_t i = 0; i < _hyperedges_eptr.size(); i++) {
     printf("%lu\n", _hyperedges_eptr[i]);
-  } printf("\n\n");
+  } printf("\n");
 
   printf("_hyperedges_eind:\n");
   for (size_t i = 0; i < _hyperedges_eind.size(); i++) {
     printf("%lu\n", _hyperedges_eind[i]);
-  } printf("\n\n");
+  } printf("\n");
 
   printf("_vectices_weight\n");
   for (size_t i = 0; i < _vectices_weight.size(); i++) {
@@ -2362,7 +2464,21 @@ void CPUPartitioner::print_preconstruct_hyperedge_vertices_details(
   } 
   printf("\n");
 
-  printf("=============================\n");
+  printf("_vertexIdx_to_sinkGateIdx:\n");
+  for (size_t i = 0; i < _vertexIdx_to_sinkGateIdx.size(); i++) {
+    printf("%lu  %lu\n", i, _vertexIdx_to_sinkGateIdx[i]);
+  } 
+  printf("\n");
+
+
+  printf("_sinkGateIdx_to_vertexIdx:\n");
+  for (size_t i = 0; i < _sinkGateIdx_to_vertexIdx.size(); i++) {
+    printf("%lu  %lu\n", i, _sinkGateIdx_to_vertexIdx[i]);
+  } 
+  printf("\n");  
+
+
+  // printf("=============================\n");  
 }
 
 void CPUPartitioner::_print_RepCut_output_cones() {
@@ -2402,25 +2518,7 @@ void CPUPartitioner::_traverse_cones_for_print(Mode mode, std::vector<size_t> &r
     ret[0] = _num_PIs;
     ret[2] = _num_POs;
     ret[1] = _num_inner_gates;
-  } else if (mode == Mode::CONES_SEQUENTIAL || mode == Mode::CONES_PARALLEL_OMP) {
-    for (size_t c = 0; c < _cones.size(); c++) {
-      for (size_t lvl = 0; lvl < _cones[c].size(); lvl++) {
-        for (size_t g = 0; g < _cones[c][lvl].size(); g++) {
-          size_t gateIdx = _cones[c][lvl][g];
-          if (gateIdx < b1) { // PIs
-            ret[0]++;
-          } else if (gateIdx >= b1 && gateIdx < b2) { // POs
-            ret[2]++;
-          } else if (gateIdx >= b2 && gateIdx < b3) {
-            ret[1]++;
-          } else {
-            printf("_traverse_cones_for_print (mode 3, 4): Gate Index: No SUCH CASES\n");
-            exit(1);
-          }
-        }
-      }
-    }
-  } else if (mode == Mode::REPCUT_SEQUENTIAL || mode == Mode::REPCUT_PARALLEL_OMP) {
+  } else if (mode == Mode::REPCUT_PARALLEL_OMP) {
     for (size_t c = 0; c < _RepCut_output_cones.size(); c++) {
       for (size_t lvl = 0; lvl < _RepCut_output_cones[c].size(); lvl++) {
         for (size_t g = 0; g < _RepCut_output_cones[c][lvl].size(); g++) {

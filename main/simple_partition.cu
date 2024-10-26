@@ -11,35 +11,24 @@ constexpr size_t _NUM_SIMULATION_RDS = 1;
 constexpr size_t TIMES = 1;
 
 
-// #define CPU_PARTITIONER_VERSION
+#define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
-    #define VERSION 1 // VERSION can be 0, 1, 2, 3, 4, 5, 6, 7
+    #define PRE_CONSTRUCT_HG 1 // 0: construct hypergraph / 1: load pre-constructed hypergraph 
+    #define VERSION 2 // VERSION can be 0, 1, 2, 3
     #if VERSION == 0   // Without Partitioner / CPU Simulation
         #define MODE 0
         #define NUM_THREADS 1
     #elif VERSION == 1
         #define MODE 1
         #define NUM_THREADS 8
-    #elif VERSION == 2  // Pure Cones Partitioner / CPU Simulation ---> TODO: need to delete these two versions
+    #elif VERSION == 2   // RepCut Partitioner
         #define MODE 2
-        #define NUM_THREADS 1
-    #elif VERSION == 3
+        #define NUM_THREADS 8
+    #else // VERSION == 3   // MT-RepCut Partitioner
         #define MODE 3
         #define NUM_THREADS 8
-    #elif VERSION == 4   // RepCut Partitioner / CPU Simulation
-        #define MODE 4
-        #define NUM_THREADS 1
-    #elif VERSION == 5
-        #define MODE 5
-        #define NUM_THREADS 1
-    #elif VERSION == 6   // MT-RepCut Partitioner / CPU Simulation
-        #define MODE 6
-        #define NUM_THREADS 1
-    #else // VERSION == 7
-        #define MODE 7
-        #define NUM_THREADS 8
     #endif
-    #define SIMU_MODE 1   // MODE 0: CPU Simulator / 1: GPU Simulator 
+    #define SIMU_MODE 0   // MODE 0: CPU Simulator / 1: GPU Simulator 
   #endif
   
 #ifndef CPU_PARTITIONER_VERSION
@@ -71,7 +60,8 @@ int main(int argc, char *argv[]) {
   std::string ckt_path(argv[1]);
   std::string flst_path(argv[2]);
   std::string ptn_path(argv[3]);
-  std::string outputfile_path(argv[4]);
+  std::string hypergraph_path(argv[4]);
+  std::string outputfile_path(argv[5]);
 
 
 #ifdef CPU_PARTITIONER_VERSION
@@ -80,31 +70,33 @@ int main(int argc, char *argv[]) {
 
   // user perspective
   CPUPartitioner cpuPartitioner;
-  printf("RUN MODE = %d, with NUM_THREADS = %d\n", MODE, NUM_THREADS);
+  // printf("RUN MODE = %d, with NUM_THREADS = %d\n", MODE, NUM_THREADS);
 
   // Read data and Run cpuPartitioner
-  // auto start = std::chrono::steady_clock::now();
+  auto start = std::chrono::steady_clock::now();
     cpuPartitioner.read(CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
-                        ckt_path, flst_path, ptn_path,NUM_THREADS);
-  // auto end = std::chrono::steady_clock::now();
-  // duration_read_data = end - start;
+                        ckt_path, flst_path, ptn_path, hypergraph_path, 
+                        NUM_THREADS, PRE_CONSTRUCT_HG);
+  auto end = std::chrono::steady_clock::now();
+  duration_read_data = end - start;
 
   // Prepare Simulator
-  auto start = std::chrono::steady_clock::now();
+  start = std::chrono::steady_clock::now();
   switch (SIMU_MODE) {
     case 0: {
         // Prepare for CPU simulation
-        cpuPartitioner.prepare_cpu_simulation();
+        cpuPartitioner.prepare_cpu_simulation(PRE_CONSTRUCT_HG);
         break;
     }
     case 1: {
         // Prepare for GPU simulation
-        cpuPartitioner.prepare_gpu_simulation(CPUPartitioner::Mode(static_cast<size_t>(MODE)));
+        cpuPartitioner.prepare_gpu_simulation(CPUPartitioner::Mode(static_cast<size_t>(MODE)), 
+                                              PRE_CONSTRUCT_HG);
         break;
     }
   }
 
-  auto end = std::chrono::steady_clock::now();
+  end = std::chrono::steady_clock::now();
   duration_prepare_simulation = end - start;
 
     // pre-run
@@ -148,16 +140,16 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // pre-run
-  cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS, _NUM_SIMULATION_RDS);
+  // // pre-run
+  // cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS, _NUM_SIMULATION_RDS);
   
-  // Run Simulator
-  for (size_t t = 0; t < TIMES; t++) {
-    auto start = std::chrono::steady_clock::now();
-    cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS, _NUM_SIMULATION_RDS);
-    auto end = std::chrono::steady_clock::now();
-    duration_simulation += (end - start);
-  }
+  // // Run Simulator
+  // for (size_t t = 0; t < TIMES; t++) {
+  //   auto start = std::chrono::steady_clock::now();
+  //   cudaPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS, _NUM_SIMULATION_RDS);
+  //   auto end = std::chrono::steady_clock::now();
+  //   duration_simulation += (end - start);
+  // }
 
   cudaPartitioner.freeMem();
 #endif  // GPU_PARTITIONER_VERSION
@@ -168,10 +160,10 @@ int main(int argc, char *argv[]) {
 //   cpuPartitioner.visualization_graph(outputfile_path);
 // #endif  // OUTPUT_VISUALIZATION_GRAPH_TO_FILE
   
-  // Show time 
-#ifdef SHOW_ALL_TIME
-  std::cout << "run_simulator: " <<  round_to(((duration_simulation.count()/TIMES))*1000, 0.001) << " ms\n";
-#endif // SHOW_ALL_TIME
+//   // Show time 
+// #ifdef SHOW_ALL_TIME
+//   std::cout << "run_simulator: " <<  round_to(((duration_simulation.count()/TIMES))*1000, 0.001) << " ms\n";
+// #endif // SHOW_ALL_TIME
 
 
   // cpuPartitioner.KaHyParExample();

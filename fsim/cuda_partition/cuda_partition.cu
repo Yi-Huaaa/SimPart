@@ -734,11 +734,6 @@ void CUDAPartitioner::_construct_graph() {
 }
 
 void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
-  // // Topological sort on CPU:
-  //   // Copy topological sort results from GPU to CPU
-  //   // Using topological sort results from GPU to levelize 
-  // _get_topological_sort_resutls();  
-
   // construct group and show constructed group 
   _construct_groups();
 

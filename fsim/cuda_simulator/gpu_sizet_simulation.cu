@@ -70,9 +70,7 @@ std::cout << "execute simulation._run_cones_gates_level_gpu();\n";
         ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
             ? (SIZE_T_BITS)
             : (_num_pattern % SIZE_T_BITS);
-#ifdef GPU_PART_DEBUG_PRINT_SIMULATION
-    // std::cout << "Run Good case with threads = " << _NUM_THREADS_SIZET << std::endl;
-#endif
+
     _run_cones_good_case_level_gpu(_numGates_per_level_gpu_of_groups,
                             _per_level_of_group_start_accum_gpu,
                             _cones_partitioned_gpu, 

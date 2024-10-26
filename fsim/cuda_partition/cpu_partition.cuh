@@ -38,12 +38,8 @@ class CPUPartitioner {
 public:
   enum class Mode { SEQUENTIAL = 0, 
                     PARALLEL_OMP = 1, 
-                    CONES_SEQUENTIAL = 2, 
-                    CONES_PARALLEL_OMP = 3, 
-                    REPCUT_SEQUENTIAL = 4, 
-                    REPCUT_PARALLEL_OMP = 5, 
-                    REPCUT_MT_SEQUENTIAL = 6, 
-                    REPCUT_MT_PARALLEL_OMP = 7,                     
+                    REPCUT_PARALLEL_OMP = 2, 
+                    MT_REPCUT_PARALLEL_OMP = 3,
                   };
   enum class SIMU_Mode {CPU = 0, 
                         GPU = 1,
@@ -51,19 +47,23 @@ public:
 
 
   // accessor
-  void read(Mode mode, const std::string &ckt, 
-            const std::string &flst, 
-            const std::string &ptn,
-            const size_t num_threads);
-  void read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn, const size_t num_threads);
+  void read(Mode mode, const std::string &ckt_path, 
+            const std::string &flst_path, 
+            const std::string &ptn_path,
+            const std::string &hyg_path,
+            const size_t num_threads,
+            const int hypergraph_construct_mode);
+  void read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn, std::istream &hyg, 
+            const size_t num_threads,
+            const int hypergraph_construct_mode);
   void run(SIMU_Mode simu_mode, Mode mode, const size_t num_threads, const size_t NUM_SIMULATION_RDS);
   
   void visualization_graph(const std::string &outputFile);
   void KaHyParExample();
   void mt_KaHyParExample();
 
-  void prepare_cpu_simulation();
-  void prepare_gpu_simulation(Mode mode);
+  void prepare_cpu_simulation(const int hypergraph_construct_mode);
+  void prepare_gpu_simulation(Mode mode, const int hypergraph_construct_mode);
 
 
 private:
@@ -74,6 +74,10 @@ private:
   std::vector<std::vector<size_t>> _adj;
   std::vector<std::vector<size_t>> _invAdj;
   std::vector<GateType> _gate_type;
+
+  size_t _preload_type;
+  std::vector<size_t> _vertex_to_partition;
+
 
   // Fault and Pattern 
   size_t _num_fault; // for read file
@@ -117,6 +121,7 @@ private:
   std::vector<size_t> _non_sink_clusters_idx;
   std::vector<bool> _is_sink_clusters; // bool is sink cluster or now
   std::vector<size_t> _vertexIdx_to_sinkGateIdx; 
+  std::vector<size_t> _sinkGateIdx_to_vertexIdx; 
   std::vector<std::vector<std::set<size_t>>> _RepCut_output_cones_set;
   std::vector<std::vector<std::vector<size_t>>> _RepCut_output_cones;
 
@@ -126,8 +131,8 @@ private:
   std::vector<size_t> _hyperedges_eind;
   std::vector<size_t> _hyperedges_eptr;
   const double _imbalance = 0.015;
-  const kahypar_partition_id_t _k = 1; // number of partitions 
-  const size_t _k_sizet = 1; 
+  const kahypar_partition_id_t _k = 2; // number of partitions 
+  const size_t _k_sizet = 2; 
   size_t _KaHyPar_num_vertices = 0; // number of sinks
   size_t _KaHyPar_num_hyperedges = 0;
 
@@ -189,9 +194,10 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                       const size_t numLevels);
 
   // RepCut
-  void _RepCut(std::chrono::duration<double> &duration_0, std::chrono::duration<double> &duration_1);
+  void _get_hypergraph(const int mode, std::istream &hyg);
+    void _load_constructed_hypergraph(std::istream &hyg);
+  void _RepCut(std::chrono::duration<double> &duration_0);
   void _RepCut_MT(std::chrono::duration<double> &duration_0, 
-                  std::chrono::duration<double> &duration_1,
                   const size_t num_threads);
   void _find_clusters();
   void _construct_hyperGraph();
@@ -199,10 +205,16 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   void _compute_vertex_weight(std::vector<double> &tmp_vectices_weight,
         std::vector<std::set<size_t>> &vertex_include_which_hyperedges);
   void _multiple_100(std::vector<double> &tmp_vectices_weight);        
-  void _run_KaHyPar(std::vector<size_t> &vertex_to_partition);
-  void _run_mtKaHyPar(std::vector<size_t> &vertex_to_partition,
-                      const size_t num_threads);
-  void _get_KHP_partitioning_res(std::vector<size_t> &vertex_to_partition);
+  void _run_KaHyPar();
+  void _run_mtKaHyPar(const size_t num_threads);
+  void _get_KHP_partitioning_res(const int hypergraph_construct_mode);
+
+  void _construct_partitioned_groups();
+    void _construct_groups();
+    void _get_sinks_group(std::vector<std::vector<size_t>> &sinks_groups);
+    void _construct_cones(std::vector<size_t> &sinks,
+                          std::vector<std::set<size_t>> &_cones_set_g,
+                          std::vector<bool> &visited_cpu);
 
   // Simulator
   void _run_cpu_simulator(Mode mode, const size_t num_threads);
