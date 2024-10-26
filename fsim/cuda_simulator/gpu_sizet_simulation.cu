@@ -245,8 +245,8 @@ void GALPS_SIZET_GPUSimulator::_run_cones_gates_part_gpu(const size_t *_numGates
                                   _g_pi_results_gpu, _g_gate_results_gpu, _g_po_results_gpu,
                                   _pi_gate_po_output_res_gpu);
       
-      cudaDeviceSynchronize(); // remove
-      cudaCheckErrors("CUDA: bibi cudaDeviceSynchronize - Failure"); // remove
+      // cudaDeviceSynchronize(); // remove
+      // cudaCheckErrors("CUDA: bibi cudaDeviceSynchronize - Failure"); // remove
     
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
     if (rd == 0) {

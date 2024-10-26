@@ -88,14 +88,17 @@ void CPUPartitioner::read(Mode mode,
                           std::istream &hyg, 
                           const size_t num_threads,
                           const int hypergraph_construct_mode) {
-  auto start = std::chrono::steady_clock::now();
-  std::chrono::duration<double> duration_0;
+
 
   // Read gate 
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
 
   _read_graph(ckt);
-  
+
+  /* Partitioning */                              
+  std::chrono::duration<double> duration_RC;
+  auto start = std::chrono::steady_clock::now();
+
   // levelization
   _levelization();
 
@@ -106,18 +109,15 @@ void CPUPartitioner::read(Mode mode,
     case Mode::PARALLEL_OMP: // 1
       break;
     case Mode::REPCUT_PARALLEL_OMP: { // 2
-      /* Partitioning */
-      // printf("REPCUT_PARALLEL_OMP\n");
       _partition();
       _get_hypergraph(hypergraph_construct_mode, hyg);
-      _RepCut(duration_0);
+      _RepCut(duration_RC);
       break;  
     }
     case Mode::MT_REPCUT_PARALLEL_OMP: { // 3
-      /* Partitioning */
-      // _partition();
-      // _get_hypergraph(hypergraph_construct_mode, hyg);
-      // _RepCut_MT(duration_0, num_threads);
+      _partition();
+      _get_hypergraph(hypergraph_construct_mode, hyg);
+      _RepCut_MT(duration_RC, num_threads);
       break;  
     }    
     default:
@@ -125,26 +125,15 @@ void CPUPartitioner::read(Mode mode,
       return; 
   }
 
-
-
   /* Construct circuit, Read Pattern, Read Fault */
   _read_fault(flst);
   _read_pattern(ptn);
 
-
-
   auto end = std::chrono::steady_clock::now();
-  std::chrono::duration<double> duration_read_data = end - start;
+  std::chrono::duration<double> duration_total_RC_HGC = end - start;
 
-
-#ifndef CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH  
-  std::cout << "Inside read_data: " << _round_to((duration_0.count())*1000, 0.001) << " ms\n";
-  std::cout << "Inside read_data: " << _round_to((duration_read_data.count())*1000, 0.001) << " ms\n";
-#endif 
-
-
-  // _print_num_PIs_Gates_POs(mode);
-
+  std::cout << "duration_RC_Partition: " << _round_to((duration_RC.count())*1000, 0.001) << " ms\n";
+  std::cout << "duration_RC_Partition (include hypergraph construction): " << _round_to((duration_total_RC_HGC.count())*1000, 0.001) << " ms\n";
 }
 
 
@@ -731,23 +720,23 @@ void CPUPartitioner::_get_hypergraph(const int mode, std::istream &hyg) {
   }
 }
 
-void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_0) {
+void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_RC) {
   auto start = std::chrono::steady_clock::now();
   if (_can_run_kahypar) {
     _run_KaHyPar();
   } 
   auto end0 = std::chrono::steady_clock::now();
-  duration_0 = end0 - start;
+  duration_RC = end0 - start;
 }
 
-void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_0, 
+void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_RC, 
                                 const size_t num_threads) {
   auto start = std::chrono::steady_clock::now();
   if (_can_run_kahypar) {
     _run_mtKaHyPar(num_threads);
   } 
   auto end0 = std::chrono::steady_clock::now();
-  duration_0 = end0 - start;
+  duration_RC = end0 - start;
 }
 
 
@@ -1054,15 +1043,10 @@ void CPUPartitioner::_run_mtKaHyPar(const size_t num_threads) {
 
   /* Construct hypergraph */
   // Settings of #V and #he of H
-  const mt_kahypar_hypernode_id_t num_vertices = _KaHyPar_num_vertices;
-  const mt_kahypar_hyperedge_id_t num_hyperedges = _KaHyPar_num_hyperedges;
-
-  assert(_vectices_weight.size() == _KaHyPar_num_vertices 
-        && "_vectices_weight.size() == _KaHyPar_num_vertices ERROR"); 
-  assert(_hyperedges_weight.size() == _KaHyPar_num_hyperedges 
-        && "_hyperedges_weight.size() == _KaHyPar_num_hyperedges ERROR"); 
-
+  const mt_kahypar_hypernode_id_t num_vertices = _vectices_weight.size();
+  const mt_kahypar_hyperedge_id_t num_hyperedges = _hyperedges_weight.size();
   
+
   // Define hyperedges: each hyperedge connects multiple vertices
   std::vector<std::vector<mt_kahypar_hypernode_id_t>> hyperedges;
   for (const auto& vertex_set : _hyperedge_include_which_vertices) {
@@ -1153,9 +1137,9 @@ void CPUPartitioner::_run_mtKaHyPar(const size_t num_threads) {
     std::cout << "Vertex " << i << " is in partition " << partition[i] << std::endl;
   }  
 
-  // for(size_t i = 0; i < _vertex_to_partition.size(); i++) {
-  //   std::cout << i << ":" << _vertex_to_partition[i] << std::endl;
-  // }  
+  for(size_t i = 0; i < _vertex_to_partition.size(); i++) {
+    std::cout << i << ":" << _vertex_to_partition[i] << std::endl;
+  }  
 #endif
 }
 
@@ -1200,7 +1184,6 @@ void CPUPartitioner::_get_sinks_group(std::vector<std::vector<size_t>> &sinks_gr
   for (size_t sinkIdx = 0; sinkIdx < _sum_pi_gates_pos; sinkIdx++) {
     size_t outputSize = _adj[sinkIdx].size();
     if (outputSize == 0) {
-      // TODO DOING
       size_t vertexIdx = _sinkGateIdx_to_vertexIdx[sinkIdx];
       size_t sinkGroup = _vertex_to_partition[vertexIdx];
       sinks_groups[sinkGroup].push_back(sinkIdx);
@@ -1307,10 +1290,14 @@ void CPUPartitioner::_get_KHP_partitioning_res(const int hypergraph_construct_mo
 // --------------------------------------------------------------------------------------
 
 void CPUPartitioner::prepare_cpu_simulation(const int hypergraph_construct_mode) {
+  auto start = std::chrono::steady_clock::now();
   _get_KHP_partitioning_res(hypergraph_construct_mode);
 
   _construct_graph();
   _ask_simulation_memory();
+  auto end = std::chrono::steady_clock::now();
+  std::chrono::duration<double> duration_prepare = end - start;
+  std::cout << "prepare_CPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << " ms\n";  
 }
 
 
@@ -1487,6 +1474,7 @@ void CPUPartitioner::_move_faults_h2d() {
 
 void CPUPartitioner::prepare_gpu_simulation(Mode mode, const int hypergraph_construct_mode) {
   // printf("CPUPartitioner::prepare_gpu_simulation\n");
+  auto start = std::chrono::steady_clock::now();
   _get_KHP_partitioning_res(hypergraph_construct_mode);
 
   _ask_gpu_memory_simu_1(mode);
@@ -1494,6 +1482,10 @@ void CPUPartitioner::prepare_gpu_simulation(Mode mode, const int hypergraph_cons
   _move_GateType_h2d();
   _move_patterns_h2d();
   _move_faults_h2d();
+
+  auto end = std::chrono::steady_clock::now();
+  std::chrono::duration<double> duration_prepare = end - start;
+  std::cout << "prepare_GPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << " ms\n";
 }
 
 
@@ -1607,23 +1599,11 @@ void CPUPartitioner::_run_cpu_simulator(Mode mode, const size_t num_threads) {
       break;
     }
     case Mode::REPCUT_PARALLEL_OMP: {
-      // std::cout << "run REPCUT_PARALLEL_OMP, num_threads = " << num_threads << "\n";
-      auto start = std::chrono::steady_clock::now();      
       _run_RepCut_cones_gates(num_threads);
-      auto end = std::chrono::steady_clock::now();      
-      std::chrono::duration<double> duration_1 = end - start;
-      
-      std::cout << "BIBI run_CUDA OMP: " << _round_to((duration_1.count())*1000, 0.001) << " ms\n";
       break;      
     }
     case Mode::MT_REPCUT_PARALLEL_OMP: {
-      // std::cout << "run MT_REPCUT_PARALLEL_OMP, num_threads = " << num_threads << "\n";
-      auto start = std::chrono::steady_clock::now();      
       _run_RepCut_cones_gates(num_threads);
-      auto end = std::chrono::steady_clock::now();      
-      std::chrono::duration<double> duration_1 = end - start;
-      
-      std::cout << "BIBI run_CUDA OMP: " << _round_to((duration_1.count())*1000, 0.001) << " ms\n";
       break;     
     }    
     default:
