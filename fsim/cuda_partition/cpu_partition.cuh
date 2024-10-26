@@ -56,6 +56,13 @@ public:
   void read(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn, std::istream &hyg, 
             const size_t num_threads,
             const int hypergraph_construct_mode);
+  void read_pre_construct_HG(Mode mode, const std::string &ckt_path, 
+                              const std::string &flst_path, 
+                              const std::string &ptn_path,
+                              const std::string &hyg_path,
+                              const size_t num_threads);
+  void read_pre_construct_HG(Mode mode, std::istream &ckt, std::istream &flst, std::istream &ptn, std::istream &hyg, 
+                              const size_t num_threads);
   void run(SIMU_Mode simu_mode, Mode mode, const size_t num_threads, const size_t NUM_SIMULATION_RDS);
   
   void visualization_graph(const std::string &outputFile);
@@ -75,7 +82,7 @@ private:
   std::vector<std::vector<size_t>> _invAdj;
   std::vector<GateType> _gate_type;
 
-  size_t _preload_type;
+  bool _preconstruct_hypergraph_print_flag = false;
   std::vector<size_t> _vertex_to_partition;
 
 

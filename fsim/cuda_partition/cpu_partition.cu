@@ -137,6 +137,54 @@ void CPUPartitioner::read(Mode mode,
 }
 
 
+void CPUPartitioner::read_pre_construct_HG(Mode mode, 
+                                            const std::string &ckt_path, 
+                                            const std::string &flst_path, 
+                                            const std::string &ptn_path,
+                                            const std::string &hyg_path,
+                                            const size_t num_threads) {
+  // printf("Get inside CPUPartitioner::read first\n");
+
+  using std::string_literals::operator""s;
+
+  std::ifstream ckt(ckt_path), flst(flst_path), ptn(ptn_path), hyg(hyg_path);
+
+  if (!ckt)
+    throw std::runtime_error("cannot open circut file "s + ckt_path);
+  if (!flst)
+    throw std::runtime_error("cannot open fault file "s + flst_path);
+  if (!ptn)
+    throw std::runtime_error("cannot open pattern file "s + ptn_path);
+  if (!ptn)
+    throw std::runtime_error("cannot open pattern file "s + ptn_path);
+
+  read_pre_construct_HG(mode, ckt, flst, ptn, hyg, num_threads);
+}
+
+
+void CPUPartitioner::read_pre_construct_HG(Mode mode, 
+                                          std::istream &ckt, 
+                                          std::istream &flst, 
+                                          std::istream &ptn, 
+                                          std::istream &hyg, 
+                                          const size_t num_threads) {
+
+
+  // Read gate 
+  ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
+
+  _read_graph(ckt);
+
+  /* Partitioning */                              
+  _levelization();
+  _partition();
+  _preconstruct_hypergraph_print_flag = true;
+  _get_hypergraph(0, hyg);
+
+
+}
+
+
 void CPUPartitioner::_read_fault(std::istream &flst) {
   flst >> _num_fault;
   _faults.resize(_num_fault);
@@ -916,9 +964,10 @@ void CPUPartitioner::_construct_hyperedge_vertices() {
 #ifdef PART_DEBUG_REPCUT_PRINT_FIND_CLUSTERS
   print_hyperedge_vertices_details(vertex_include_which_hyperedges);
 #endif 
-#ifdef CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH
-  print_preconstruct_hyperedge_vertices_details(vertex_include_which_hyperedges);
-#endif
+
+  if (_preconstruct_hypergraph_print_flag) {
+    print_preconstruct_hyperedge_vertices_details(vertex_include_which_hyperedges);
+  }
 }
 
 void CPUPartitioner::_compute_vertex_weight(std::vector<double> &tmp_vectices_weight, 

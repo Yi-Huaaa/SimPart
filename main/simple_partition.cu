@@ -10,6 +10,7 @@
 constexpr size_t _NUM_SIMULATION_RDS = 1;
 constexpr size_t TIMES = 1;
 
+// #define CPU_PRE_CONSTRUCT_HYPERGRAH
 
 #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
@@ -53,7 +54,6 @@ double round_to(double value, double precision = 1.0){
 
 int main(int argc, char *argv[]) {
   // Init recording time 
-  
   std::chrono::duration<double> duration_simulation = chro_zero();
 
   // Inputs 
@@ -65,7 +65,6 @@ int main(int argc, char *argv[]) {
 
 
 #ifdef CPU_PARTITIONER_VERSION
-
   // user perspective
   CPUPartitioner cpuPartitioner;
 
@@ -149,6 +148,18 @@ int main(int argc, char *argv[]) {
 #ifdef SHOW_ALL_TIME
   std::cout << "run_simulator: " <<  round_to(((duration_simulation.count()/TIMES))*1000, 0.001) << " ms\n";
 #endif // SHOW_ALL_TIME
+
+
+
+
+#ifdef CPU_PRE_CONSTRUCT_HYPERGRAH
+  // user perspective
+  CPUPartitioner cpuPartitioner;
+  // Read data and Run cpuPartitioner
+  cpuPartitioner.read_pre_construct_HG(CPUPartitioner::Mode(2), 
+                                      ckt_path, flst_path, ptn_path, hypergraph_path, 8);
+#endif 
+  
 
 
   // cpuPartitioner.KaHyParExample();
