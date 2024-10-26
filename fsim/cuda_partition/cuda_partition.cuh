@@ -209,7 +209,7 @@ private:
   std::vector<size_t> _found_fault_to_pattern;
 
   // GPU partitioner memory: 
-  int *_adj_gpu; 
+  int *_adj_gpu;  
   int *_invAdj_gpu; 
   int *_adj_index_table_gpu;
   int *_invAdj_index_table_gpu;
