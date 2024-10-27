@@ -113,10 +113,10 @@ def process_data(input_file, output_file):
 
 # List of input files
 input_files = [
-    'RepCutOriginal.txt', 
-    'leon2_iccad_eval.txt', 'mgc_edit_dist_iccad.txt', 
-    'b19_iccad.txt', 
-    # 'leon3mp_iccad.txt', 'mgc_matrix_mult_iccad.txt', 'netcard_iccad.txt'
+    # 'RepCutOriginal.txt', 
+    # 'mgc_edit_dist_iccad.txt', 'mgc_matrix_mult_iccad.txt', 
+    # 'b19_iccad.txt', 
+    'leon2_iccad_eval.txt', 'leon3mp_iccad.txt', 'netcard_iccad.txt'
     # 'c17.txt', 'c432.txt', 'c499.txt', 'c880.txt', 'c1355.txt', 
     # 'c1908.txt', 'c2670.txt', 'c3540.txt', 'c5315.txt', 'c7552.txt',
 ]

@@ -69,9 +69,8 @@ public:
   void KaHyParExample();
   void mt_KaHyParExample();
 
-  void prepare_cpu_simulation(const int hypergraph_construct_mode);
+  void prepare_cpu_simulation(const int hypergraph_construct_mode, Mode mode);
   void prepare_gpu_simulation(Mode mode, const int hypergraph_construct_mode);
-
 
 private:
   /* Private members */
@@ -138,8 +137,8 @@ private:
   std::vector<size_t> _hyperedges_eind;
   std::vector<size_t> _hyperedges_eptr;
   const double _imbalance = 0.015;
-  const kahypar_partition_id_t _k = 2; // number of partitions 
-  const size_t _k_sizet = 2; 
+  const kahypar_partition_id_t _k = 128; // number of partitions 
+  const size_t _k_sizet = 128; 
   size_t _KaHyPar_num_vertices = 0; // number of sinks
   size_t _KaHyPar_num_hyperedges = 0;
 
@@ -202,7 +201,8 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
                       const size_t numLevels);
 
   // RepCut
-  void _get_hypergraph(const int mode, std::istream &hyg);
+  void _get_hypergraph(const int mode, std::istream &hyg,
+                      std::chrono::duration<double> &duration_load_data);
     void _load_constructed_hypergraph(std::istream &hyg);
   void _RepCut(std::chrono::duration<double> &duration_0);
   void _RepCut_MT(std::chrono::duration<double> &duration_0, 
@@ -312,6 +312,7 @@ void _construct_duplication_table(std::vector<size_t> &coneIdxToSinkGateIdx,
   // Check 
   void _print_num_PIs_Gates_POs(Mode mode);
   void _traverse_cones_for_print(Mode mode, std::vector<size_t> &ret);
+  void _count_duplications(Mode mode);
 
   double _round_to(double value, double precision = 1.0){
     return std::round(value / precision) * precision;

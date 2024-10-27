@@ -40,8 +40,8 @@
 
 
 // constexpr
-constexpr int _k = 16; // based on the kernel concurrency
-constexpr int _THRESHOLD_0 = 8192; // until which level should use levelization 
+constexpr int _k = 12; // based on the kernel concurrency
+constexpr int _THRESHOLD_0 = 1024; // until which level should use levelization 
 
 
 // Define the enum class
@@ -279,7 +279,7 @@ private:
 
   /* Construct cones */
   // GPU Simulator preparation - CPU
-  void _construct_partitioned_groups(int simulator);
+  void _construct_partitioned_groups(const int simulator);
     void _get_topological_sort_resutls();
       void _copy_TS_resutls_to_Host();
       void _levelized();
@@ -365,7 +365,7 @@ private:
   void _print_copy_TS_resutls_to_Host();
   void _print_levelized();
   void _print_construct_groups(const std::vector<std::vector<int>> &sinks_groups);
-  void _count_duplications(int simulator);
+  void _count_duplications(const int simulator);
   // Simulation
   void _print_simulation_results(const std::vector<size_t> &pi_results,
                                 const std::vector<size_t> &gate_results,

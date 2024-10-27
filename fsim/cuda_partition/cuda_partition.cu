@@ -95,7 +95,7 @@ void CUDAPartitioner::read(std::istream &ckt, std::istream &flst, std::istream &
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_GPU_partition = end - start;
 
-  std::cout << "duration_GPU_partition: " << _round_to((duration_GPU_partition.count())*1000, 0.001) << " ms\n";
+  std::cout << "duration_GPU_partition: " << _round_to((duration_GPU_partition.count())*1000, 0.001) << "\n";
 }
 
 void CUDAPartitioner::_read_graph(std::istream &ckt) {
@@ -733,7 +733,7 @@ void CUDAPartitioner::_construct_graph() {
 #endif  
 }
 
-void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
+void CUDAPartitioner::_construct_partitioned_groups(const int simulator) {
   // construct group and show constructed group 
   _construct_groups();
 
@@ -789,7 +789,6 @@ void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
         }
       }
 
-      _count_duplications(simulator);
 
       //   printf("_numGates_per_level_gpu_of_groups = [");
       //   for (size_t i = 0; i < _numGates_per_level_gpu_of_groups.size(); i++) {
@@ -832,13 +831,16 @@ void CUDAPartitioner::_construct_partitioned_groups(int simulator) {
 
 void CUDAPartitioner::prepare_cpu_simulation() {
   auto start = std::chrono::steady_clock::now();
-  _construct_partitioned_groups(0);
+  const int simulator = 0;
+  _construct_partitioned_groups(simulator);
   // Note: _construct_graph need to be run after _construct_partitioned_groups
   _construct_graph();
   _ask_simulation_memory();
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_prepare = end - start;
-  std::cout << "prepare_CPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << " ms\n";
+  // std::cout << "prepare_CPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << "\n";
+
+  _count_duplications(simulator);
 }
 
 
@@ -944,7 +946,8 @@ void CUDAPartitioner::_move_faults___h2d() {
 
 void CUDAPartitioner::prepare_gpu_simulation() {
   auto start = std::chrono::steady_clock::now();
-  _construct_partitioned_groups(1);
+  const int simulator = 1;
+  _construct_partitioned_groups(simulator);
   // Copy data from Host to Device for GPU simulation 
   _ask_gpu_simulation_memory();
     // cudaDeviceSynchronize();
@@ -960,7 +963,8 @@ void CUDAPartitioner::prepare_gpu_simulation() {
   _move_faults___h2d(); 
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_prepare = end - start;
-  std::cout << "prepare_GPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << " ms\n";
+  // std::cout << "prepare_GPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << "\n";
+  _count_duplications(simulator);
 }
 
 
@@ -1357,7 +1361,7 @@ void CUDAPartitioner::_print_construct_groups(const std::vector<std::vector<int>
   printf("\n");
 }
 
-void CUDAPartitioner::_count_duplications(int simulator) {
+void CUDAPartitioner::_count_duplications(const int simulator) {
   switch (simulator) {
     case 0: { // CPU simulator
         std::vector<bool> visited_cpu;
@@ -1448,9 +1452,9 @@ void CUDAPartitioner::_count_duplications(int simulator) {
       }
       
       printf("Partitioned:\n");
-      // printf("_part_PIs = %d, %d\n", numGates[0], _num_PIs);
-      // printf("_part_Gates = %d, %d\n", numGates[1], _num_inner_gates);
-      // printf("_part_POs = %d, %d\n", numGates[2], _num_POs);
+      printf("_part_PIs = %d, %d\n", numGates[0], _num_PIs);
+      printf("_part_Gates = %d, %d\n", numGates[1], _num_inner_gates);
+      printf("_part_POs = %d, %d\n", numGates[2], _num_POs);
       if (numGates[3] == _sum_pi_gates_pos) {
         printf("The same! _sum_pi_gates_pos = %d\n", _sum_pi_gates_pos);
       } else {

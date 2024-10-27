@@ -96,7 +96,8 @@ void CPUPartitioner::read(Mode mode,
   _read_graph(ckt);
 
   /* Partitioning */                              
-  std::chrono::duration<double> duration_RC;
+  std::chrono::duration<double> duration_KHP;
+  std::chrono::duration<double> duration_load_data; // need to be minus 
   auto start = std::chrono::steady_clock::now();
 
   // levelization
@@ -104,25 +105,26 @@ void CPUPartitioner::read(Mode mode,
 
   // whether partitioning
   switch (mode) {
-    case Mode::SEQUENTIAL: // 0
+    case Mode::SEQUENTIAL: 
+    case Mode::PARALLEL_OMP: { // 0 1
       break;
-    case Mode::PARALLEL_OMP: // 1
-      break;
+    } 
     case Mode::REPCUT_PARALLEL_OMP: { // 2
       _partition();
-      _get_hypergraph(hypergraph_construct_mode, hyg);
-      _RepCut(duration_RC);
+      _get_hypergraph(hypergraph_construct_mode, hyg, duration_load_data);
+      _RepCut(duration_KHP);
       break;  
     }
     case Mode::MT_REPCUT_PARALLEL_OMP: { // 3
       _partition();
-      _get_hypergraph(hypergraph_construct_mode, hyg);
-      _RepCut_MT(duration_RC, num_threads);
+      _get_hypergraph(hypergraph_construct_mode, hyg, duration_load_data);
+      _RepCut_MT(duration_KHP, num_threads);
       break;  
     }    
-    default:
+    default: {
       printf("read: No SUCH CASES\n");
       return; 
+    }
   }
 
   /* Construct circuit, Read Pattern, Read Fault */
@@ -130,10 +132,10 @@ void CPUPartitioner::read(Mode mode,
   _read_pattern(ptn);
 
   auto end = std::chrono::steady_clock::now();
-  std::chrono::duration<double> duration_total_RC_HGC = end - start;
+  std::chrono::duration<double> duration_total_RC_HGC = end - start - duration_load_data;
 
-  std::cout << "duration_RC_Partition: " << _round_to((duration_RC.count())*1000, 0.001) << " ms\n";
-  std::cout << "duration_RC_Partition (include hypergraph construction): " << _round_to((duration_total_RC_HGC.count())*1000, 0.001) << " ms\n";
+  std::cout << "duration_KHP_Partition: " << _round_to((duration_KHP.count())*1000, 0.001) << "\n";
+  std::cout << "duration_KHP_Partition (include hypergraph construction): " << _round_to((duration_total_RC_HGC.count())*1000, 0.001) << "\n";
 }
 
 
@@ -179,9 +181,8 @@ void CPUPartitioner::read_pre_construct_HG(Mode mode,
   _levelization();
   _partition();
   _preconstruct_hypergraph_print_flag = true;
-  _get_hypergraph(0, hyg);
-
-
+  std::chrono::duration<double> duration_load_data; 
+  _get_hypergraph(0, hyg, duration_load_data);
 }
 
 
@@ -739,9 +740,11 @@ void CPUPartitioner::_load_constructed_hypergraph(std::istream &hyg) {
 #endif
 }
 
-void CPUPartitioner::_get_hypergraph(const int mode, std::istream &hyg) {
+void CPUPartitioner::_get_hypergraph(const int mode, std::istream &hyg,
+                                    std::chrono::duration<double> &duration_load_data) {
   // printf("_get_hypergraph\n");
-
+  auto start = std::chrono::steady_clock::now();
+  auto end = std::chrono::steady_clock::now();
   switch (mode) {
     case 0: { // construct hypergraph 
       _find_clusters();
@@ -751,6 +754,7 @@ void CPUPartitioner::_get_hypergraph(const int mode, std::istream &hyg) {
       break;
     }
     case 1: { // load pre-construct hypergraph 
+      start = std::chrono::steady_clock::now();
       size_t tmp;
       hyg >> tmp; 
       if (tmp == 1) {
@@ -760,31 +764,33 @@ void CPUPartitioner::_get_hypergraph(const int mode, std::istream &hyg) {
         _find_clusters();
         _can_run_kahypar = false; 
       }
+      end = std::chrono::steady_clock::now();
       break;
     }
     default:
       printf("No SUCH CASES\n");
       return; 
   }
+  duration_load_data = end - start;
 }
 
-void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_RC) {
+void CPUPartitioner::_RepCut(std::chrono::duration<double> &duration_KHP) {
   auto start = std::chrono::steady_clock::now();
   if (_can_run_kahypar) {
     _run_KaHyPar();
   } 
   auto end0 = std::chrono::steady_clock::now();
-  duration_RC = end0 - start;
+  duration_KHP = end0 - start;
 }
 
-void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_RC, 
+void CPUPartitioner::_RepCut_MT(std::chrono::duration<double> &duration_KHP, 
                                 const size_t num_threads) {
   auto start = std::chrono::steady_clock::now();
   if (_can_run_kahypar) {
     _run_mtKaHyPar(num_threads);
   } 
   auto end0 = std::chrono::steady_clock::now();
-  duration_RC = end0 - start;
+  duration_KHP = end0 - start;
 }
 
 
@@ -1338,7 +1344,7 @@ void CPUPartitioner::_get_KHP_partitioning_res(const int hypergraph_construct_mo
 
 // --------------------------------------------------------------------------------------
 
-void CPUPartitioner::prepare_cpu_simulation(const int hypergraph_construct_mode) {
+void CPUPartitioner::prepare_cpu_simulation(const int hypergraph_construct_mode, Mode mode) {
   auto start = std::chrono::steady_clock::now();
   _get_KHP_partitioning_res(hypergraph_construct_mode);
 
@@ -1346,7 +1352,9 @@ void CPUPartitioner::prepare_cpu_simulation(const int hypergraph_construct_mode)
   _ask_simulation_memory();
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_prepare = end - start;
-  std::cout << "prepare_CPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << " ms\n";  
+  // std::cout << "prepare_CPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << "\n";  
+
+  _count_duplications(mode);
 }
 
 
@@ -1534,7 +1542,9 @@ void CPUPartitioner::prepare_gpu_simulation(Mode mode, const int hypergraph_cons
 
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_prepare = end - start;
-  std::cout << "prepare_GPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << " ms\n";
+  // std::cout << "prepare_GPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << "\n";
+
+  _count_duplications(mode);
 }
 
 
@@ -2576,6 +2586,79 @@ void CPUPartitioner::_traverse_cones_for_print(Mode mode, std::vector<size_t> &r
   }
 }
 
+void CPUPartitioner::_count_duplications(Mode mode) {
+  switch (mode) {
+    case Mode::SEQUENTIAL: 
+    case Mode::PARALLEL_OMP: { 
+
+      // printf("_count_duplications:\n");
+      // printf("_part_PIs = %lu, %lu\n", _num_PIs, _num_PIs);
+      // printf("_part_Gates = %lu, %lu\n", _num_inner_gates, _num_inner_gates);
+      // printf("_part_POs = %lu, %lu\n", _num_POs, _num_POs);
+      // printf("_part_sum_pi_gates_pos = %lu, %lu\n", _sum_pi_gates_pos, _sum_pi_gates_pos);
+
+      printf("_count_duplications:\n");
+      printf("_part_PIs = %lu\n", _num_PIs);
+      printf("_part_Gates = %lu\n", _num_inner_gates);
+      printf("_part_POs = %lu\n", _num_POs);
+      printf("_part_sum_pi_gates_pos = %lu\n", _sum_pi_gates_pos);
+      break;  
+    }
+    case Mode::REPCUT_PARALLEL_OMP: 
+    case Mode::MT_REPCUT_PARALLEL_OMP: { // GPU simulator 
+      std::vector<bool> visited_cpu;
+      visited_cpu.resize(_sum_pi_gates_pos, false);
+      std::vector<size_t> numGates; 
+      numGates.resize(4, 0);
+      // printf("_RepCut_output_cones.size() = %lu\n", _RepCut_output_cones.size());
+
+      for (size_t c = 0; c < _RepCut_output_cones.size(); c++) {
+        for (size_t lvl = 0; lvl < _RepCut_output_cones[c].size(); lvl++) {
+          for (size_t g = 0; g < _RepCut_output_cones[c][lvl].size(); g++) {
+            size_t gateIdx = _RepCut_output_cones[c][lvl][g];
+            visited_cpu[gateIdx] = true;
+
+            if (gateIdx < _num_PIs) { // PIs
+              numGates[0]++;
+            } else if (gateIdx >= _num_PIs && gateIdx < (_num_PIs + _num_POs)) { // POs
+              numGates[2]++;
+            } else {
+              numGates[1]++;
+            }
+          }
+        }
+      }  
+
+      numGates[3] = numGates[0]+numGates[1]+numGates[2];
+    
+      size_t accum = 0;
+      for (size_t i = 0; i < visited_cpu.size(); i++) {
+        if (!visited_cpu[i]) {
+          accum++;
+        }
+      }
+      
+      // printf("Partitioned:\n");
+      // printf("_part_PIs = %d, %d\n", numGates[0], _num_PIs);
+      // printf("_part_Gates = %d, %d\n", numGates[1], _num_inner_gates);
+      // printf("_part_POs = %d, %d\n", numGates[2], _num_POs);
+      // printf("_part_sum_pi_gates_pos = %d, %d\n", numGates[3], _sum_pi_gates_pos);
+      // printf("_part_visited_cpu: accum = %d (should == 0)\n", accum);
+
+      printf("Partitioned:\n");
+      printf("_part_PIs = %lu\n", numGates[0]);
+      printf("_part_Gates = %lu\n", numGates[1]);
+      printf("_part_POs = %lu\n", numGates[2]);
+      printf("_part_sum_pi_gates_pos = %lu\n", numGates[3]);
+      printf("_part_visited_cpu: accum = %lu (should == 0)\n", accum);      
+      break;
+    }
+    default: {
+      printf("No SUCH CASES\n");
+      return; 
+    }
+  }  
+}
 
 
 

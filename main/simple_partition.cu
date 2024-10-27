@@ -7,12 +7,12 @@
 #include <vector>
 #include <iostream>
 
-constexpr size_t _NUM_SIMULATION_RDS = 1;
-constexpr size_t TIMES = 1;
+constexpr size_t TIMES = 10;
+// constexpr size_t _NUM_SIMULATION_RDS = 2048;
 
 // #define CPU_PRE_CONSTRUCT_HYPERGRAH
 
-#define CPU_PARTITIONER_VERSION
+// #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
     #define PRE_CONSTRUCT_HG 1 // 0: construct hypergraph / 1: load pre-constructed hypergraph 
     #define VERSION 3 // VERSION can be 0, 1, 2, 3
@@ -53,6 +53,11 @@ double round_to(double value, double precision = 1.0){
 }
 
 int main(int argc, char *argv[]) {
+  if (argc < 7) {
+    std::cerr << "Usage: " << argv[0] << " <ckt_path> <flst_path> <ptn_path> <hypergraph_path> <outputfile_path> <num_simulation_rds>" << std::endl;
+    return 1;
+  }
+
   // Init recording time 
   std::chrono::duration<double> duration_simulation = chro_zero();
 
@@ -62,6 +67,10 @@ int main(int argc, char *argv[]) {
   std::string ptn_path(argv[3]);
   std::string hypergraph_path(argv[4]);
   std::string outputfile_path(argv[5]);
+
+  // New input for number of simulation rounds
+  size_t _NUM_SIMULATION_RDS = std::atoi(argv[6]);
+
 
 
 #ifdef CPU_PARTITIONER_VERSION
@@ -76,7 +85,7 @@ int main(int argc, char *argv[]) {
   // Prepare Simulator
   switch (SIMU_MODE) {
     case 0: { // Prepare for CPU simulation
-        cpuPartitioner.prepare_cpu_simulation(PRE_CONSTRUCT_HG);
+        cpuPartitioner.prepare_cpu_simulation(PRE_CONSTRUCT_HG, CPUPartitioner::Mode(static_cast<size_t>(MODE)));
         break;
     }
     case 1: { // Prepare for GPU simulation
@@ -146,7 +155,7 @@ int main(int argc, char *argv[]) {
   
   // Show time 
 #ifdef SHOW_ALL_TIME
-  std::cout << "run_simulator: " <<  round_to(((duration_simulation.count()/TIMES))*1000, 0.001) << " ms\n";
+  std::cout << "run_simulator: " <<  round_to(((duration_simulation.count()/TIMES))*1000, 0.001) << "\n";
 #endif // SHOW_ALL_TIME
 
 
