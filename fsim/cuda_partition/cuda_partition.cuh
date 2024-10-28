@@ -40,7 +40,7 @@
 
 
 // constexpr
-constexpr int _k = 12; // based on the kernel concurrency
+constexpr int _k = 64; // based on the kernel concurrency
 constexpr int _THRESHOLD_0 = 1024; // until which level should use levelization 
 
 

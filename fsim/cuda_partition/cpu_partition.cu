@@ -132,10 +132,18 @@ void CPUPartitioner::read(Mode mode,
   _read_pattern(ptn);
 
   auto end = std::chrono::steady_clock::now();
-  std::chrono::duration<double> duration_total_RC_HGC = end - start - duration_load_data;
 
+  std::chrono::duration<double> duration_total_RC_HGC = (hypergraph_construct_mode == 1) ? 
+                                                        (end - start - duration_load_data) :
+                                                        (end - start);
+  duration_KHP = (hypergraph_construct_mode == 1) ? 
+                 (duration_KHP) : 
+                 (duration_total_RC_HGC - duration_load_data);
+
+
+  std::cout << "duration_load_data (aka hypergraph construction time): " << _round_to((duration_load_data.count())*1000, 0.001) << "\n";
   std::cout << "duration_KHP_Partition: " << _round_to((duration_KHP.count())*1000, 0.001) << "\n";
-  std::cout << "duration_KHP_Partition (include hypergraph construction): " << _round_to((duration_total_RC_HGC.count())*1000, 0.001) << "\n";
+  std::cout << "duration_RepCut_Partition (Total time): " << _round_to((duration_total_RC_HGC.count())*1000, 0.001) << "\n";
 }
 
 
@@ -747,10 +755,12 @@ void CPUPartitioner::_get_hypergraph(const int mode, std::istream &hyg,
   auto end = std::chrono::steady_clock::now();
   switch (mode) {
     case 0: { // construct hypergraph 
+      start = std::chrono::steady_clock::now();
       _find_clusters();
       if (_can_run_kahypar) {
         _construct_hyperGraph();
       } 
+      end = std::chrono::steady_clock::now();
       break;
     }
     case 1: { // load pre-construct hypergraph 

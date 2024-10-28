@@ -7,13 +7,13 @@
 #include <vector>
 #include <iostream>
 
-constexpr size_t TIMES = 10;
+constexpr size_t TIMES = 1;
 
 // #define CPU_PRE_CONSTRUCT_HYPERGRAH
 
-#define CPU_PARTITIONER_VERSION
+// #define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
-    #define PRE_CONSTRUCT_HG 1 // 0: construct hypergraph / 1: load pre-constructed hypergraph 
+    #define PRE_CONSTRUCT_HG 0 // 0: construct hypergraph / 1: load pre-constructed hypergraph 
     #define VERSION 3 // VERSION can be 0, 1, 2, 3
     #if VERSION == 0   // Without Partitioner / CPU Simulation
         #define MODE 0
