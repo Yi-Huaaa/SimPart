@@ -8,11 +8,10 @@
 #include <iostream>
 
 constexpr size_t TIMES = 10;
-// constexpr size_t _NUM_SIMULATION_RDS = 2048;
 
 // #define CPU_PRE_CONSTRUCT_HYPERGRAH
 
-// #define CPU_PARTITIONER_VERSION
+#define CPU_PARTITIONER_VERSION
   #ifdef CPU_PARTITIONER_VERSION
     #define PRE_CONSTRUCT_HG 1 // 0: construct hypergraph / 1: load pre-constructed hypergraph 
     #define VERSION 3 // VERSION can be 0, 1, 2, 3
