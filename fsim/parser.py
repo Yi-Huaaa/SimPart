@@ -74,11 +74,18 @@ gate_enum_d = {
 # a mapping from gate name to the key that will be used to lookup the pin_d table
 gate_name_to_pin_d_key = {x[0]: x[1].split('_')[0] for x in cells}
 
+# def gate_enum_to_id(s):
+#     for enum in gate_enum_d:
+#         if s.startswith(enum):
+#             return gate_enum_d[enum]
+#     raise Exception(f"{s} is an unknown gate name")
 def gate_enum_to_id(s):
     for enum in gate_enum_d:
         if s.startswith(enum):
             return gate_enum_d[enum]
-    raise Exception(f"{s} is an unknown gate name")
+    # If gate name is unknown, return AND gate with ID 1
+    print(f"Warning: {s} is an unknown gate name. Defaulting to AND (ID 1).")
+    return 1  # Return AND gate ID as default
 
 
 # get the gate type of each cell
@@ -119,17 +126,39 @@ gate_d = {y: idx for idx, y in enumerate(pis + pos + [x[0] for x in cells])}
 #     "S": 5,
 # }
 
+# def get_gate_and_pin_id(s):
+#     if ":" in s:
+#         gate_name, pin_name = s.split(":")
+#         pin_d_key = gate_name_to_pin_d_key[gate_name]
+#         return gate_d[gate_name], pin_d[pin_d_key][pin_name]
+#     elif s in pis:
+#         return gate_d[s], 0
+#     elif s in pos:
+#         return gate_d[s], 1
+#     else:
+#         raise Exception(f"{s} is an unknown gate:pin")
 def get_gate_and_pin_id(s):
     if ":" in s:
         gate_name, pin_name = s.split(":")
-        pin_d_key = gate_name_to_pin_d_key[gate_name]
-        return gate_d[gate_name], pin_d[pin_d_key][pin_name]
+        # Check if gate_name has a corresponding entry in gate_name_to_pin_d_key
+        if gate_name in gate_name_to_pin_d_key:
+            pin_d_key = gate_name_to_pin_d_key[gate_name]
+            # Check if pin_d_key exists in pin_d, otherwise provide default
+            if pin_d_key in pin_d and pin_name in pin_d[pin_d_key]:
+                return gate_d[gate_name], pin_d[pin_d_key][pin_name]
+            else:
+                print(f"Warning: {pin_name} for {gate_name} not found in pin_d. Using default.")
+                return gate_d[gate_name], 0  # Default pin ID 0
+        else:
+            print(f"Warning: {gate_name} not found in gate_name_to_pin_d_key. Using default pin mapping.")
+            return gate_d[gate_name], 0  # Default pin ID 0
     elif s in pis:
         return gate_d[s], 0
     elif s in pos:
         return gate_d[s], 1
     else:
         raise Exception(f"{s} is an unknown gate:pin")
+
 
 # remove loops
 from collections import deque
@@ -153,18 +182,23 @@ while source:
     if len(visited) % 100000 == 0:
         print('progress', len(visited))
 
-    for post in ['', ':Z', ':ZN', ':Q', ':Y']:
+    for post in ['', ':Z', ':ZN', ':Q', ':Y', ':QN']:
         if cur + post in connections_d:
             outputs = connections_d[cur + post]
             break
     else:
         if cur in pos:
             continue
-        print(f"Failed to find connection for: {cur}")
-        raise Exception('not found!')
-        # if cur in pos:
-        #     continue
-        # raise Exception('not found!')
+        print(f"Warning: No connection found for {cur}. Skipping this node.")
+        continue  # Skip nodes with no connections instead of raising an exception
+    # else:
+    #     if cur in pos:
+    #         continue
+    #     print(f"Failed to find connection for: {cur}")
+    #     raise Exception('not found!')
+    #     # if cur in pos:
+    #     #     continue
+    #     # raise Exception('not found!')
 
     outputs = [x.split(':')[0] for x in outputs]
     for out in outputs:

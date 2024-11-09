@@ -144,6 +144,13 @@ void CPUPartitioner::read(Mode mode,
   std::cout << "duration_load_data (aka hypergraph construction time): " << _round_to((duration_load_data.count())*1000, 0.001) << "\n";
   std::cout << "duration_KHP_Partition: " << _round_to((duration_KHP.count())*1000, 0.001) << "\n";
   std::cout << "duration_RepCut_Partition (Total time): " << _round_to((duration_total_RC_HGC.count())*1000, 0.001) << "\n";
+
+  // // 1107 for exp
+  // _preconstruct_hypergraph_print_flag = true;
+  // if (_preconstruct_hypergraph_print_flag) {
+  //   print_preconstruct_hyperedge_vertices_details();
+  // }
+  // // 1107 for exp
 }
 
 
@@ -184,6 +191,7 @@ void CPUPartitioner::read_pre_construct_HG(Mode mode,
   ckt >> _num_PIs >> _num_POs >> _num_inner_gates >> _num_wires; 
 
   _read_graph(ckt);
+  printf("read_pre_construct_HG\n");
 
   /* Partitioning */                              
   _levelization();
@@ -380,10 +388,10 @@ void CPUPartitioner::_levelization() {
   // #pragma omp parallel for
   for (size_t i = 0; i < _adj.size(); i++) {
     if (_adj[i].size() == 0) {
-      // #pragma omp critical
-      // {
+      #pragma omp critical
+      {
         _sinks.push_back(i);
-      // }
+      }
     }
   }
 
@@ -394,10 +402,10 @@ void CPUPartitioner::_levelization() {
   // #pragma omp parallel for
   for (size_t gateIdx = 0; gateIdx < _level_of_gates.size(); gateIdx++) {
     size_t gateLvl = _level_of_gates[gateIdx];
-    // #pragma omp critical
-    // {
+    #pragma omp critical
+    {
       _gateIdx_in_each_level[gateLvl].push_back(gateIdx);
-    // }
+    }
   }
 
   // printf("_max_level = %lu, _total_num_levels = %lu\n", 
@@ -405,15 +413,15 @@ void CPUPartitioner::_levelization() {
 
 
 #ifdef CPU_PARTITIONER_PRINT_FOR_CHECK
-  for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
-    printf("gate_%lu, level = %lu\n", i, _level_of_gates[i]);
-  }
+  // for (size_t i = 0; i < _sum_pi_gates_pos; i++) {
+  //   printf("gate_%lu, level = %lu\n", i, _level_of_gates[i]);
+  // }
 
-  for (size_t i = 0; i < _gateIdx_in_each_level.size(); i++) {
-    printf("level_%lu: size() == %lu\n", i, _gateIdx_in_each_level[i].size());
-  }
+  // for (size_t i = 0; i < _gateIdx_in_each_level.size(); i++) {
+  //   printf("level_%lu: size() == %lu\n", i, _gateIdx_in_each_level[i].size());
+  // }
 
-  for (size_t i = 0; i < _gateIdx_in_each_level.size(); i++) {
+  for (size_t i = _gateIdx_in_each_level.size()-5; i < _gateIdx_in_each_level.size(); i++) {
     printf("level_%lu: ", i);
     for (size_t j = 0; j < _gateIdx_in_each_level[i].size(); j++) {
       printf("%lu, ", _gateIdx_in_each_level[i][j]);
@@ -688,15 +696,15 @@ void CPUPartitioner::_load_constructed_hypergraph(std::istream &hyg) {
     }
   }
 
-  // Load vertex_include_which_hyperedges
-  std::vector<std::set<size_t>> vertex_include_which_hyperedges;
+  // Load _vertex_include_which_hyperedges
+  std::vector<std::set<size_t>> _vertex_include_which_hyperedges;
   hyg >> sz0;
-  vertex_include_which_hyperedges.resize(sz0);
+  _vertex_include_which_hyperedges.resize(sz0);
   for (size_t i = 0; i < sz0; i++) {
     hyg >> sz1;
     for (size_t j = 0; j < sz1; j++) {
       hyg >> element;
-      vertex_include_which_hyperedges[i].insert(element);
+      _vertex_include_which_hyperedges[i].insert(element);
     }
   }
 
@@ -744,7 +752,7 @@ void CPUPartitioner::_load_constructed_hypergraph(std::istream &hyg) {
 
 
 #ifdef CPU_PRE_CONSTRUCTION_OF_HYPERGRAPH
-  print_preconstruct_hyperedge_vertices_details(vertex_include_which_hyperedges);
+  print_preconstruct_hyperedge_vertices_details();
 #endif
 }
 
@@ -819,30 +827,69 @@ void CPUPartitioner::_find_clusters() {
     }
   }  
 
+  // std::vector<bool> get_cluster;  // tmp 
+  // get_cluster.resize(_sum_pi_gates_pos, false);
+  // _gate_to_cluster.resize(_sum_pi_gates_pos);
+
+  // // Get _gate_to_cluster
+  // for (size_t gate0_Idx = 0; gate0_Idx < _sum_pi_gates_pos; gate0_Idx++) {
+  //   if (!get_cluster[gate0_Idx]) {
+  //     std::vector<size_t> tmp;
+  //     tmp.push_back(gate0_Idx);
+  //     _clusters.push_back(tmp);
+  //     _gate_to_cluster[gate0_Idx] = _clusters.size()-1;
+  //     get_cluster[gate0_Idx] = true;
+  //   }
+
+  //   size_t cluster_0_idx = _gate_to_cluster[gate0_Idx];
+
+  //   for (size_t gate1_Idx = 0; gate1_Idx < _sum_pi_gates_pos; gate1_Idx++) {
+  //     if (!get_cluster[gate1_Idx] && (_gate_to_cones[gate0_Idx] == _gate_to_cones[gate1_Idx])) {
+  //       _clusters[cluster_0_idx].push_back(gate1_Idx);
+  //       _gate_to_cluster[gate1_Idx] = cluster_0_idx;
+  //       get_cluster[gate1_Idx] = true;        
+  //     }
+  //   }
+  // }
+
+  // 1108 new ver
   std::vector<bool> get_cluster;  // tmp 
   get_cluster.resize(_sum_pi_gates_pos, false);
   _gate_to_cluster.resize(_sum_pi_gates_pos);
 
-  // Get _gate_to_cluster
-  for (size_t gate0_Idx = 0; gate0_Idx < _sum_pi_gates_pos; gate0_Idx++) {
-    if (!get_cluster[gate0_Idx]) {
-      std::vector<size_t> tmp;
-      tmp.push_back(gate0_Idx);
-      _clusters.push_back(tmp);
-      _gate_to_cluster[gate0_Idx] = _clusters.size()-1;
-      get_cluster[gate0_Idx] = true;
-    }
+  for (size_t c = 0; c < _cones.size(); c++) {
+    for (size_t level = 0; level < _cones[c].size(); level++) {
+      for (size_t g = 0; g < _cones[c][level].size(); g++) {
+        size_t gateIdx1 = _cones[c][level][g];
+        
+        if (!get_cluster[gateIdx1]) {
+          std::vector<size_t> tmp;
+          tmp.push_back(gateIdx1);
+          _clusters.push_back(tmp);
+          _gate_to_cluster[gateIdx1] = _clusters.size()-1;
+          get_cluster[gateIdx1] = true;
+        }
+        size_t cluster_0_idx = _gate_to_cluster[gateIdx1];
 
-    size_t cluster_0_idx = _gate_to_cluster[gate0_Idx];
+        for (size_t level1 = 0; level1 < _cones[c].size(); level1++) {
+          for (size_t g1 = 0; g1 < _cones[c][level1].size(); g1++) {
+            size_t gateIdx2 = _cones[c][level1][g1];
+            if (gateIdx1 != gateIdx2) {
+              if (!get_cluster[gateIdx2] && 
+                  (_gate_to_cones[gateIdx1] == _gate_to_cones[gateIdx2])) {
+                _clusters[cluster_0_idx].push_back(gateIdx2);
+                _gate_to_cluster[gateIdx2] = cluster_0_idx;
+                get_cluster[gateIdx2] = true;        
+              }
+            }
+          }
+        }
 
-    for (size_t gate1_Idx = 0; gate1_Idx < _sum_pi_gates_pos; gate1_Idx++) {
-      if (!get_cluster[gate1_Idx] && (_gate_to_cones[gate0_Idx] == _gate_to_cones[gate1_Idx])) {
-        _clusters[cluster_0_idx].push_back(gate1_Idx);
-        _gate_to_cluster[gate1_Idx] = cluster_0_idx;
-        get_cluster[gate1_Idx] = true;        
-      }
+      } 
     }
   }
+  // 1108 new ver
+
 
   // Get _is_sink_clusters, _KaHyPar_num_hyperedges, and _KaHyPar_num_vertices
   _is_sink_clusters.resize(_clusters.size(), false);
@@ -959,35 +1006,35 @@ void CPUPartitioner::_construct_hyperedge_vertices() {
   _hyperedges_eptr.push_back(_hyperedges_eind.size()); // final one 
   
 
-  // Get vertex_include_which_hyperedges
-  std::vector<std::set<size_t>> vertex_include_which_hyperedges;
-  vertex_include_which_hyperedges.resize(_is_sink_clusters_idx.size());
+  // Get _vertex_include_which_hyperedges
+  // std::vector<std::set<size_t>> _vertex_include_which_hyperedges;
+  _vertex_include_which_hyperedges.resize(_is_sink_clusters_idx.size());
 
   for (size_t hyperedgeIdx = 0; hyperedgeIdx < _hyperedge_include_which_vertices.size(); hyperedgeIdx++) {
     for (const auto& vertexIdx : _hyperedge_include_which_vertices[hyperedgeIdx]) {
-      vertex_include_which_hyperedges[vertexIdx].insert(hyperedgeIdx);
+      _vertex_include_which_hyperedges[vertexIdx].insert(hyperedgeIdx);
     }
   }  
 
   /* Get _vectices_weight */
   std::vector<double> tmp_vectices_weight;
   _compute_vertex_weight(tmp_vectices_weight, 
-                        vertex_include_which_hyperedges);
+                        _vertex_include_which_hyperedges);
 
   /* Normalize double to size_t*/
   _multiple_100(tmp_vectices_weight);
   
 #ifdef PART_DEBUG_REPCUT_PRINT_FIND_CLUSTERS
-  print_hyperedge_vertices_details(vertex_include_which_hyperedges);
+  print_hyperedge_vertices_details();
 #endif 
 
   if (_preconstruct_hypergraph_print_flag) {
-    print_preconstruct_hyperedge_vertices_details(vertex_include_which_hyperedges);
+    print_preconstruct_hyperedge_vertices_details();
   }
 }
 
 void CPUPartitioner::_compute_vertex_weight(std::vector<double> &tmp_vectices_weight, 
-                      std::vector<std::set<size_t>> &vertex_include_which_hyperedges) {
+                      std::vector<std::set<size_t>> &_vertex_include_which_hyperedges) {
 
   tmp_vectices_weight.resize(_is_sink_clusters_idx.size());
   for (size_t cl = 0; cl < _is_sink_clusters_idx.size(); cl++) {
@@ -995,13 +1042,13 @@ void CPUPartitioner::_compute_vertex_weight(std::vector<double> &tmp_vectices_we
     size_t vertexIdx = _to_hypergraph_vertex_idx[clusterIdx];
     double sumOfYita = 0.0;
 
-    for (const auto& hyperedgeIdx : vertex_include_which_hyperedges[vertexIdx]) {
+    for (const auto& hyperedgeIdx : _vertex_include_which_hyperedges[vertexIdx]) {
       sumOfYita += _hyperedges_weight[hyperedgeIdx];
       // printf("sumOfYita = %.3lf\n", sumOfYita);
     }
 
-    if (vertex_include_which_hyperedges[vertexIdx].size() != 0) {
-      sumOfYita /= double(vertex_include_which_hyperedges[vertexIdx].size());
+    if (_vertex_include_which_hyperedges[vertexIdx].size() != 0) {
+      sumOfYita /= double(_vertex_include_which_hyperedges[vertexIdx].size());
     }
 
     sumOfYita += _clusters[clusterIdx].size();
@@ -2425,8 +2472,7 @@ void CPUPartitioner::_print_find_clusters() const {
 }
 
 
-void CPUPartitioner::print_hyperedge_vertices_details(
-                    const std::vector<std::set<size_t>> &vertex_include_which_hyperedges) const {
+void CPUPartitioner::print_hyperedge_vertices_details() const {
 
   printf("_hyperedge_include_which_vertices:\n");
   for (size_t hyperedge = 0; hyperedge < _hyperedge_include_which_vertices.size(); hyperedge++) {
@@ -2439,10 +2485,10 @@ void CPUPartitioner::print_hyperedge_vertices_details(
   printf("\n");
 
 
-  printf("vertex_include_which_hyperedges:\n");
-  for (size_t vertexIdx = 0; vertexIdx < vertex_include_which_hyperedges.size(); vertexIdx++) {
+  printf("_vertex_include_which_hyperedges:\n");
+  for (size_t vertexIdx = 0; vertexIdx < _vertex_include_which_hyperedges.size(); vertexIdx++) {
     printf("vertexIdx %lu includes vertex indices: ", vertexIdx);
-    for (const auto& hyperedge : vertex_include_which_hyperedges[vertexIdx]) {
+    for (const auto& hyperedge : _vertex_include_which_hyperedges[vertexIdx]) {
       printf("%lu, ", hyperedge);
     }
     printf("\n");
@@ -2473,8 +2519,7 @@ void CPUPartitioner::print_hyperedge_vertices_details(
 
 }
 
-void CPUPartitioner::print_preconstruct_hyperedge_vertices_details(
-                    const std::vector<std::set<size_t>> &vertex_include_which_hyperedges) const {
+void CPUPartitioner::print_preconstruct_hyperedge_vertices_details() const {
   printf("_hyperedge_include_which_vertices:\n");
   for (size_t hyperedge = 0; hyperedge < _hyperedge_include_which_vertices.size(); hyperedge++) {
     printf("%lu  ", hyperedge);
@@ -2486,10 +2531,10 @@ void CPUPartitioner::print_preconstruct_hyperedge_vertices_details(
   printf("\n");
 
 
-  printf("vertex_include_which_hyperedges:\n");
-  for (size_t vertexIdx = 0; vertexIdx < vertex_include_which_hyperedges.size(); vertexIdx++) {
+  printf("_vertex_include_which_hyperedges:\n");
+  for (size_t vertexIdx = 0; vertexIdx < _vertex_include_which_hyperedges.size(); vertexIdx++) {
     printf("%lu  ", vertexIdx);
-    for (const auto& hyperedge : vertex_include_which_hyperedges[vertexIdx]) {
+    for (const auto& hyperedge : _vertex_include_which_hyperedges[vertexIdx]) {
       printf("%lu ", hyperedge);
     }
     printf("\n");
@@ -2853,5 +2898,4 @@ void CPUPartitioner::mt_KaHyParExample() {
   mt_kahypar_free_hypergraph(hypergraph);
   mt_kahypar_free_partitioned_hypergraph(partitioned_hg);
 }
-
 
