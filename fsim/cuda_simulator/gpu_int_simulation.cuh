@@ -429,7 +429,15 @@ private:
                                                                   int *_found_fault_to_pattern_gpu,
                                                                   size_t *_pi_gate_po_output_res_gpu);
 
-    void simpleDoWhileGraph(const int *_numGates_per_level_gpu_of_groups_gpu,
+    void construct_cuda_graph(
+                            cudaStream_t stream1, cudaGraph_t graph, 
+                            cudaGraphNode_t *dsp_nodes, 
+                            cudaGraphNode_t *rap_node, 
+                            cudaKernelNodeParams *dsp_nodes_params, 
+                            cudaKernelNodeParams *rsp_node_params,
+                            void **kernelArgs_dsp,
+                            void **kernelArgs_rap,      
+                            const int *_numGates_per_level_gpu_of_groups_gpu,
                             const int *_per_level_of_group_start_accum_gpu,
                             const int *_cones_partitioned_gpu,
                             const int _total_num_levels,
