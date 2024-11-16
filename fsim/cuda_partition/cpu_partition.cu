@@ -421,12 +421,12 @@ void CPUPartitioner::_levelization() {
   //   printf("level_%lu: size() == %lu\n", i, _gateIdx_in_each_level[i].size());
   // }
 
-  for (size_t i = _gateIdx_in_each_level.size()-5; i < _gateIdx_in_each_level.size(); i++) {
-    printf("level_%lu: ", i);
-    for (size_t j = 0; j < _gateIdx_in_each_level[i].size(); j++) {
-      printf("%lu, ", _gateIdx_in_each_level[i][j]);
-    } printf("\n");
-  }
+  // for (size_t i = _gateIdx_in_each_level.size()-5; i < _gateIdx_in_each_level.size(); i++) {
+  //   printf("level_%lu: ", i);
+  //   for (size_t j = 0; j < _gateIdx_in_each_level[i].size(); j++) {
+  //     printf("%lu, ", _gateIdx_in_each_level[i][j]);
+  //   } printf("\n");
+  // }
   printf("_max_level = %lu, _total_num_levels = %lu\n", 
           _max_level, _total_num_levels);
 #endif
@@ -2013,7 +2013,7 @@ void CPUPartitioner::_run_RepCut_cones_good_case(const Pattern pattern,
   for (size_t c = 0; c < _RepCut_output_cones.size(); c++) {
     for (int lvl = _RepCut_output_cones[c].size()-1; lvl > -1; lvl--) {
       // Parallelize across gates within the same cone and level
-      #pragma omp parallel for
+      // #pragma omp parallel for
       for (const auto& gateIdx : _RepCut_output_cones[c][lvl]) {
         // printf("c = %lu, lvl = %d, gateIdx = %lu\n", c, lvl, gateIdx);
         
