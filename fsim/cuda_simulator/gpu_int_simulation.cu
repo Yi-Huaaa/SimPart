@@ -326,6 +326,18 @@ void GALPS_GPUSimulator::_run_cones_good_case_part_gpu(const int *_numGates_per_
 #endif  
 }
 
+
+
+// -------------------------------------
+// -------------------------------------
+// -------------------------------------
+// -------------------------------------
+// -------------------------------------
+// -------------------------------------
+
+
+
+
 void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph_CORRECT_VERSION(const int *_numGates_per_level_gpu_of_groups_gpu,
                                                               const int *_per_level_of_group_start_accum_gpu,
                                                               const int *_cones_partitioned_gpu,
@@ -414,69 +426,52 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph_CORRECT_VERSION(c
 }
 
 
-// Kernel A
-__global__ void myKernel1(const int *level_gpu) {
-  printf("myKernel1, level = %d\n", level_gpu[0]);
+__global__ void testing() {
+  int t_idx = blockDim.x*blockIdx.x + threadIdx.x;
+  
+  printf("t_idx = %d\n", t_idx);
 }
 
-// Kernel B
-__global__ void myKernel2(const int *level_gpu) {
-  for (int i = 0; i < 3; i++) {
-    printf("myKernel2, t_idx = %d, i = %d, level = %d\n", threadIdx.x, i, level_gpu[0]);
+double hhh(double value, double precision = 1.0){
+  return std::round(value / precision) * precision;
+}
+void dumpCudaGraphToDot(cudaGraph_t graph, const char* fileName) {
+  // Use the DOT print function to dump the graph
+  cudaError_t err = cudaGraphDebugDotPrint(graph, fileName, cudaGraphDebugDotFlagsVerbose);
+
+  if (err != cudaSuccess) {
+      std::cerr << "Failed to dump CUDA graph to DOT file: " << cudaGetErrorString(err) << std::endl;
+  } else {
+      std::cout << "CUDA Graph dumped to " << fileName << std::endl;
   }
 }
-__global__ void loopKernel(cudaGraphConditionalHandle handle)
-{
-    static int count = 10;
-    cudaGraphSetConditional(handle, --count ? 1 : 0);
-}
 
-
-
-
-
-// -------------------------------------
-// -------------------------------------
-// -------------------------------------
-// -------------------------------------
-// -------------------------------------
-// -------------------------------------
-
-
-
-
-
-
-__global__ void ifGraphKernelA(char *dPtr, cudaGraphConditionalHandle handle)
-{
-    unsigned int value = *dPtr & 0x01;
-    cudaGraphSetConditional(handle, value);
-    printf("GPU: Handle set to %d\n", value);
-}
-
-__global__ void ifGraphKernelC(void)
-{
-    printf("GPU: Hello from the GPU!\n");
-}
-
-__global__ void doWhileEmptyKernel(void)
-{
-    printf("GPU: doWhileEmptyKernel()\n");
-    return;
-}
 
 __global__ void doWhileLoopKernel(char *dPtr, cudaGraphConditionalHandle handle, int *level_counter_gpu, 
                                   int *gateIdx_in_each_level_copy_gpu, 
-                                  int *num_gates_per_level_gpu)
+                                  int *num_gates_per_level_gpu, int *d_numBlocks, int *d_numThreads, int *bb_m, int*tt_m)
 {
     if (--(*dPtr) == 0) {
       cudaGraphSetConditional(handle, 0);
     }
     (*level_counter_gpu)++;
-    (*num_gates_per_level_gpu) = gateIdx_in_each_level_copy_gpu[(*level_counter_gpu)];
+    (*num_gates_per_level_gpu) = gateIdx_in_each_level_copy_gpu[*level_counter_gpu];
 
-    printf("GPU: counter = %d, level_counter_gpu = %d, (*num_gates_per_level_gpu) = %d\n", *dPtr, *level_counter_gpu, (*num_gates_per_level_gpu));
+    (*bb_m)  = ((*num_gates_per_level_gpu) > 1024) ? 
+              ((*num_gates_per_level_gpu) + 1024 - 1)/1024 : 
+              (1);
+    (*tt_m) = ((*num_gates_per_level_gpu) > 1024) ? 
+              (1024) : 
+              ((*num_gates_per_level_gpu));
+
+
+    // printf("GPU: counter = %d, level_counter_gpu = %d, (*num_gates_per_level_gpu) = %d, bb_m = %d, tt_m = %d\n", 
+    //       *dPtr, *level_counter_gpu, *num_gates_per_level_gpu, *bb_m, *tt_m);
+    // for (int i = 0; i < 77; i++) {
+    //   printf("gateIdx_in_each_level_copy_gpu[%d] = %d\n", i, gateIdx_in_each_level_copy_gpu[i]);
+    // }
 }
+
 
 
 void GALPS_GPUSimulator::simpleDoWhileGraph(const int *_numGates_per_level_gpu_of_groups_gpu,
@@ -510,12 +505,16 @@ void GALPS_GPUSimulator::simpleDoWhileGraph(const int *_numGates_per_level_gpu_o
   cudaMalloc(&d_numThreads, sizeof(int));
   cudaMalloc(&num_gates_per_level_gpu, sizeof(int));
   cudaMalloc(&gateIdx_in_each_level_copy_gpu, _gateIdx_in_each_level.size()*sizeof(int));
+
+  int *bb_m, *tt_m;  
+  cudaMallocManaged(&bb_m, 1*sizeof(int));
+  cudaMallocManaged(&tt_m, 1*sizeof(int));
   std::vector<int> tmp; 
   for (size_t level = 0; level < _gateIdx_in_each_level.size(); level++) {
     tmp.push_back(_gateIdx_in_each_level[level].size());
     biNum = (biNum > _gateIdx_in_each_level[level].size()) ? (biNum) : (_gateIdx_in_each_level[level].size());
   }
-  cudaMemcpyAsync(gateIdx_in_each_level_copy_gpu, tmp.data(), 
+  cudaMemcpy(gateIdx_in_each_level_copy_gpu, tmp.data(), 
                   tmp.size()*sizeof(int), cudaMemcpyHostToDevice);
   num_blocks  = (biNum > _NUM_THREADS) ? 
                 (biNum + _NUM_THREADS - 1)/_NUM_THREADS : 
@@ -523,8 +522,17 @@ void GALPS_GPUSimulator::simpleDoWhileGraph(const int *_numGates_per_level_gpu_o
   num_threads = (biNum > _NUM_THREADS) ? 
                 (_NUM_THREADS) : 
                 (biNum);
-  printf("num_blocks = %d, num_threads = %d\n", num_blocks, num_threads);
+  *bb_m = (_gateIdx_in_each_level[0].size() > _NUM_THREADS) ? 
+          (_gateIdx_in_each_level[0].size() + _NUM_THREADS - 1)/_NUM_THREADS : 
+          (1);;
+  *tt_m = (_gateIdx_in_each_level[0].size() > _NUM_THREADS) ? 
+          (_NUM_THREADS) : 
+          (_gateIdx_in_each_level[0].size());
+  // printf("num_blocks = %d, num_threads = %d\n", num_blocks, num_threads);
   // Allocate device memory for dynamic block/thread config
+
+  
+
 
 
   cudaGraph_t     graph;
@@ -536,7 +544,7 @@ void GALPS_GPUSimulator::simpleDoWhileGraph(const int *_numGates_per_level_gpu_o
   int *level_counter_gpu;
   cudaMalloc((void**)&level_counter_gpu, 1*sizeof(int));
 
-  printf("simpleDoWhileGraph: Building graph...\n");
+  // printf("simpleDoWhileGraph: Building graph...\n");
   cudaGraphCreate(&graph, 0);
 
   cudaGraphConditionalHandle handle;
@@ -554,8 +562,8 @@ void GALPS_GPUSimulator::simpleDoWhileGraph(const int *_numGates_per_level_gpu_o
   cudaStreamCreate(&captureStream);
   
   cudaStreamBeginCaptureToGraph(captureStream, bodyGraph, nullptr, nullptr, 0, cudaStreamCaptureModeRelaxed);
-
   _run_gate_level_1115 <<< num_blocks, num_threads, 0, captureStream >>> (_invAdj_gpu, _invAdj_index_table_gpu, 
+  // _run_gate_level_1115 <<< *bb_m, *tt_m, 0, captureStream >>> (_invAdj_gpu, _invAdj_index_table_gpu, 
                                                                     _gateIdx_in_each_level_gpu, 
                                                                     _per_level_of_group_start_accum_level_gpu, level_counter_gpu,
                                                                     _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
@@ -566,115 +574,169 @@ void GALPS_GPUSimulator::simpleDoWhileGraph(const int *_numGates_per_level_gpu_o
                                                                     _num_PIs);   
   doWhileLoopKernel<<<1, 1, 0, captureStream>>>(dPtr, handle, level_counter_gpu, 
                                                 gateIdx_in_each_level_copy_gpu, 
-                                                num_gates_per_level_gpu);
+                                                num_gates_per_level_gpu, d_numBlocks, d_numThreads, bb_m, tt_m);
   cudaStreamEndCapture(captureStream, nullptr);
   cudaStreamDestroy(captureStream);
 
+  // cudaGraphInstantiate(&graphExec, graph, NULL, NULL, 0);
+
+  // cudaMemset(dPtr, _end_level, 1);
+  // printf("Host: Launching graph with loop counter set to %d\n", _end_level);
+
+  cudaGraphNode_t kernelNode_PO;
+  cudaKernelNodeParams kernelNode_PO_Params {0};
+  cudaCheckErrors("cudaGraphCreate failure");
+
+  const size_t num_func_inputs = 16; // partition kernel 的 input 數量
+  void **kernelArgs_PO = (void **)malloc(num_func_inputs*sizeof(void *));
+
+
+  const int rd = 0, fault_num = 0, bad_case = 0;
+  kernelArgs_PO[0] = (void *)&_num_PIs;
+  kernelArgs_PO[1] = (void *)&_end_level;
+  kernelArgs_PO[2] = (void *)&_total_num_levels;
+  kernelArgs_PO[3] = (void *)&_invAdj_gpu;
+  kernelArgs_PO[4] = (void *)&_invAdj_index_table_gpu;
+  kernelArgs_PO[5] = (void *)&_numGates_per_level_gpu_of_groups_gpu;
+  kernelArgs_PO[6] = (void *)&_cones_partitioned_gpu;
+  kernelArgs_PO[7] = (void *)&_per_level_of_group_start_accum_gpu;
+  kernelArgs_PO[8] = (void *)&_pi_gate_po_gate_type_gpu;
+  kernelArgs_PO[9] = (void *)&_pi_gate_po_output_res_gpu;
+  kernelArgs_PO[10] = (void *)&_patterns_gpu;
+  kernelArgs_PO[11] = (void *)&rd;
+  kernelArgs_PO[12] = (void *)&_fault_gate_idx_gpu;
+  kernelArgs_PO[13] = (void *)&_fault_SA_fault_val_gpu;
+  kernelArgs_PO[14] = (void *)&fault_num;
+  kernelArgs_PO[15] = (void *)&bad_case;
+
+  kernelNode_PO_Params.func = (void *)_run_gate_part;
+  kernelNode_PO_Params.gridDim = dim3(_k, 1, 1); // Replace `_k` with your desired block configuration
+  kernelNode_PO_Params.blockDim = dim3(_NUM_THREADS, 1, 1); // Replace `_NUM_THREADS` with your desired thread configuration
+  kernelNode_PO_Params.sharedMemBytes = 0;
+  kernelNode_PO_Params.kernelParams = (void **)(kernelArgs_PO);
+  kernelNode_PO_Params.extra = NULL;
+
+  // Add kernel node to the main graph
+  cudaGraphAddKernelNode(&kernelNode_PO, graph, NULL, 0, &kernelNode_PO_Params);
+  cudaCheckErrors("Adding kernelNode_PO failed");
+  cudaGraphAddDependencies(graph, &node, &kernelNode_PO, 1);
+  cudaCheckErrors("cudaGraphAddDependencies node -> kernelNode_PO");  
+
+
   cudaGraphInstantiate(&graphExec, graph, NULL, NULL, 0);
 
-  cudaMemset(dPtr, _end_level, 1);
-  printf("Host: Launching graph with loop counter set to %d\n", _end_level);
-  cudaGraphLaunch(graphExec, 0);
+  // cudaMemset(dPtr, _end_level, 1);
+  // // printf("Host: Launching graph with loop counter set to %d\n", _end_level);
+
+  // cudaGraphLaunch(graphExec, 0);
+
+  // cudaDeviceSynchronize();
+
+  // cudaGraphExecDestroy(graphExec);
+  // cudaGraphDestroy(graph);
+  // cudaFree(dPtr);
+
+  // cudaError_t err = cudaGraphDebugDotPrint(graph, "graph.dot", cudaGraphDebugDotFlagsVerbose);
+
+
+
+
+  cudaStream_t stream1115;
+  cudaStreamCreate(&stream1115);
+  cudaGraphLaunch(graphExec, stream1115);
   cudaDeviceSynchronize();
+
+  auto start1115 = std::chrono::steady_clock::now();
+
+  // Simulation
+  for (size_t rd = 0; rd < _num_rounds; rd++) {
+    size_t num_testcases_this_round =
+        ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
+            ? (SIZE_T_BITS)
+            : (_num_pattern % SIZE_T_BITS);
+
+    cudaMemset(dPtr, _end_level, 1);
+    cudaMemset(level_counter_gpu, 0, 1*sizeof(int)); // init
+    *bb_m = (_gateIdx_in_each_level[0].size() > _NUM_THREADS) ? 
+            (_gateIdx_in_each_level[0].size() + _NUM_THREADS - 1)/_NUM_THREADS : 
+            (1);;
+    *tt_m = (_gateIdx_in_each_level[0].size() > _NUM_THREADS) ? 
+            (_NUM_THREADS) : 
+            (_gateIdx_in_each_level[0].size());  
+  
+    // printf("Host: Launching graph with loop counter set to %d\n", _end_level);
+  
+    cudaGraphLaunch(graphExec, stream1115);
+    cudaDeviceSynchronize();
+
+    // _run_gate_part <<< _k, _NUM_THREADS, 0, stream1115 >>> (_num_PIs, _end_level, _total_num_levels, 
+    //                                         _invAdj_gpu, _invAdj_index_table_gpu,
+    //                                         _numGates_per_level_gpu_of_groups_gpu,
+    //                                         _cones_partitioned_gpu, 
+    //                                         _per_level_of_group_start_accum_gpu, 
+    //                                         _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
+    //                                         _patterns_gpu, rd, 
+    //                                         _fault_gate_idx_gpu, _fault_SA_fault_val_gpu, 
+    //                                         0, 0);
+
+
+      const size_t bits = num_testcases_this_round;
+      // shift and copy answer to the good results
+      int num_blocks = (_sum_pi_gates_pos > _NUM_THREADS) ? 
+                    (_sum_pi_gates_pos + _NUM_THREADS - 1)/_NUM_THREADS : 
+                    (1);//1;
+      int num_threads = (_sum_pi_gates_pos > _NUM_THREADS) ? 
+                    (_NUM_THREADS) : 
+                    (_sum_pi_gates_pos);    
+      _write_and_shift_to_array_gpu <<< num_blocks, num_threads >>> (_num_PIs, 
+                                                                    _num_inner_gates, 
+                                                                    _num_POs,
+                                                                    bits, 
+                                                                    _pi_gate_po_output_res_gpu,
+                                                                    _sum_pi_gates_pos,
+                                                                    _g_pi_results_gpu,
+                                                                    _g_gate_results_gpu,
+                                                                    _g_po_results_gpu);
+  }
+
+  cudaDeviceSynchronize();
+
+  auto end1115 = std::chrono::steady_clock::now();
+  std::chrono::duration<double>  duration_simulation = (end1115 - start1115);
+  std::cout << "1115run_simulator: " <<  hhh(((duration_simulation.count()))*1000, 0.001) << "\n";
 
   cudaGraphExecDestroy(graphExec);
   cudaGraphDestroy(graph);
   cudaFree(dPtr);
+  cudaFree(d_numBlocks);
+  cudaFree(d_numThreads);
+  cudaFree(gateIdx_in_each_level_copy_gpu);
+  cudaFree(num_gates_per_level_gpu);
 
-  printf("simpleDoWhileGraph: Complete\n\n");
+
+
+  // int *testB, *testT;
+  // cudaMalloc(&testB, sizeof(int));
+  // cudaMalloc(&testT, sizeof(int));
+
+
+  // for (int i = 0; i < 10; i++) {
+  //   int newB = i+1, newT = 4*i;
+  //   cudaMemset(testB, newB, 1*sizeof(int)); // init
+  //   cudaMemset(testT, newT, 1*sizeof(int)); // init
+  //   testing <<< *testB, *testT >>> ();
+  // }
+
+  
+
+
+
+
+
+
+
+  // printf("simpleDoWhileGraph: Complete\n\n");
 }
-
-// __global__ void capturedWhileKernel(char *dPtr, cudaGraphConditionalHandle handle)
-// {
-//     printf("GPU: counter = %d\n", *dPtr);
-//     if (*dPtr) {
-//         (*dPtr)--;
-//     }
-//     cudaGraphSetConditional(handle, *dPtr);
-// }
-
-// __global__ void capturedWhileEmptyKernel(void)
-// {
-//     printf("GPU: capturedWhileEmptyKernel()\n");
-//     return;
-// }
-
-// void capturedWhileGraph(void)
-// {
-//     cudaGraph_t graph;
-//     cudaGraphExec_t graphExec;
-
-//     cudaStreamCaptureStatus status;
-//     const cudaGraphNode_t *dependencies;
-//     size_t numDependencies;
-
-//     char *dPtr;
-//     cudaMalloc((void**)&dPtr, 1);
-
-//     printf("capturedWhileGraph: Building graph...\n");
-//     cudaStream_t captureStream;
-//     cudaStreamCreate(&captureStream);
-
-//     cudaStreamBeginCapture(captureStream, cudaStreamCaptureModeRelaxed);
-
-//     cudaStreamGetCaptureInfo(captureStream, &status, NULL, &graph, &dependencies, &numDependencies);
-
-//     cudaGraphConditionalHandle handle;
-//     cudaGraphConditionalHandleCreate(&handle, graph);
-
-//     capturedWhileKernel<<<1, 1, 0, captureStream>>>(dPtr, handle);
-
-//     cudaStreamGetCaptureInfo(captureStream, &status, NULL, &graph, &dependencies, &numDependencies);
-
-//     cudaGraphNode_t node;
-//     cudaGraphNodeParams cParams = { cudaGraphNodeTypeConditional };
-//     cParams.conditional.handle = handle;
-//     cParams.conditional.type   = cudaGraphCondTypeWhile;
-//     cParams.conditional.size   = 1;
-//     cudaGraphAddNode(&node, graph, dependencies, numDependencies, &cParams);
-
-//     cudaGraph_t bodyGraph = cParams.conditional.phGraph_out[0];
-
-//     cudaStreamUpdateCaptureDependencies(captureStream, &node, 1, cudaStreamSetCaptureDependencies);
-
-//     capturedWhileEmptyKernel<<<1, 1, 0, captureStream>>>();
-
-//     cudaStreamEndCapture(captureStream, &graph);
-//     cudaStreamDestroy(captureStream);
-
-//     cudaStream_t bodyStream;
-//     cudaStreamCreate(&bodyStream);
-
-//     cudaStreamBeginCaptureToGraph(bodyStream, bodyGraph, nullptr, nullptr, 0, cudaStreamCaptureModeRelaxed);
-
-//     // Insert kernel node C
-//     capturedWhileKernel<<<1, 1, 0, bodyStream>>>(dPtr, handle);
-//     cudaStreamEndCapture(bodyStream, nullptr);
-//     cudaStreamDestroy(bodyStream);
-
-//     cudaGraphInstantiate(&graphExec, graph, NULL, NULL, 0);
-
-//     // Initialize device memory and launch the graph
-//     // Device memory is zero, so the conditional node will not execute
-//     cudaMemset(dPtr, 0, 1); // Set dPtr to 0
-//     printf("Host: Launching graph with loop counter set to 0\n");
-//     cudaGraphLaunch(graphExec, 0);
-//     cudaDeviceSynchronize();
-
-//     // Initialize device memory and launch the graph
-//     cudaMemset(dPtr, 10, 1); // Set dPtr to 10
-//     printf("Host: Launching graph with loop counter set to 10\n");
-//     cudaGraphLaunch(graphExec, 0);
-//     cudaDeviceSynchronize();
-
-//     // Cleanup
-//     cudaGraphExecDestroy(graphExec);
-//     cudaGraphDestroy(graph);
-//     cudaFree(dPtr);
-
-//     printf("capturedWhileGraph: Complete\n\n");
-// }
-
 
 
 
@@ -702,9 +764,7 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph(
                                                 size_t *_b_po_results_gpu,
                                                 int *_found_fault_to_pattern_gpu,
                                                 size_t *_pi_gate_po_output_res_gpu) {
-  printf("Starting CUDA Graph...\n");
-
-
+  // printf("Starting CUDA Graph...\n");
 
   simpleDoWhileGraph(_numGates_per_level_gpu_of_groups_gpu,
                       _per_level_of_group_start_accum_gpu,
@@ -730,200 +790,6 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph(
                       _found_fault_to_pattern_gpu,
                       _pi_gate_po_output_res_gpu);
   // capturedWhileGraph();
-
-
-
-
-
-
-
-
-
-//   // construct graph
-//   cudaStream_t stream1;
-//   cudaStreamCreateWithFlags(&stream1, cudaStreamNonBlocking);
-//   cudaCheckErrors("cudaStreamCreateWithFlags failure");
-//   cudaGraph_t graph; // main graph
-//   cudaGraphCreate(&graph, 0); // create the graph
-
-//   // construct_graph
-//   cudaGraphNode_t kernelNode_PI;
-//   cudaKernelNodeParams kernelNode_PI_Params {0};
-//   cudaGraphNode_t kernelNode_gate; // = (cudaGraphNode_t *)malloc(1*sizeof(cudaGraphNode_t));
-//   cudaKernelNodeParams kernelNode_gate_Params; // = (cudaKernelNodeParams *)malloc(1*sizeof(cudaKernelNodeParams));
-//   cudaGraphNode_t kernelNode_PO;
-//   cudaKernelNodeParams kernelNode_PO_Params {0};
-//   cudaCheckErrors("cudaGraphCreate failure");
-
-
-//   const size_t num_func_inputs = 16; // partition kernel 的 input 數量
-//   void **kernelArgs_PI = (void **)malloc(num_func_inputs*sizeof(void *));
-//   void **kernelArgs_gate = (void **)malloc(num_func_inputs*sizeof(void *));
-//   void **kernelArgs_PO = (void **)malloc(num_func_inputs*sizeof(void *));
-
-//   kernelArgs_PI[0] = (void *)&_invAdj_gpu;
-
-//   kernelArgs_gate[0] = (void *)&_invAdj_gpu;
-
-//   const int rd = 0, fault_num = 0, bad_case = 0;
-//   kernelArgs_PO[0] = (void *)&_num_PIs;
-//   kernelArgs_PO[1] = (void *)&_end_level;
-//   kernelArgs_PO[2] = (void *)&_total_num_levels;
-//   kernelArgs_PO[3] = (void *)&_invAdj_gpu;
-//   kernelArgs_PO[4] = (void *)&_invAdj_index_table_gpu;
-//   kernelArgs_PO[5] = (void *)&_numGates_per_level_gpu_of_groups_gpu;
-//   kernelArgs_PO[6] = (void *)&_cones_partitioned_gpu;
-//   kernelArgs_PO[7] = (void *)&_per_level_of_group_start_accum_gpu;
-//   kernelArgs_PO[8] = (void *)&_pi_gate_po_gate_type_gpu;
-//   kernelArgs_PO[9] = (void *)&_pi_gate_po_output_res_gpu;
-//   kernelArgs_PO[10] = (void *)&_patterns_gpu;
-//   kernelArgs_PO[11] = (void *)&rd;
-//   kernelArgs_PO[12] = (void *)&_fault_gate_idx_gpu;
-//   kernelArgs_PO[13] = (void *)&_fault_SA_fault_val_gpu;
-//   kernelArgs_PO[14] = (void *)&fault_num;
-//   kernelArgs_PO[15] = (void *)&bad_case;
-
-//   // // Adding node
-//   kernelNode_PI_Params.func = (void *)myKernel1;
-//   kernelNode_PI_Params.gridDim = dim3(1, 1, 1);
-//   kernelNode_PI_Params.blockDim = dim3(1, 1, 1);
-//   kernelNode_PI_Params.sharedMemBytes = 0;
-//   kernelNode_PI_Params.kernelParams = (void **)(kernelArgs_PI);
-//   kernelNode_PI_Params.extra = NULL;  
-
-//   // // Adding node
-//   kernelNode_gate_Params.func = (void *)myKernel2;
-//   kernelNode_gate_Params.gridDim = dim3(1, 1, 1);
-//   kernelNode_gate_Params.blockDim = dim3(4, 1, 1);
-//   kernelNode_gate_Params.sharedMemBytes = 0;
-//   kernelNode_gate_Params.kernelParams = (void **)(kernelArgs_gate);
-//   kernelNode_gate_Params.extra = NULL;  
-
-//   // // Adding node
-//   kernelNode_PO_Params.func = (void *)_run_gate_part;
-//   kernelNode_PO_Params.gridDim = dim3(_k, 1, 1);
-//   kernelNode_PO_Params.blockDim = dim3(_NUM_THREADS, 1, 1);
-//   kernelNode_PO_Params.sharedMemBytes = 0;
-//   kernelNode_PO_Params.kernelParams = (void **)(kernelArgs_PO);
-//   kernelNode_PO_Params.extra = NULL;  
-
-//   // push nodes
-//   cudaGraphAddKernelNode(&kernelNode_PI, graph, NULL, 0, &kernelNode_PI_Params);
-//   cudaCheckErrors("Adding kernelNode_PO failed");  
-//   cudaGraphAddKernelNode(&kernelNode_gate, graph, NULL, 0, &kernelNode_gate_Params);
-//   cudaCheckErrors("Adding kernelNode_PO failed");  
-//   cudaGraphAddKernelNode(&kernelNode_PO, graph, NULL, 0, &kernelNode_PO_Params);
-//   cudaCheckErrors("Adding kernelNode_PO failed");  
-
-
-//   // cudaGraphAddDependencies(graph, &kernelNode_PI, &kernelNode_gate, 1);
-//   // cudaCheckErrors("cudaGraphAddDependencies PI -> gate[0]");
-//   // cudaGraphAddDependencies(graph, &kernelNode_gate, &kernelNode_PO, 1);
-//   // cudaCheckErrors("cudaGraphAddDependencies gate[0] -> PO");
-
-
-//   // cudaDeviceSynchronize();
-//   // // check nodes
-//   // cudaGraphNode_t *nodes = NULL;
-//   // size_t numNodes = 0;
-//   // cudaGraphGetNodes(graph, nodes, &numNodes);
-//   // cudaCheckErrors("Graph get nodes failed");
-//   // printf("!!! Number of the nodes in the graph = %zu\n", numNodes);  
-
-//   // cudaGraphExec_t instance;
-//   // cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
-//   // cudaCheckErrors("Graph instantiation failed");
-  
-
-//   // cudaGraphLaunch(instance, stream1);
-//   // cudaCheckErrors("Graph launch failed (_run_good_case_cuda_graph)");  
-//   // cudaStreamSynchronize(stream1);
-//   // cudaCheckErrors("cudaStreamSynchronize (_run_good_case_cuda_graph) failed");
-//   // cudaDeviceSynchronize();
-//   // cudaCheckErrors("Graph cudaDeviceSynchronize failed");
-
-
-// // --------------
-
-
-//   // 定義 conditionNode
-//   cudaGraphNode_t conditionNode;
-
-//   // 創建 conditional handle
-//   cudaGraphConditionalHandle handle;
-//   cudaError_t err = cudaGraphConditionalHandleCreate(&handle, graph, 1, cudaGraphCondAssignDefault);
-//   if (err != cudaSuccess) {
-//       printf("Error: cudaGraphConditionalHandleCreate failed: %s\n", cudaGetErrorString(err));
-//       return;
-//   }
-
-//   // 構建條件節點參數
-//   cudaGraphNodeParams cParams = { cudaGraphNodeTypeConditional };
-//   cParams.conditional.handle = handle;
-//   cParams.conditional.type = cudaGraphCondTypeWhile;
-//   cParams.conditional.size = 1;
-
-//   // 添加條件節點
-//   err = cudaGraphAddNode(&conditionNode, graph, &kernelNode_PI, 1, &cParams);
-//   if (err != cudaSuccess) {
-//       printf("Error: cudaGraphAddNode failed: %s\n", cudaGetErrorString(err));
-//       return;
-//   }
-
-//   // 獲取 bodyGraph
-//   cudaGraph_t bodyGraph = cParams.conditional.phGraph_out[0];
-//   if (!bodyGraph) {
-//       printf("Error: bodyGraph is null.\n");
-//       return;
-//   }
-
-//   // 創建 CUDA Stream 並捕獲 body graph
-//   cudaStream_t captureStream;
-//   cudaStreamCreate(&captureStream);
-
-//   // 捕獲 bodyGraph
-//   cudaStreamBeginCapture(captureStream, cudaStreamCaptureModeGlobal);
-//   myKernel1<<<1, 10, 0, captureStream>>>((int *)_invAdj_gpu);  // Kernel A
-//   cudaCheckErrors("myKernel1 <<<1, 1, 0, captureStream>>>((int *)_invAdj_gpu);");
-//   loopKernel<<<1, 1, 0, captureStream>>>(handle);  // Loop kernel
-//   cudaCheckErrors("loopKernel <<<1, 1, 0, captureStream>>>(handle);");
-//   cudaStreamEndCapture(captureStream, &bodyGraph);
-//   cudaCheckErrors("cudaStreamEndCapture(captureStream, &bodyGraph);");
-
-//   // 釋放 Stream
-//   cudaStreamDestroy(captureStream);
-
-//   // cudaGraphAddDependencies(graph, &kernelNode_PO, &conditionNode, 1);
-//   // cudaCheckErrors("cudaGraphAddDependencies PO -> conditionNode");
-
-
-//   cudaDeviceSynchronize();
-//   // check nodes
-//   cudaGraphNode_t *nodes = NULL;
-//   size_t numNodes = 0;
-//   cudaGraphGetNodes(graph, nodes, &numNodes);
-//   cudaCheckErrors("Graph get nodes failed");
-//   printf("!!! Number of the nodes in the graph = %zu\n", numNodes);  
-
-//   cudaGraphExec_t instance;
-//   cudaGraphInstantiate(&instance, graph, NULL, NULL, 0);
-//   cudaCheckErrors("Graph instantiation failed");
-  
-//   cudaGraphLaunch(instance, stream1);
-//   cudaCheckErrors("Graph launch failed (_run_good_case_cuda_graph)");  
-//   cudaStreamSynchronize(stream1);
-//   cudaCheckErrors("cudaStreamSynchronize (_run_good_case_cuda_graph) failed");
-//   cudaDeviceSynchronize();
-//   cudaCheckErrors("Graph cudaDeviceSynchronize failed");
-
-
-//   printf("Completed execution.\n");
-
-//   // Cleanup
-//   cudaGraphExecDestroy(instance);
-//   cudaGraphDestroy(graph);
-//   cudaStreamDestroy(stream1);
-
 
 
 
@@ -1125,30 +991,28 @@ __global__ void _run_gate_level(const int *_invAdj_gpu, const int *_invAdj_index
 }
 
 __global__ void _run_gate_level_1115(const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, 
-                          const int *_gateIdx_in_each_level_gpu, 
-                          const int *_per_level_of_group_start_accum_level_gpu, const int *level_counter_gpu, 
-                          const int *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
-                          const size_t *_patterns_gpu, const size_t rd, 
-                          const int *_fault_gate_idx_gpu, const size_t *_fault_SA_fault_val_gpu,
-                          const size_t fault_num, const size_t bad_case, 
-                          const int *num_gates_per_level, 
-                          const int _num_PIs) {  
+                                      const int *_gateIdx_in_each_level_gpu, 
+                                      const int *_per_level_of_group_start_accum_level_gpu, const int *level_counter_gpu, 
+                                      const int *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
+                                      const size_t *_patterns_gpu, const size_t rd, 
+                                      const int *_fault_gate_idx_gpu, const size_t *_fault_SA_fault_val_gpu,
+                                      const size_t fault_num, const size_t bad_case, 
+                                      const int *num_gates_per_level, 
+                                      const int _num_PIs) {  
   int t_idx = blockDim.x*blockIdx.x + threadIdx.x;
-  if (t_idx == 0)
-    printf("b = %d, t = %d, *num_gates_per_level = %d\n", blockIdx.x, threadIdx.x, *num_gates_per_level);
+  // if (t_idx == 0)
+  //   printf("b = %d, t = %d, *level_counter_gpu = %d, *num_gates_per_level = %d\n", blockIdx.x, threadIdx.x, *level_counter_gpu, *num_gates_per_level);
   if (*num_gates_per_level > t_idx) {
+
     int k_accum_gates = _per_level_of_group_start_accum_level_gpu[*level_counter_gpu];
     int real_g_idx = _gateIdx_in_each_level_gpu[t_idx + k_accum_gates];
-
-    int SA_fault = (((real_g_idx) == _fault_gate_idx_gpu[fault_num]) & bad_case);
     
-    // If have fault 
-    if (SA_fault) {
-      _pi_gate_po_output_res_gpu[real_g_idx] = _fault_SA_fault_val_gpu[fault_num];
-      return;
-    }
+    // if (t_idx == ((*num_gates_per_level)-1)) {
+    //   printf("*level_counter_gpu = %d, t_idx = %d, blockDim.x = %d\n", *level_counter_gpu, t_idx, blockDim.x);
+    // } 
 
     int type = _pi_gate_po_gate_type_gpu[real_g_idx];
+  
 
     switch (type) { 
       case 0:
@@ -1187,7 +1051,7 @@ __global__ void _run_gate_level_1115(const int *_invAdj_gpu, const int *_invAdj_
     case 11:
       break;
     }      
-  }
+  }  
 }
 __global__ void _run_gate_part(const int _num_PIs,
                               const int _start_level, 
