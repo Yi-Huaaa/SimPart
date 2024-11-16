@@ -85,7 +85,15 @@ __global__ void _write_and_shift_to_array_gpu(const int _num_PIs,
                                               const size_t bits, 
                                               const size_t *_pi_gate_po_output_res_gpu, const int total_num_gates,
                                               size_t *outputs_PIs, size_t *outputs_Gates, size_t *outputs_POs);
-
+__global__ void _run_gate_level_1115(const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, 
+                          const int *_gateIdx_in_each_level_gpu, 
+                          const int *_per_level_of_group_start_accum_level_gpu, const int *level_counter_gpu, 
+                          const int *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
+                          const size_t *_patterns_gpu, const size_t rd, 
+                          const int *_fault_gate_idx_gpu, const size_t *_fault_SA_fault_val_gpu,
+                          const size_t fault_num, const size_t bad_case, 
+                          const int *num_gates_per_level, 
+                          const int _num_PIs);
 
 // print function 
 __global__  void _print_simulation_results(const int _num_PIs, 
@@ -203,6 +211,77 @@ public:
     } // NUM_SIMULATION_RDS
   }
 
+  void run_gpu_simulator_cones_part_gpu_cuda_graph(const int k,
+                                                  const int num_PIs, 
+                                                  const int num_inner_gates,
+                                                  const int num_POs, 
+                                                  const int sum_pi_gates_pos,
+                                                  const int num_pattern, 
+                                                  const size_t num_rounds,
+                                                  const int num_fault, 
+                                                  const int *_pi_gate_po_gate_type_gpu,
+                                                  const size_t *_patterns_gpu,
+                                                  const int *_fault_gate_idx_gpu,
+                                                  const size_t *_fault_SA_fault_val_gpu,
+                                                  size_t *_pi_gate_po_output_res_gpu,
+                                                  const std::vector<std::vector<int>> &_gateIdx_in_each_level,
+                                                  const int *_gateIdx_in_each_level_gpu, 
+                                                  const int *_per_level_of_group_start_accum_level_gpu,
+                                                  const int threshold_0_level,
+                                                  const int *_numGates_per_level_gpu_of_groups_gpu,
+                                                  const int *_per_level_of_group_start_accum_gpu,
+                                                  const int *_cones_partitioned_gpu,
+                                                  const int _total_num_levels,
+                                                  const int *_invAdj_gpu,
+                                                  const int *_invAdj_index_table_gpu,
+                                                  const std::vector<Pattern> _patterns,
+                                                  size_t *_g_pi_results_gpu,
+                                                  size_t *_g_gate_results_gpu,
+                                                  size_t *_g_po_results_gpu,
+                                                  size_t *_b_pi_results_gpu,
+                                                  size_t *_b_gate_results_gpu,
+                                                  size_t *_b_po_results_gpu,
+                                                  int *_found_fault_to_pattern_gpu,
+                                                  const size_t NUM_SIMULATION_RDS) {
+    // Get vars   
+    _k = k;       
+    _num_PIs = num_PIs;
+    _num_inner_gates = num_inner_gates;
+    _num_POs = num_POs;
+    _sum_pi_gates_pos = sum_pi_gates_pos;
+    _num_pattern = num_pattern;
+    _num_rounds = num_rounds;
+    _num_fault = num_fault;
+    _threshold_0_level = threshold_0_level;
+    // printf("Get inside run_gpu_simulator_cones_part_gpu_cuda_graph\n");
+    
+    // Run simulation
+    for (size_t rd = 0; rd < NUM_SIMULATION_RDS; rd++) {
+      _run_cones_gates_level_rep_cuda_graph(_numGates_per_level_gpu_of_groups_gpu,
+                                            _per_level_of_group_start_accum_gpu,
+                                            _cones_partitioned_gpu,
+                                            _total_num_levels,
+                                            _gateIdx_in_each_level,
+                                            _per_level_of_group_start_accum_level_gpu,
+                                            _gateIdx_in_each_level_gpu, 
+                                            _threshold_0_level+1,
+                                            _invAdj_gpu,
+                                            _invAdj_index_table_gpu,
+                                            _pi_gate_po_gate_type_gpu, 
+                                            _patterns_gpu,
+                                            _patterns,
+                                            _fault_gate_idx_gpu,
+                                            _fault_SA_fault_val_gpu,
+                                            _g_pi_results_gpu,
+                                            _g_gate_results_gpu,
+                                            _g_po_results_gpu,
+                                            _b_pi_results_gpu,
+                                            _b_gate_results_gpu,
+                                            _b_po_results_gpu,
+                                            _found_fault_to_pattern_gpu,
+                                            _pi_gate_po_output_res_gpu);  
+    } // NUM_SIMULATION_RDS
+  }  
 
 private:
 
@@ -303,8 +382,76 @@ private:
                                     size_t *_g_po_results_gpu,
                                     size_t *_pi_gate_po_output_res_gpu);
 
+  void _run_cones_gates_level_rep_cuda_graph(const int *_numGates_per_level_gpu_of_groups_gpu,
+                                              const int *_per_level_of_group_start_accum_gpu,
+                                              const int *_cones_partitioned_gpu,
+                                              const int _total_num_levels,
+                                              const std::vector<std::vector<int>> &_gateIdx_in_each_level,
+                                              const int *_per_level_of_group_start_accum_level_gpu,
+                                              const int *_gateIdx_in_each_level_gpu,
+                                              const int _end_level,
+                                              const int *_invAdj_gpu,
+                                              const int *_invAdj_index_table_gpu,
+                                              const int *_pi_gate_po_gate_type_gpu,
+                                              const size_t *_patterns_gpu,
+                                              const std::vector<Pattern> _patterns,
+                                              const int *_fault_gate_idx_gpu,
+                                              const size_t *_fault_SA_fault_val_gpu,
+                                              size_t *_g_pi_results_gpu,
+                                              size_t *_g_gate_results_gpu,
+                                              size_t *_g_po_results_gpu,
+                                              size_t *_b_pi_results_gpu,
+                                              size_t *_b_gate_results_gpu,
+                                              size_t *_b_po_results_gpu,
+                                              int *_found_fault_to_pattern_gpu,
+                                              size_t *_pi_gate_po_output_res_gpu);
+    void _run_cones_gates_level_rep_cuda_graph_CORRECT_VERSION(const int *_numGates_per_level_gpu_of_groups_gpu,
+                                                                  const int *_per_level_of_group_start_accum_gpu,
+                                                                  const int *_cones_partitioned_gpu,
+                                                                  const int _total_num_levels,
+                                                                  const std::vector<std::vector<int>> &_gateIdx_in_each_level,
+                                                                  const int *_per_level_of_group_start_accum_level_gpu,
+                                                                  const int *_gateIdx_in_each_level_gpu,
+                                                                  const int _end_level,
+                                                                  const int *_invAdj_gpu,
+                                                                  const int *_invAdj_index_table_gpu,
+                                                                  const int *_pi_gate_po_gate_type_gpu,
+                                                                  const size_t *_patterns_gpu,
+                                                                  const std::vector<Pattern> _patterns,
+                                                                  const int *_fault_gate_idx_gpu,
+                                                                  const size_t *_fault_SA_fault_val_gpu,
+                                                                  size_t *_g_pi_results_gpu,
+                                                                  size_t *_g_gate_results_gpu,
+                                                                  size_t *_g_po_results_gpu,
+                                                                  size_t *_b_pi_results_gpu,
+                                                                  size_t *_b_gate_results_gpu,
+                                                                  size_t *_b_po_results_gpu,
+                                                                  int *_found_fault_to_pattern_gpu,
+                                                                  size_t *_pi_gate_po_output_res_gpu);
 
-
+    void simpleDoWhileGraph(const int *_numGates_per_level_gpu_of_groups_gpu,
+                            const int *_per_level_of_group_start_accum_gpu,
+                            const int *_cones_partitioned_gpu,
+                            const int _total_num_levels,
+                            const std::vector<std::vector<int>> &_gateIdx_in_each_level,
+                            const int *_per_level_of_group_start_accum_level_gpu,
+                            const int *_gateIdx_in_each_level_gpu,
+                            const int _end_level,
+                            const int *_invAdj_gpu,
+                            const int *_invAdj_index_table_gpu,
+                            const int *_pi_gate_po_gate_type_gpu,
+                            const size_t *_patterns_gpu,
+                            const std::vector<Pattern> _patterns,
+                            const int *_fault_gate_idx_gpu,
+                            const size_t *_fault_SA_fault_val_gpu,
+                            size_t *_g_pi_results_gpu,
+                            size_t *_g_gate_results_gpu,
+                            size_t *_g_po_results_gpu,
+                            size_t *_b_pi_results_gpu,
+                            size_t *_b_gate_results_gpu,
+                            size_t *_b_po_results_gpu,
+                            int *_found_fault_to_pattern_gpu,
+                            size_t *_pi_gate_po_output_res_gpu);
 
 };
 
