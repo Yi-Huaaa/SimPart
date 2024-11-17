@@ -431,6 +431,8 @@ private:
 
     void construct_cuda_graph(
                             cudaStream_t stream1, cudaGraph_t graph, 
+                            cudaGraphNode_t *while_node, 
+                            cudaGraph_t *bodyGraph,
                             cudaGraphNode_t *dsp_nodes, 
                             cudaGraphNode_t *rap_node, 
                             cudaKernelNodeParams *dsp_nodes_params, 

@@ -41,7 +41,7 @@
 
 // constexpr
 constexpr int _k = 16; // based on the kernel concurrency
-constexpr int _THRESHOLD_0 = 1024; // until which level should use levelization 
+constexpr int _THRESHOLD_0 = 4096; // until which level should use levelization 
 
 
 // Define the enum class

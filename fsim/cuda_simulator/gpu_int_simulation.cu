@@ -447,35 +447,49 @@ void dumpCudaGraphToDot(cudaGraph_t graph, const char* fileName) {
 }
 
 
-__global__ void doWhileLoopKernel(char *dPtr, cudaGraphConditionalHandle handle, int *level_counter_gpu, 
-                                  int *gateIdx_in_each_level_copy_gpu, 
-                                  int *num_gates_per_level_gpu, int *d_numBlocks, int *d_numThreads, int *bb_m, int*tt_m)
-{
-    if (--(*dPtr) == 0) {
-      cudaGraphSetConditional(handle, 0);
-    }
-    (*level_counter_gpu)++;
-    (*num_gates_per_level_gpu) = gateIdx_in_each_level_copy_gpu[*level_counter_gpu];
+// __global__ void doWhileLoopKernel(char *dPtr, cudaGraphConditionalHandle handle, int *level_counter_gpu, 
+//                                   int *gateIdx_in_each_level_copy_gpu, 
+//                                   int *num_gates_per_level_gpu, int *d_numBlocks, int *d_numThreads, int *bb_m, int*tt_m)
+// {
+//     if (--(*dPtr) == 0) {
+//       cudaGraphSetConditional(handle, 0);
+//     }
+//     (*level_counter_gpu)++;
+//     (*num_gates_per_level_gpu) = gateIdx_in_each_level_copy_gpu[*level_counter_gpu];
 
-    (*bb_m)  = ((*num_gates_per_level_gpu) > 1024) ? 
-              ((*num_gates_per_level_gpu) + 1024 - 1)/1024 : 
-              (1);
-    (*tt_m) = ((*num_gates_per_level_gpu) > 1024) ? 
-              (1024) : 
-              ((*num_gates_per_level_gpu));
+//     (*bb_m)  = ((*num_gates_per_level_gpu) > 1024) ? 
+//               ((*num_gates_per_level_gpu) + 1024 - 1)/1024 : 
+//               (1);
+//     (*tt_m) = ((*num_gates_per_level_gpu) > 1024) ? 
+//               (1024) : 
+//               ((*num_gates_per_level_gpu));
 
 
-    // printf("GPU: counter = %d, level_counter_gpu = %d, (*num_gates_per_level_gpu) = %d, bb_m = %d, tt_m = %d\n", 
-    //       *dPtr, *level_counter_gpu, *num_gates_per_level_gpu, *bb_m, *tt_m);
-    // for (int i = 0; i < 77; i++) {
-    //   printf("gateIdx_in_each_level_copy_gpu[%d] = %d\n", i, gateIdx_in_each_level_copy_gpu[i]);
-    // }
+//     // printf("GPU: counter = %d, level_counter_gpu = %d, (*num_gates_per_level_gpu) = %d, bb_m = %d, tt_m = %d\n", 
+//     //       *dPtr, *level_counter_gpu, *num_gates_per_level_gpu, *bb_m, *tt_m);
+//     // for (int i = 0; i < 77; i++) {
+//     //   printf("gateIdx_in_each_level_copy_gpu[%d] = %d\n", i, gateIdx_in_each_level_copy_gpu[i]);
+//     // }
+// }
+
+__global__ void doWhileLoopKernel(char *dPtr, cudaGraphConditionalHandle handle) {
+  // if (--(*dPtr) == 0) {
+  //   cudaGraphSetConditional(handle, 0);
+  // }
+  // printf("GPU: counter = %d\n", *dPtr);
+  if (*dPtr <= 0) {
+    cudaGraphSetConditional(handle, 0);  
+    // printf("GPU: Breaking loop, counter = %d\n", *dPtr);
+  } else {
+    --(*dPtr);  // 更新计数器
+    // printf("GPU: counter decremented to %d\n", *dPtr);
+  }  
 }
-
-
 
 void GALPS_GPUSimulator::construct_cuda_graph(
                                             cudaStream_t stream1, cudaGraph_t graph, 
+                                            cudaGraphNode_t *while_node,
+                                            cudaGraph_t *bodyGraph,
                                             cudaGraphNode_t *dsp_nodes, 
                                             cudaGraphNode_t *rap_node, 
                                             cudaKernelNodeParams *dsp_nodes_params, 
@@ -543,7 +557,9 @@ void GALPS_GPUSimulator::construct_cuda_graph(
     cudaCheckErrors("dsp_nodes_params failed");
     
     // push node: gate
-    cudaGraphAddKernelNode(&dsp_nodes[level], graph, NULL, 0, &dsp_nodes_params[level]);
+    // cudaGraphAddKernelNode(&dsp_nodes[level], graph, NULL, 0, &dsp_nodes_params[level]);
+    cudaGraphAddKernelNode(&dsp_nodes[level], *bodyGraph, NULL, 0, &dsp_nodes_params[level]);
+    
     cudaCheckErrors("Adding kernelNode_gate failed");
   }
 
@@ -574,15 +590,16 @@ void GALPS_GPUSimulator::construct_cuda_graph(
   rsp_node_params->extra = NULL;
 
   // Add kernel node to the main graph
-  cudaGraphAddKernelNode(rap_node, graph, NULL, 0, rsp_node_params);
+  cudaGraphAddKernelNode(rap_node, *bodyGraph, NULL, 0, rsp_node_params);
   cudaCheckErrors("Adding rap_node failed");
   
-  for (int level = 0; level < _end_level-1; level++) {
-    cudaGraphAddDependencies(graph, &dsp_nodes[level], &dsp_nodes[level+1], 1);
-    cudaCheckErrors("cudaGraphAddDependencies dsp_nodes[level] -> dsp_nodes[level+1]");  
-  }
-  cudaGraphAddDependencies(graph, &dsp_nodes[_end_level-1], rap_node, 1);
-  cudaCheckErrors("cudaGraphAddDependencies dsp_nodes[_end_level-1] -> rap_node");
+
+  // for (int level = 0; level < _end_level-1; level++) {
+  //   cudaGraphAddDependencies(graph, &dsp_nodes[level], &dsp_nodes[level+1], 1);
+  //   cudaCheckErrors("cudaGraphAddDependencies dsp_nodes[level] -> dsp_nodes[level+1]");  
+  // }
+  // cudaGraphAddDependencies(graph, &dsp_nodes[_end_level-1], rap_node, 1);
+  // cudaCheckErrors("cudaGraphAddDependencies dsp_nodes[_end_level-1] -> rap_node");
 }
 
 
@@ -617,8 +634,13 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph(
   cudaStreamCreateWithFlags(&stream1, cudaStreamNonBlocking);
   cudaCheckErrors("cudaStreamCreateWithFlags failure");
 
-  cudaGraph_t     graph;
-  cudaGraphCreate(&graph, 0); // create the graph
+  
+  cudaGraph_t graph; // Create the parent graph
+  cudaGraphCreate(&graph, 0);
+  cudaGraph_t subgraph; // Create the subgraph (loop body)
+  cudaGraphCreate(&subgraph, 0);
+  // cudaGraph_t     graph;
+  // cudaGraphCreate(&graph, 0); // create the graph
   cudaCheckErrors("cudaGraphCreate failure");
   cudaGraphExec_t graphExec;
   cudaGraphNode_t *dsp_nodes = (cudaGraphNode_t *)malloc(_end_level*sizeof(cudaGraphNode_t));
@@ -633,8 +655,25 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph(
   void **kernelArgs_rap = (void **)malloc(16*sizeof(void *));
   cudaCheckErrors("kernelArgs_dsp failure");
 
+  // Construct conditional node 
+  char *dPtr;
+  cudaMalloc((void**)&dPtr, 1);
+  cudaMemset(dPtr, _num_rounds, 1);
+  cudaGraphNode_t while_node;
+                        
+  // Create a conditional while node
+  cudaGraphConditionalHandle handle;
+  cudaGraphConditionalHandleCreate(&handle, graph, 1, cudaGraphCondAssignDefault);
 
-  construct_cuda_graph(stream1, graph, 
+  cudaGraphNodeParams while_params = { cudaGraphNodeTypeConditional };
+  while_params.conditional.handle = handle;
+  while_params.conditional.type = cudaGraphCondTypeWhile;
+  while_params.conditional.size = 1;  
+  cudaGraphAddNode(&while_node, graph, NULL, 0, &while_params);
+
+  cudaGraph_t bodyGraph = while_params.conditional.phGraph_out[0];
+
+  construct_cuda_graph(stream1, graph, &while_node, &bodyGraph, 
                       dsp_nodes, &rap_node, 
                       dsp_nodes_params, &rsp_node_params, 
                       kernelArgs_dsp, kernelArgs_rap,
@@ -661,59 +700,52 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph(
                       _b_po_results_gpu,
                       _found_fault_to_pattern_gpu,
                       _pi_gate_po_output_res_gpu);
-                      
+                   
+  // doWhileLoopKernel
+  cudaGraphNode_t dw_node;
+  cudaCheckErrors("dowhile_node failure");
+  cudaKernelNodeParams dw_node_params {0};
+  cudaCheckErrors("dw_node_params failure");
+  void **kernelArgs_dw = (void **)malloc(2*sizeof(void *));
+  cudaCheckErrors("kernelArgs_dw failure");
+  // construct rap nodes
+  kernelArgs_dw[0] = (void *)&dPtr;
+  kernelArgs_dw[1] = (void *)&handle;
+  dw_node_params.func = (void *)doWhileLoopKernel;
+  dw_node_params.gridDim = dim3(1, 1, 1); // Replace `_k` with your desired block configuration
+  dw_node_params.blockDim = dim3(1, 1, 1); // Replace `_NUM_THREADS` with your desired thread configuration
+  dw_node_params.sharedMemBytes = 0;
+  dw_node_params.kernelParams = (void **)(kernelArgs_dw);
+  dw_node_params.extra = NULL;
+
+  // Add kernel node to the main graph
+  cudaGraphAddKernelNode(&dw_node, bodyGraph, NULL, 0, &dw_node_params);
+  cudaCheckErrors("Adding dw_node failed");
+
   cudaGraphInstantiate(&graphExec, graph, NULL, NULL, 0);
-  cudaGraphLaunch(graphExec, stream1);
-  cudaDeviceSynchronize();
-
-  // // cudaGraphLaunch(graphExec, stream1115);
-  // // cudaDeviceSynchronize();
-
-  auto start1115 = std::chrono::steady_clock::now();
+  // cudaGraphLaunch(graphExec, stream1);
+  // cudaDeviceSynchronize();
 
 
-  
-  // Simulation
-  for (size_t rd = 0; rd < _num_rounds; rd++) {
-    size_t num_testcases_this_round =
-        ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
-            ? (SIZE_T_BITS)
-            : (_num_pattern % SIZE_T_BITS);
-  
+  // auto start1115 = std::chrono::steady_clock::now();
+
     cudaGraphLaunch(graphExec, stream1);
-    // cudaDeviceSynchronize();
-
-      // const size_t bits = num_testcases_this_round;
-      // // shift and copy answer to the good results
-      // int num_blocks = (_sum_pi_gates_pos > _NUM_THREADS) ? 
-      //               (_sum_pi_gates_pos + _NUM_THREADS - 1)/_NUM_THREADS : 
-      //               (1);//1;
-      // int num_threads = (_sum_pi_gates_pos > _NUM_THREADS) ? 
-      //               (_NUM_THREADS) : 
-      //               (_sum_pi_gates_pos);    
-      // _write_and_shift_to_array_gpu <<< num_blocks, num_threads >>> (_num_PIs, 
-      //                                                               _num_inner_gates, 
-      //                                                               _num_POs,
-      //                                                               bits, 
-      //                                                               _pi_gate_po_output_res_gpu,
-      //                                                               _sum_pi_gates_pos,
-      //                                                               _g_pi_results_gpu,
-      //                                                               _g_gate_results_gpu,
-      //                                                               _g_po_results_gpu);
-  }
 
   cudaDeviceSynchronize();
 
-  auto end1115 = std::chrono::steady_clock::now();
-  std::chrono::duration<double>  duration_simulation = (end1115 - start1115);
-  std::cout << "1115run_simulator: " <<  hhh(((duration_simulation.count()))*1000, 0.001) << "\n";
+  // auto end1115 = std::chrono::steady_clock::now();
+  // std::chrono::duration<double>  duration_simulation = (end1115 - start1115);
+  // std::cout << "1115run_simulator: " <<  hhh(((duration_simulation.count()))*1000, 0.001) << "\n";
 
   cudaGraphExecDestroy(graphExec);
   cudaGraphDestroy(graph);
 
-
-
 }
+
+
+
+
+
 
 
 
