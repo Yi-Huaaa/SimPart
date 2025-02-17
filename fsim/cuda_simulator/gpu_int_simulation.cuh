@@ -253,7 +253,9 @@ public:
     _num_rounds = num_rounds;
     _num_fault = num_fault;
     _threshold_0_level = threshold_0_level;
-    // printf("Get inside run_gpu_simulator_cones_part_gpu_cuda_graph\n");
+    printf("Get inside run_gpu_simulator_cones_part_gpu_cuda_graph\n");
+    
+    bool _RAP_shared_mem = true;
     
     // Run simulation
     for (size_t rd = 0; rd < NUM_SIMULATION_RDS; rd++) {
@@ -279,7 +281,8 @@ public:
                                             _b_gate_results_gpu,
                                             _b_po_results_gpu,
                                             _found_fault_to_pattern_gpu,
-                                            _pi_gate_po_output_res_gpu);  
+                                            _pi_gate_po_output_res_gpu,
+                                            _RAP_shared_mem);  
     } // NUM_SIMULATION_RDS
   }  
 
@@ -403,7 +406,8 @@ private:
                                               size_t *_b_gate_results_gpu,
                                               size_t *_b_po_results_gpu,
                                               int *_found_fault_to_pattern_gpu,
-                                              size_t *_pi_gate_po_output_res_gpu);
+                                              size_t *_pi_gate_po_output_res_gpu,
+                                              const bool _RAP_shared_mem);
     void _run_cones_gates_level_rep_cuda_graph_CORRECT_VERSION(const int *_numGates_per_level_gpu_of_groups_gpu,
                                                                   const int *_per_level_of_group_start_accum_gpu,
                                                                   const int *_cones_partitioned_gpu,
