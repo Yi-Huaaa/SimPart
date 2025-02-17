@@ -287,7 +287,6 @@ private:
 
 
   // void _run_level_gates_gpu();
-  
   // vars
   int _k;
   int _num_PIs; 

@@ -1013,8 +1013,27 @@ __global__ void _run_gate_part(const int _num_PIs,
                               const int *_fault_gate_idx_gpu, const size_t *_fault_SA_fault_val_gpu,
                               const size_t fault_num, const size_t bad_case) {  
                                 
-  int t_idx = threadIdx.x;
+  // int t_idx = threadIdx.x;
+  // int acc = 0;
+  // if (t_idx == 0) {
+  //   const int tmp_level = _start_level+4;
+  //   for (int level = tmp_level; level < _total_num_levels ; level++) {
+  //     const int k = blockIdx.x;
+  //     const int k_level = k*_total_num_levels+level;
+  //     const int num_gates_this_level = _numGates_per_level_gpu_of_groups_gpu[k_level];    
+  //     // printf("level = %d, %d\n", level, num_gates_this_level);
+  //     acc += num_gates_this_level;
+  //   }
+  //   if (acc != 0) {
+  //     printf("%d, %d\n", tmp_level, _total_num_levels);
+  //     printf("blockIdx.x = %d, acc = %d\n", blockIdx.x, acc);
+  //   }
+  // }
 
+  // __syncthreads();
+
+
+  int t_idx = threadIdx.x;
   for (int level = _start_level; level < _total_num_levels ; level++) {
     const int k = blockIdx.x;
     const int k_level = k*_total_num_levels+level;
