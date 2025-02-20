@@ -446,12 +446,42 @@ void dumpCudaGraphToDot(cudaGraph_t graph, const char* fileName) {
   }
 }
 
+
+// __global__ void doWhileLoopKernel(char *dPtr, cudaGraphConditionalHandle handle, int *level_counter_gpu, 
+//                                   int *gateIdx_in_each_level_copy_gpu, 
+//                                   int *num_gates_per_level_gpu, int *d_numBlocks, int *d_numThreads, int *bb_m, int*tt_m)
+// {
+//     if (--(*dPtr) == 0) {
+//       cudaGraphSetConditional(handle, 0);
+//     }
+//     (*level_counter_gpu)++;
+//     (*num_gates_per_level_gpu) = gateIdx_in_each_level_copy_gpu[*level_counter_gpu];
+
+//     (*bb_m)  = ((*num_gates_per_level_gpu) > 1024) ? 
+//               ((*num_gates_per_level_gpu) + 1024 - 1)/1024 : 
+//               (1);
+//     (*tt_m) = ((*num_gates_per_level_gpu) > 1024) ? 
+//               (1024) : 
+//               ((*num_gates_per_level_gpu));
+
+
+//     // printf("GPU: counter = %d, level_counter_gpu = %d, (*num_gates_per_level_gpu) = %d, bb_m = %d, tt_m = %d\n", 
+//     //       *dPtr, *level_counter_gpu, *num_gates_per_level_gpu, *bb_m, *tt_m);
+//     // for (int i = 0; i < 77; i++) {
+//     //   printf("gateIdx_in_each_level_copy_gpu[%d] = %d\n", i, gateIdx_in_each_level_copy_gpu[i]);
+//     // }
+// }
+
 __global__ void doWhileLoopKernel(char *dPtr, cudaGraphConditionalHandle handle) {
+  // if (--(*dPtr) == 0) {
+  //   cudaGraphSetConditional(handle, 0);
+  // }
+  // printf("GPU: counter = %d\n", *dPtr);
   if (*dPtr <= 0) {
     cudaGraphSetConditional(handle, 0);  
     // printf("GPU: Breaking loop, counter = %d\n", *dPtr);
   } else {
-    --(*dPtr);  // update the counter
+    --(*dPtr);  // 更新计数器
     // printf("GPU: counter decremented to %d\n", *dPtr);
   }  
 }
@@ -532,7 +562,8 @@ void GALPS_GPUSimulator::construct_cuda_graph(
     
     cudaCheckErrors("Adding kernelNode_gate failed");
   }
-  
+
+
   // construct rap nodes
   kernelArgs_rap[0] = (void *)&_num_PIs;
   kernelArgs_rap[1] = (void *)&_end_level;
@@ -596,13 +627,14 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph(
                                                 size_t *_b_gate_results_gpu,
                                                 size_t *_b_po_results_gpu,
                                                 int *_found_fault_to_pattern_gpu,
-                                                size_t *_pi_gate_po_output_res_gpu,
-                                                const bool _RAP_shared_mem) {
+                                                size_t *_pi_gate_po_output_res_gpu) {
   // printf("Starting CUDA Graph...\n");
+
   cudaStream_t stream1;
   cudaStreamCreateWithFlags(&stream1, cudaStreamNonBlocking);
   cudaCheckErrors("cudaStreamCreateWithFlags failure");
 
+  
   cudaGraph_t graph; // Create the parent graph
   cudaGraphCreate(&graph, 0);
   cudaGraph_t subgraph; // Create the subgraph (loop body)
@@ -617,14 +649,18 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph(
 
   cudaKernelNodeParams *dsp_nodes_params = (cudaKernelNodeParams *)malloc(_end_level*sizeof(cudaKernelNodeParams));
   cudaKernelNodeParams rsp_node_params {0};
-  cudaCheckErrors("cudaKernelNodeParams failure");  
+  cudaCheckErrors("cudaKernelNodeParams failure");
+
+  void **kernelArgs_dsp = (void **)malloc(_end_level*15*sizeof(void *));
+  void **kernelArgs_rap = (void **)malloc(16*sizeof(void *));
+  cudaCheckErrors("kernelArgs_dsp failure");
 
   // Construct conditional node 
   char *dPtr;
   cudaMalloc((void**)&dPtr, 1);
   cudaMemset(dPtr, _num_rounds, 1);
   cudaGraphNode_t while_node;
-  
+                        
   // Create a conditional while node
   cudaGraphConditionalHandle handle;
   cudaGraphConditionalHandleCreate(&handle, graph, 1, cudaGraphCondAssignDefault);
@@ -635,53 +671,36 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph(
   while_params.conditional.size = 1;  
   cudaGraphAddNode(&while_node, graph, NULL, 0, &while_params);
 
-  cudaGraph_t bodyGraph = while_params.conditional.phGraph_out[0];  
-  
-  if (_RAP_shared_mem == false) {
-    void **kernelArgs_dsp = (void **)malloc(_end_level*15*sizeof(void *));
-    void **kernelArgs_rap = (void **)malloc(16*sizeof(void *));
-    cudaCheckErrors("kernelArgs_dsp failure");
+  cudaGraph_t bodyGraph = while_params.conditional.phGraph_out[0];
 
-    construct_cuda_graph(stream1, graph, &while_node, &bodyGraph, 
-                        dsp_nodes, &rap_node, 
-                        dsp_nodes_params, &rsp_node_params, 
-                        kernelArgs_dsp, kernelArgs_rap,
-                        _numGates_per_level_gpu_of_groups_gpu,
-                        _per_level_of_group_start_accum_gpu,
-                        _cones_partitioned_gpu,
-                        _total_num_levels,
-                        _gateIdx_in_each_level,
-                        _per_level_of_group_start_accum_level_gpu,
-                        _gateIdx_in_each_level_gpu,
-                        _end_level,
-                        _invAdj_gpu,
-                        _invAdj_index_table_gpu,
-                        _pi_gate_po_gate_type_gpu,
-                        _patterns_gpu,
-                        _patterns,
-                        _fault_gate_idx_gpu,
-                        _fault_SA_fault_val_gpu,
-                        _g_pi_results_gpu,
-                        _g_gate_results_gpu,
-                        _g_po_results_gpu,
-                        _b_pi_results_gpu,
-                        _b_gate_results_gpu,
-                        _b_po_results_gpu,
-                        _found_fault_to_pattern_gpu,
-                        _pi_gate_po_output_res_gpu);
-
-  } else {
-    // shared memory version
-    printf("RAP-based shared memory version\n");
-    /* 
-    TODO: 
-    construct_cuda_graph_RAP_shared_mem(); 
-    */
-
-
-  }
-
-
+  construct_cuda_graph(stream1, graph, &while_node, &bodyGraph, 
+                      dsp_nodes, &rap_node, 
+                      dsp_nodes_params, &rsp_node_params, 
+                      kernelArgs_dsp, kernelArgs_rap,
+                      _numGates_per_level_gpu_of_groups_gpu,
+                      _per_level_of_group_start_accum_gpu,
+                      _cones_partitioned_gpu,
+                      _total_num_levels,
+                      _gateIdx_in_each_level,
+                      _per_level_of_group_start_accum_level_gpu,
+                      _gateIdx_in_each_level_gpu,
+                      _end_level,
+                      _invAdj_gpu,
+                      _invAdj_index_table_gpu,
+                      _pi_gate_po_gate_type_gpu,
+                      _patterns_gpu,
+                      _patterns,
+                      _fault_gate_idx_gpu,
+                      _fault_SA_fault_val_gpu,
+                      _g_pi_results_gpu,
+                      _g_gate_results_gpu,
+                      _g_po_results_gpu,
+                      _b_pi_results_gpu,
+                      _b_gate_results_gpu,
+                      _b_po_results_gpu,
+                      _found_fault_to_pattern_gpu,
+                      _pi_gate_po_output_res_gpu);
+                   
   // doWhileLoopKernel
   cudaGraphNode_t dw_node;
   cudaCheckErrors("dowhile_node failure");
@@ -693,8 +712,8 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph(
   kernelArgs_dw[0] = (void *)&dPtr;
   kernelArgs_dw[1] = (void *)&handle;
   dw_node_params.func = (void *)doWhileLoopKernel;
-  dw_node_params.gridDim = dim3(1, 1, 1); // this is the do-while kernel's #blocks in 3 dim
-  dw_node_params.blockDim = dim3(1, 1, 1); // this is the do-while kernel's #threads in 3 dim
+  dw_node_params.gridDim = dim3(1, 1, 1); // Replace `_k` with your desired block configuration
+  dw_node_params.blockDim = dim3(1, 1, 1); // Replace `_NUM_THREADS` with your desired thread configuration
   dw_node_params.sharedMemBytes = 0;
   dw_node_params.kernelParams = (void **)(kernelArgs_dw);
   dw_node_params.extra = NULL;
@@ -720,6 +739,7 @@ void GALPS_GPUSimulator::_run_cones_gates_level_rep_cuda_graph(
 
   cudaGraphExecDestroy(graphExec);
   cudaGraphDestroy(graph);
+
 }
 
 

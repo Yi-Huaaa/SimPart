@@ -44,7 +44,7 @@ add_library(fsim_cuda_partition
   ./cuda_simulator/gpu_int_simulation.cuh  
   ./cuda_simulator/gpu_sizet_simulation.cu
   ./cuda_simulator/gpu_sizet_simulation.cuh
-  )
+)
 
 # Simulation:
 add_library(galps_simulator
@@ -55,12 +55,32 @@ add_library(galps_simulator
   ./cuda_simulator/gpu_sizet_simulation.cuh  
 )
 
+add_library(fsim_MA_cuda_partition
+  ./cuda_partition/cpu_partition.cu  ./cuda_partition/cpu_partition.cuh
+  ./cuda_partition/cuda_partition.cu ./cuda_partition/cuda_partition.cuh
+  # CPU: 
+  fault.cpp fault.hpp
+  pattern.cpp pattern.hpp
+  base_ppg.cpp base_ppg.hpp
+  pi.cpp pi.hpp
+  po.cpp po.hpp
+  gate.cpp gate.hpp
+  simulation.cpp simulation.hpp
+  ./cpu_simulator/cpu_simulation.cuh 
+  ./cuda_simulator/gpu_int_simulation.cu
+  ./cuda_simulator/gpu_int_simulation.cuh  
+  ./cuda_simulator/gpu_sizet_simulation.cu
+  ./cuda_simulator/gpu_sizet_simulation.cuh 
+)
+
+
 
 # -----------------------------------------------------------------------------
 # Link OpenMP for CUDA partition (needed for OpenMP support in CUDA code)
 # -----------------------------------------------------------------------------
 target_link_libraries(fsim_cuda_partition PRIVATE OpenMP::OpenMP_CXX)
 target_link_libraries(galps_simulator PRIVATE OpenMP::OpenMP_CXX)
+target_link_libraries(fsim_MA_cuda_partition PRIVATE OpenMP::OpenMP_CXX)
 
 
 # -----------------------------------------------------------------------------
@@ -84,6 +104,10 @@ include_directories(/usr/local/include)
 target_link_libraries(fsim_cuda_partition PRIVATE ${KAHYPAR_LIB})
 message(STATUS "KAHYPAR_LIB: ${KAHYPAR_LIB}")
 
+# Link the library with the target fsim_MA_cuda_partition
+target_link_libraries(fsim_MA_cuda_partition PRIVATE ${KAHYPAR_LIB})
+message(STATUS "KAHYPAR_LIB: ${KAHYPAR_LIB}")
+
 
 # -----------------------------------------------------------------------------
 # MT-KAHYPAR_LIB 
@@ -97,6 +121,9 @@ include_directories(/usr/local/include)
 target_link_libraries(fsim_cuda_partition PRIVATE ${MT_KAHYPAR_LIB})
 message(STATUS "MT_KAHYPAR_LIB: ${MT_KAHYPAR_LIB}")
 
+# Link the library with the target fsim_MA_cuda_partition
+target_link_libraries(fsim_MA_cuda_partition PRIVATE ${MT_KAHYPAR_LIB})
+message(STATUS "MT_KAHYPAR_LIB: ${MT_KAHYPAR_LIB}")
 
 
 
@@ -137,11 +164,20 @@ target_compile_options(fsim_cuda_partition PRIVATE
   -DNDEBUG
 )
 
-
 target_compile_options(galps_simulator PRIVATE
   -Wall
   -Wextra
   -Wfatal-errors
   -Wshadow
   -O3  
+)
+
+target_compile_options(fsim_MA_cuda_partition PRIVATE
+  -Wall
+  -Wextra
+  -Wfatal-errors
+  -Wshadow
+  -lineinfo
+  -O3
+  -DNDEBUG
 )
