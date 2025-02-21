@@ -184,20 +184,12 @@ private:
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
   std::vector<Pattern> _patterns;
 
-  // For levelization and Find cones
-  std::vector<int> _queue_data_cpu; 
-  std::vector<int> _partitionIndex_cpu;
-  int _queue_tail_cpu;
-
-  std::vector<int> _sources;
-  std::vector<int> _sinks; 
+  // For levelization
+  std::vector<int> _level_of_gates;
+  std::vector<int> _newIndex; 
+  std::vector<int> _num_gates_per_level;
   int _max_level;
   int _total_num_levels;
-  std::vector<int> _level_of_gates;
-  std::vector<std::vector<int>> _gateIdx_in_each_level;
-  std::vector<std::vector<std::set<int>>> _cones_set;
-  std::vector<std::vector<std::vector<int>>> _cones_partitioned;
-  int _threshold_0_level;
   
   // CPU Simulation
   std::vector<size_t> _g_pi_results;
@@ -213,45 +205,15 @@ private:
   int *_invAdj_gpu; 
   int *_adj_index_table_gpu;
   int *_invAdj_index_table_gpu;
-  int *_partitionIndex_gpu;
-  int *_visited_gpu;
 
   const int _NUM_THREADS = 1024;
-
-
-  
-  // GPU partitioner: New Queue for processing nodes on GPU
-  int *_queue_data;
-  int *_queue_head;
-  int *_queue_tail;
-  int *_queue_size;
-
-
-  // GPU simulation pre-process
-  std::vector<int> _numGates_per_level_gpu_of_groups; // partitioned cones CPU
-  int *_numGates_per_level_gpu_of_groups_gpu;
-  
-  int *_total_numGates_partitioned_gpu;
-  
-  std::vector<int> _per_level_of_group_start_accum_tmp;
-  int *_per_level_of_group_start_accum_gpu; // start point of each level of each group in _total_numGates_partitioned_gpu
-  
-  std::vector<int> _cones_partitioned_tmp;
-  int *_cones_partitioned_gpu; // partitioned results 
-
-  std::vector<int> _per_level_of_group_start_accum_level_tmp;
-  int *_per_level_of_group_start_accum_level_gpu;
-  
-  std::vector<int> _gateIdx_in_each_level_tmp;
-  int *_gateIdx_in_each_level_gpu; 
-  
 
   // GPU Simulation: 
   int *_max_level_gpu;
   int *_total_num_levels_gpu;
-  // for levelization
   int *_level_of_gates_gpu;
 
+  int *_numGates_per_level_gpu;
   int *_pi_gate_po_gate_type_gpu;
   size_t *_patterns_gpu;
   int *_fault_gate_idx_gpu;
@@ -265,36 +227,20 @@ private:
   size_t *_b_po_results_gpu;
   int *_found_fault_to_pattern_gpu;
 
-
   /* Read files - CPU function */
   void _read_graph(std::istream &ckt);
   void _construct_graph();
   void _read_pattern(std::istream &ptn);
   void _read_fault(std::istream &flst);
 
-  /* GPU function */
-  void _ask_gpu_memory_part();
-  void _call_gpu_partitioner();
-  int _get_queue_size();
-
-  /* Construct cones */
-  // GPU Simulator preparation - CPU
-  void _construct_partitioned_groups(const int simulator);
-    void _get_topological_sort_resutls();
-      void _copy_TS_resutls_to_Host();
-      void _levelized();
-    void _construct_groups();
-      void _get_sinks_group(std::vector<std::vector<int>> &sinks_groups);
-      void _construct_cones(std::vector<int> &sinks,
-                          std::vector<std::set<int>> &_cones_set_g,
-                          std::vector<bool> &visited_cpu);
-  // GPU Simulator preparation - GPU
+  /* Levelization */
+  void _levelized(std::vector<std::vector<int>> &adj, 
+                  std::vector<std::vector<int>> &invAdj);
+  /* GPU Simulator preparation */
   void _ask_gpu_simulation_memory();
   void _move_GateType_h2d();
   void _move_patterns_h2d();
   void _move_faults___h2d();
-
-
 
 
   void _free() {
@@ -309,18 +255,9 @@ private:
     cudaFree(_invAdj_gpu);
     cudaFree(_adj_index_table_gpu);
     cudaFree(_invAdj_index_table_gpu);
-    cudaFree(_partitionIndex_gpu);
-    cudaFree(_visited_gpu);
-    cudaFree(_queue_data);
-    cudaFree(_queue_head);
-    cudaFree(_queue_tail);
-    cudaFree(_queue_size);
-    cudaFree(_cones_partitioned_gpu);
     cudaFree(_max_level_gpu);
     cudaFree(_total_num_levels_gpu);
     cudaFree(_level_of_gates_gpu);
-    cudaFree(_per_level_of_group_start_accum_gpu);
-    cudaFree(_total_numGates_partitioned_gpu);
     cudaFree(_pi_gate_po_gate_type_gpu);
     cudaFree(_patterns_gpu);
     cudaFree(_fault_gate_idx_gpu);
@@ -333,24 +270,7 @@ private:
     cudaFree(_b_gate_results_gpu);
     cudaFree(_b_po_results_gpu);
     cudaFree(_found_fault_to_pattern_gpu);
-    cudaFree(_per_level_of_group_start_accum_level_gpu);
-    cudaFree(_gateIdx_in_each_level_gpu);
   }
-
-
-  // CPU Simulation
-  void _ask_simulation_memory() {
-    _g_pi_results.resize(_num_PIs);
-    _g_gate_results.resize(_num_inner_gates);
-    _g_po_results.resize(_num_POs);
-    _b_pi_results.resize(_num_PIs);
-    _b_gate_results.resize(_num_inner_gates);
-    _b_po_results.resize(_num_POs);
-    _found_fault_to_pattern.resize(2 * _faults.size());
-  }
-
-  
-
 
   // --------------------------------------------------------------------------
 
