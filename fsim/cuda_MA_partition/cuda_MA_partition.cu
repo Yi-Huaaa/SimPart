@@ -311,13 +311,6 @@ void CUDAMAPartitioner::_ask_gpu_simulation_memory() {
   cudaMalloc((void**)&_fault_SA_fault_val_gpu, _num_fault*sizeof(size_t));
   
   cudaMalloc((void**)&_pi_gate_po_output_res_gpu, _sum_pi_gates_pos*sizeof(size_t));
-  cudaMalloc((void**)&_g_pi_results_gpu, _num_PIs*sizeof(size_t));
-  cudaMalloc((void**)&_g_gate_results_gpu, _num_inner_gates*sizeof(size_t));
-  cudaMalloc((void**)&_g_po_results_gpu, _num_POs*sizeof(size_t));
-  cudaMalloc((void**)&_b_pi_results_gpu, _num_PIs*sizeof(size_t));
-  cudaMalloc((void**)&_b_gate_results_gpu, _num_inner_gates*sizeof(size_t));
-  cudaMalloc((void**)&_b_po_results_gpu, _num_POs*sizeof(size_t));
-  cudaMalloc((void**)&_found_fault_to_pattern_gpu, 2*_num_fault*sizeof(int));  
   cudaMalloc((void**)&_numGates_per_level_gpu, _numGates_per_level.size()*sizeof(int));
   cudaCheckErrors("CUDA: ask gpu simulation memory - cudaMalloc - Failure");
 
@@ -416,27 +409,20 @@ void CUDAMAPartitioner::prepare_gpu_simulation() {
 void CUDAMAPartitioner::run(const size_t num_threads, const size_t NUM_SIMULATION_RDS) {  
   GALPS_MA_GPUSimulator gpuSimulator;
   gpuSimulator.run_gpu_simulator_DSP_gpu(_num_PIs, _num_inner_gates, _num_POs, 
-                                                _sum_pi_gates_pos, 
-                                                _num_pattern, _num_rounds, _num_fault,
-                                                _pi_gate_po_gate_type_gpu, 
-                                                _patterns_gpu,
-                                                _fault_gate_idx_gpu,
-                                                _fault_SA_fault_val_gpu,
-                                                _pi_gate_po_output_res_gpu,
-                                                _numGates_per_level,
-                                                _numGates_per_level_gpu,
-                                                _total_num_levels,
-                                                _invAdj_gpu,
-                                                _invAdj_index_table_gpu,
-                                                _patterns, 
-                                                _g_pi_results_gpu,
-                                                _g_gate_results_gpu,
-                                                _g_po_results_gpu,
-                                                _b_pi_results_gpu,
-                                                _b_gate_results_gpu,
-                                                _b_po_results_gpu,
-                                                _found_fault_to_pattern_gpu,
-                                                NUM_SIMULATION_RDS);
+                                          _sum_pi_gates_pos, 
+                                          _num_pattern, _num_rounds, _num_fault,
+                                          _pi_gate_po_gate_type_gpu, 
+                                          _patterns_gpu,
+                                          _fault_gate_idx_gpu,
+                                          _fault_SA_fault_val_gpu,
+                                          _pi_gate_po_output_res_gpu,
+                                          _numGates_per_level,
+                                          _numGates_per_level_gpu,
+                                          _total_num_levels,
+                                          _invAdj_gpu,
+                                          _invAdj_index_table_gpu,
+                                          _patterns, 
+                                          NUM_SIMULATION_RDS);
   cudaDeviceSynchronize();
 }
 

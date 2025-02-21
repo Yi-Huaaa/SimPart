@@ -98,13 +98,6 @@ public:
                                 const int *_invAdj_gpu,
                                 const int *_invAdj_index_table_gpu,
                                 const std::vector<Pattern> _patterns,
-                                size_t *_g_pi_results_gpu,
-                                size_t *_g_gate_results_gpu,
-                                size_t *_g_po_results_gpu,
-                                size_t *_b_pi_results_gpu,
-                                size_t *_b_gate_results_gpu,
-                                size_t *_b_po_results_gpu,
-                                int *_found_fault_to_pattern_gpu,
                                 const size_t NUM_SIMULATION_RDS) {
     // Get vars   
     _num_PIs = num_PIs;
@@ -128,13 +121,6 @@ public:
                         _patterns,
                         _fault_gate_idx_gpu,
                         _fault_SA_fault_val_gpu,
-                        _g_pi_results_gpu,
-                        _g_gate_results_gpu,
-                        _g_po_results_gpu,
-                        _b_pi_results_gpu,
-                        _b_gate_results_gpu,
-                        _b_po_results_gpu,
-                        _found_fault_to_pattern_gpu,
                         _pi_gate_po_output_res_gpu);
     } // NUM_SIMULATION_RDS
   }
@@ -160,13 +146,6 @@ private:
                           const std::vector<Pattern> _patterns,
                           const int *_fault_gate_idx_gpu,
                           const size_t *_fault_SA_fault_val_gpu,
-                          size_t *_g_pi_results_gpu,
-                          size_t *_g_gate_results_gpu,
-                          size_t *_g_po_results_gpu,
-                          size_t *_b_pi_results_gpu,
-                          size_t *_b_gate_results_gpu,
-                          size_t *_b_po_results_gpu,
-                          int *_found_fault_to_pattern_gpu,
                           size_t *_pi_gate_po_output_res_gpu);   
   void _run_cones_good_case_DSP_gpu(const int _total_num_levels, 
                                     const std::vector<int> &_numGates_per_level,
@@ -179,9 +158,6 @@ private:
                                     const size_t *_fault_SA_fault_val_gpu,
                                     const size_t bits,
                                     const size_t rd, 
-                                    size_t *_g_pi_results_gpu,
-                                    size_t *_g_gate_results_gpu,
-                                    size_t *_g_po_results_gpu,
                                     size_t *_pi_gate_po_output_res_gpu);
 };
 

@@ -218,13 +218,6 @@ private:
   int *_fault_gate_idx_gpu;
   size_t *_fault_SA_fault_val_gpu;
   size_t *_pi_gate_po_output_res_gpu;
-  size_t *_g_pi_results_gpu;
-  size_t *_g_gate_results_gpu;
-  size_t *_g_po_results_gpu;
-  size_t *_b_pi_results_gpu;
-  size_t *_b_gate_results_gpu;
-  size_t *_b_po_results_gpu;
-  int *_found_fault_to_pattern_gpu;
 
   /* Read files - CPU function */
   void _read_graph(std::istream &ckt);
@@ -262,13 +255,6 @@ private:
     cudaFree(_fault_gate_idx_gpu);
     cudaFree(_fault_SA_fault_val_gpu);
     cudaFree(_pi_gate_po_output_res_gpu);
-    cudaFree(_g_pi_results_gpu);
-    cudaFree(_g_gate_results_gpu);
-    cudaFree(_g_po_results_gpu);
-    cudaFree(_b_pi_results_gpu);
-    cudaFree(_b_gate_results_gpu);
-    cudaFree(_b_po_results_gpu);
-    cudaFree(_found_fault_to_pattern_gpu);
   }
 
   // --------------------------------------------------------------------------

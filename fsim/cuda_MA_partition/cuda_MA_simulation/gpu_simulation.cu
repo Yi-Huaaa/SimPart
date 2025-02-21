@@ -59,13 +59,6 @@ void GALPS_MA_GPUSimulator::_run_gates_DSP_gpu(const int _total_num_levels,
                                               const std::vector<Pattern> _patterns,
                                               const int *_fault_gate_idx_gpu,
                                               const size_t *_fault_SA_fault_val_gpu,
-                                              size_t *_g_pi_results_gpu,
-                                              size_t *_g_gate_results_gpu,
-                                              size_t *_g_po_results_gpu,
-                                              size_t *_b_pi_results_gpu,
-                                              size_t *_b_gate_results_gpu,
-                                              size_t *_b_po_results_gpu,
-                                              int *_found_fault_to_pattern_gpu,
                                               size_t *_pi_gate_po_output_res_gpu) {
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
   std::cout << "execute simulation._run_gates_DSP_gpu();\n";
@@ -88,7 +81,6 @@ void GALPS_MA_GPUSimulator::_run_gates_DSP_gpu(const int _total_num_levels,
                                   _fault_SA_fault_val_gpu,
                                   num_testcases_this_round,  // bits 
                                   rd, 
-                                  _g_pi_results_gpu, _g_gate_results_gpu, _g_po_results_gpu,
                                   _pi_gate_po_output_res_gpu);
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
     if (rd == 0) {
@@ -128,9 +120,6 @@ void GALPS_MA_GPUSimulator::_run_cones_good_case_DSP_gpu(const int _total_num_le
                                                         const size_t *_fault_SA_fault_val_gpu,
                                                         const size_t bits,
                                                         const size_t rd, 
-                                                        size_t *_g_pi_results_gpu,
-                                                        size_t *_g_gate_results_gpu,
-                                                        size_t *_g_po_results_gpu,
                                                         size_t *_pi_gate_po_output_res_gpu) {
   // printf("Getting inside _run_cones_good_case_DSP_gpu\n");
 

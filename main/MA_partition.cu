@@ -50,17 +50,16 @@ int main(int argc, char *argv[]) {
   // pre-run
   cudaMAPartitioner.run(NUM_THREADS, _NUM_SIMULATION_RDS);
   
-  // // Run Simulator
-  // for (size_t t = 0; t < TIMES; t++) {
-  //   auto start = std::chrono::steady_clock::now();
-  //   cudaMAPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS, _NUM_SIMULATION_RDS);
-  //   auto end = std::chrono::steady_clock::now();
-  //   dur_sim += (end - start);
-  // }
+  // Run Simulator
+  for (size_t t = 0; t < TIMES; t++) {
+    auto start = std::chrono::steady_clock::now();
+    cudaMAPartitioner.run(NUM_THREADS, _NUM_SIMULATION_RDS);
+    auto end = std::chrono::steady_clock::now();
+    dur_sim += (end - start);
+  }
 
-  // cudaMAPartitioner.freeMem();
-
-  // std::cout << "run_simulator: " <<  round_to(((dur_sim.count()/TIMES))*1000, 0.001) << "\n";
+  cudaMAPartitioner.freeMem();
+  std::cout << "run_simulator: " <<  round_to(((dur_sim.count()/TIMES))*1000, 0.001) << "\n";
 
 
   return 0;
