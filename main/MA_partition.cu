@@ -40,7 +40,6 @@ int main(int argc, char *argv[]) {
 
   // user perspective
   CUDAMAPartitioner cudaMAPartitioner;
-  printf("hello world!\n");
 
   // Read data and Run cudaMAPartitioner
   cudaMAPartitioner.read(ckt_path, flst_path, ptn_path);
@@ -48,8 +47,8 @@ int main(int argc, char *argv[]) {
   // Prepare Simulator
   cudaMAPartitioner.prepare_gpu_simulation();
 
-  // // pre-run
-  // cudaMAPartitioner.run(CUDAPartitioner::Mode(static_cast<size_t>(SIMU_MODE)), NUM_THREADS, _NUM_SIMULATION_RDS);
+  // pre-run
+  cudaMAPartitioner.run(NUM_THREADS, _NUM_SIMULATION_RDS);
   
   // // Run Simulator
   // for (size_t t = 0; t < TIMES; t++) {

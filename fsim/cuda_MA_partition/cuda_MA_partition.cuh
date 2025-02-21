@@ -152,10 +152,9 @@ public:
   void read(std::istream &ckt, std::istream &flst, std::istream &ptn);
 
   // preparation 
-  void prepare_cpu_simulation();
   void prepare_gpu_simulation();
 
-  void run(Mode mode, const size_t num_threads, const size_t NUM_SIMULATION_RDS);
+  void run(const size_t num_threads, const size_t NUM_SIMULATION_RDS);
   void freeMem() {
     _free();
   }
@@ -187,7 +186,7 @@ private:
   // For levelization
   std::vector<int> _level_of_gates;
   std::vector<int> _newIndex; 
-  std::vector<int> _num_gates_per_level;
+  std::vector<int> _numGates_per_level;
   int _max_level;
   int _total_num_levels;
   

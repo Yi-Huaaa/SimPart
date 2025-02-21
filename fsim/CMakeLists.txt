@@ -57,6 +57,7 @@ add_library(galps_simulator
 
 add_library(fsim_MA_cuda_partition
   ./cuda_MA_partition/cuda_MA_partition.cu ./cuda_MA_partition/cuda_MA_partition.cuh
+  ./cuda_MA_partition/cuda_MA_simulation/gpu_simulation.cu ./cuda_MA_partition/cuda_MA_simulation/gpu_simulation.cuh
   # CPU: 
   fault.cpp fault.hpp
   pattern.cpp pattern.hpp
@@ -65,11 +66,6 @@ add_library(fsim_MA_cuda_partition
   po.cpp po.hpp
   gate.cpp gate.hpp
   simulation.cpp simulation.hpp
-  ./cpu_simulator/cpu_simulation.cuh 
-  ./cuda_simulator/gpu_int_simulation.cu
-  ./cuda_simulator/gpu_int_simulation.cuh  
-  ./cuda_simulator/gpu_sizet_simulation.cu
-  ./cuda_simulator/gpu_sizet_simulation.cuh 
 )
 
 
