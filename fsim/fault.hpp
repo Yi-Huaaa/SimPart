@@ -6,6 +6,7 @@
 namespace fsim {
 class Simulator;
 class CUDAPartitioner;
+class CUDAMAPartitioner;
 }
 
 
@@ -15,6 +16,7 @@ class Fault {
   friend class fsim::Simulator;
   friend class CPUPartitioner;
   friend class CUDAPartitioner;
+  friend class CUDAMAPartitioner;
   
   // This is the correct syntax for declaring a template class as a friend
   template<typename T> 
