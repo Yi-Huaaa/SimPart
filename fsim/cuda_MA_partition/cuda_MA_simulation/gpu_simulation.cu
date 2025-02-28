@@ -70,6 +70,17 @@ void GALPS_MA_GPUSimulator::_run_gates_DSP_gpu(const int _total_num_levels,
         ((_num_pattern / (SIZE_T_BITS * (rd + 1))))
             ? (SIZE_T_BITS)
             : (_num_pattern % SIZE_T_BITS);
+            // if (rd==0) {
+              // printf("rd = %lu, _num_rounds= %lu %d\n", rd, _num_rounds, _total_num_levels);
+              // if (_sum_pi_gates_pos <= 409184) {
+              //   printf("PASS: #gates = %d\n", _sum_pi_gates_pos);
+              // } else {
+              //   printf("NO: #gates = %d\n", _sum_pi_gates_pos);
+              // }
+              // for (int i = 0; i < _total_num_levels; i++) {
+              //   printf("level %d: %d\n", i, _numGates_per_level[i]);
+              // }
+            // }
     _run_cones_good_case_DSP_gpu(_total_num_levels, 
                                   _numGates_per_level, 
                                   _numGates_per_level_gpu,

@@ -217,7 +217,7 @@ void CUDAMAPartitioner::_read_fault(std::istream &flst) {
   _faults.resize(_num_fault);
 
   for (int i = 0; i < _num_fault; i++) {
-    FAULT_INDEX_TYPE_PART wrong_gate;
+    int wrong_gate;
     size_t fault_value;
     flst >> wrong_gate >> fault_value;
 

@@ -19,12 +19,6 @@
 #include <fsim/cuda_simulator/galps_cuda_simulator.cuh>
 
 
-#define ELEMENT_INDEX_TYPE_PART int
-#define ELEMENT_LEVEL_TYPE_PART int
-
-#define FAULT_INDEX_TYPE_PART int
-
-
 // error checking macro
 #define cudaCheckErrors(msg) \
     do { \
@@ -92,8 +86,6 @@ __device__ bool _canEnqueue(const int g_idx,
                             const int *_invAdj_index_table_gpu, 
                             int *_visited_gpu);
 
-
-
 // For print
 __global__ void _gpu_print_read_graph(const int _sum_pi_gates_pos, 
                                       const int _szOfAdj, 
@@ -130,18 +122,16 @@ __global__ void print_ask_gpu_simulation_memory(const size_t sz1,
                                                 const int *_per_level_of_group_start_accum_gpu,
                                                 const size_t sz2,
                                                 const int *_cones_partitioned_gpu);
-
-
+                                                
 
 /* Forward declaration */
 class CUDASimulator;
-template class GALPS_CPUSimulator<ELEMENT_INDEX_TYPE_PART>;
 
 class CUDAMAPartitioner {
   
   // Declare friend class 
   friend class CUDASimulator;
-  // friend class GALPS_CPUSimulator<ELEMENT_INDEX_TYPE_PART>;
+  friend class GALPS_MA_GPUSimulator; 
 
 public:
 
@@ -164,7 +154,6 @@ private:
   int _num_PIs, _num_POs, _num_inner_gates, _num_wires;
   int _sum_pi_gates_pos;
   // Include PIs, POs, Gates, 
-  std::vector<ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART>> _Gates;
 
   // Host memory 
   // Read Graph 
@@ -177,7 +166,7 @@ private:
   
   // Faults and Patterns 
   int _num_fault; // for read file
-  std::vector<Fault<FAULT_INDEX_TYPE_PART>> _faults;
+  std::vector<Fault<int>> _faults;
 
   int _num_pattern; // total number of patterns that need to be tested
   size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
@@ -190,15 +179,6 @@ private:
   int _max_level;
   int _total_num_levels;
   
-  // CPU Simulation
-  std::vector<size_t> _g_pi_results;
-  std::vector<size_t> _g_gate_results;
-  std::vector<size_t> _g_po_results;
-  std::vector<size_t> _b_pi_results;
-  std::vector<size_t> _b_gate_results;
-  std::vector<size_t> _b_po_results;
-  std::vector<size_t> _found_fault_to_pattern;
-
   // GPU partitioner memory: 
   int *_adj_gpu; 
   int *_invAdj_gpu; 
@@ -275,7 +255,7 @@ private:
   void _print_simulation_results(const std::vector<size_t> &pi_results,
                                 const std::vector<size_t> &gate_results,
                                 const std::vector<size_t> &po_results) const;
-  void _print_ppg(const ElementBase<ELEMENT_INDEX_TYPE_PART, ELEMENT_LEVEL_TYPE_PART> &gate) const;
+  void _print_ppg(const ElementBase<int, int> &gate) const;
 
   double _round_to(double value, double precision = 1.0){
     return std::round(value / precision) * precision;
