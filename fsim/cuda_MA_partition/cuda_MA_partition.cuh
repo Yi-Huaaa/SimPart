@@ -224,7 +224,7 @@ private:
   std::vector<int> _weight_table;
 
   void _MA_simu_preparation();
-    void _init_num_CLs(std::vector<int> &num_CLs_per_level);
+    void _init_num_CLs();
     void _construct_weight_tables();
     void _construct_g_c_table();
   

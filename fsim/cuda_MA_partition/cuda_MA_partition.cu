@@ -246,7 +246,7 @@ void CUDAMAPartitioner::_read_pattern(std::istream &ptn) {
   }
 }
 
-void CUDAMAPartitioner::_init_num_CLs(std::vector<int> &num_CLs_per_level) {
+void CUDAMAPartitioner::_init_num_CLs() {
   _which_CL.resize(_sum_pi_gates_pos, 0); 
   
   int which_gate = 0;
@@ -264,36 +264,17 @@ void CUDAMAPartitioner::_init_num_CLs(std::vector<int> &num_CLs_per_level) {
   // printf("_num_CLs = %d, %d, _sum = %d\n", _num_CLs, _max_level+1, _sum_pi_gates_pos);
   // std::cout << *std::max_element(_which_CL.begin(), _which_CL.end()) << std::endl;
 
-  _level_of_CLs.resize(_num_CLs, 0);
-  int level = 0, pre_num_CLs = 0, acc_CLs = 0;
-  for (size_t i = 0; i < _numGates_per_level.size(); i++) {
-    pre_num_CLs = acc_CLs;
-    acc_CLs += (_numGates_per_level[i] + _NUM_GATES_PER_CL - 1)/_NUM_GATES_PER_CL;
-    for (int cl = pre_num_CLs; cl < acc_CLs; cl++) {
-      _level_of_CLs[cl] = level;
-    }
-    num_CLs_per_level[level] = acc_CLs-pre_num_CLs;
-    level++;
-  }
-
   // for (size_t i = 0; i < _numGates_per_level.size(); i++) {
   //   printf("level_%lu: %d\n", i, _numGates_per_level[i]);
   // }
   // for (size_t i = 0; i < _level_of_CLs.size(); i++) {
   //   printf("CL_%lu: level %d\n", i, _level_of_CLs[i]);
-  // }
-  // for (size_t i = 0; i < num_CLs_per_level.size(); i++) {
-  //   printf("num_CLs_per_level[%lu]: %d\n", i, num_CLs_per_level[i]);
-  // }
+  // }  
 }
 
 void CUDAMAPartitioner::_construct_weight_tables() {
   // prepare _num_CLs
-
-  std::vector<int> num_CLs_per_level;
-  num_CLs_per_level.resize(_total_num_levels, 0); 
-
-  _init_num_CLs(num_CLs_per_level);
+  _init_num_CLs();
 
   _weight_table.resize(_num_CLs*_total_num_levels, 0);
   
@@ -335,9 +316,6 @@ void CUDAMAPartitioner::_construct_weight_tables() {
     }
   }
 
-
-  // printf("_num_CLs = %d, _total_num_levels = %d\n", _num_CLs, _total_num_levels);
-
   // printf("\n\n_weight_table = [\n");
   // for (int l = 0; l < _total_num_levels; l++) {
   //   printf("\tlevel_%d: ", l);
@@ -348,18 +326,17 @@ void CUDAMAPartitioner::_construct_weight_tables() {
   // }
   // printf("]\n");
 
-  // bool all_zeros = true; 
-  // for (int l = _total_num_levels-1; l < _total_num_levels; l++) {
-  //   for (int i = l*_num_CLs; i < (l+1)*_num_CLs; i++) {
-  //     all_zeros = (_weight_table[i] == 0) ? (true) : (false);
-  //   }
-  // }
-  // if (!all_zeros) {
-  //   printf("QQ FAIL ALL ZERO!!!\n");
-  // } else {
-  //   printf("PASS ALL ZERO!!!\n");
-  // }
-  
+  bool all_zeros = true; 
+  for (int l = _total_num_levels-1; l < _total_num_levels; l++) {
+    for (int i = l*_num_CLs; i < (l+1)*_num_CLs; i++) {
+      all_zeros = (_weight_table[i] == 0) ? (true) : (false);
+    }
+  }
+  if (!all_zeros) {
+    printf("QQ FAIL ALL ZERO!!!\n");
+  } else {
+    printf("PASS ALL ZERO!!!\n");
+  }
 }
 
 void CUDAMAPartitioner::_construct_g_c_table() {
