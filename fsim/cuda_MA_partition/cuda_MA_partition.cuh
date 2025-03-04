@@ -225,8 +225,8 @@ private:
 
   void _MA_simu_preparation();
     void _init_num_CLs();
-    void _construct_weight_tables();
-    void _construct_g_c_table();
+    void _construct_num_CLs_weight_tables();
+    void _construct_g_c_and_position_table();
   
 
   // free

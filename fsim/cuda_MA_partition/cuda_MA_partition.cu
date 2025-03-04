@@ -272,7 +272,7 @@ void CUDAMAPartitioner::_init_num_CLs() {
   // }  
 }
 
-void CUDAMAPartitioner::_construct_weight_tables() {
+void CUDAMAPartitioner::_construct_num_CLs_weight_tables() {
   // prepare _num_CLs
   _init_num_CLs();
 
@@ -288,6 +288,7 @@ void CUDAMAPartitioner::_construct_weight_tables() {
   // update _weight_table
   int fin_level = 0, acc_g = 0;
   bool level_update = false; 
+  // TODO: this for loop can be run in parallel 
   for (int gateIdx = 0; gateIdx < _sum_pi_gates_pos; gateIdx++) {
     // printf("gateIdx = %d\n", gateIdx);
     // reduce 
@@ -316,6 +317,7 @@ void CUDAMAPartitioner::_construct_weight_tables() {
     }
   }
 
+  // // print weight table
   // printf("\n\n_weight_table = [\n");
   // for (int l = 0; l < _total_num_levels; l++) {
   //   printf("\tlevel_%d: ", l);
@@ -326,20 +328,21 @@ void CUDAMAPartitioner::_construct_weight_tables() {
   // }
   // printf("]\n");
 
-  bool all_zeros = true; 
-  for (int l = _total_num_levels-1; l < _total_num_levels; l++) {
-    for (int i = l*_num_CLs; i < (l+1)*_num_CLs; i++) {
-      all_zeros = (_weight_table[i] == 0) ? (true) : (false);
-    }
-  }
-  if (!all_zeros) {
-    printf("QQ FAIL ALL ZERO!!!\n");
-  } else {
-    printf("PASS ALL ZERO!!!\n");
-  }
+  // // test the correctness of weight table 
+  // bool all_zeros = true; 
+  // for (int l = _total_num_levels-1; l < _total_num_levels; l++) {
+  //   for (int i = l*_num_CLs; i < (l+1)*_num_CLs; i++) {
+  //     all_zeros = (_weight_table[i] == 0) ? (true) : (false);
+  //   }
+  // }
+  // if (!all_zeros) {
+  //   printf("QQ FAIL ALL ZERO!!!\n");
+  // } else {
+  //   printf("PASS ALL ZERO!!!\n");
+  // }
 }
 
-void CUDAMAPartitioner::_construct_g_c_table() {
+void CUDAMAPartitioner::_construct_g_c_and_position_table() {
   
 }
 
@@ -356,8 +359,9 @@ void CUDAMAPartitioner::_MA_simu_preparation() {
   3. g_c table, 一開始全部 init 成 0
   4. position table 
   */
-  _construct_weight_tables();
-  _construct_g_c_table();
+  _construct_num_CLs_weight_tables();
+  // _();
+  _construct_g_c_and_position_table();
 }
 
 
