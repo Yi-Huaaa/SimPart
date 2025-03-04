@@ -4,7 +4,6 @@
 #include <vector>
 #include <iostream>
 
-// #include <fsim/cuda_partition/fsim_cuda_partition.cuh>
 #include <fsim/cuda_MA_partition/fsim_cuda_MA_partition.cuh>
 
 constexpr size_t TIMES = 1;
@@ -57,10 +56,22 @@ int main(int argc, char *argv[]) {
     auto end = std::chrono::steady_clock::now();
     dur_sim += (end - start);
   }
+  std::cout << "run pure DSP simulator: " <<  round_to(((dur_sim.count()/TIMES))*1000, 0.001) << "\n";
 
+  // pre-run
+  cudaMAPartitioner.run_MA(NUM_THREADS, _NUM_SIMULATION_RDS);
+  dur_sim = chro_zero();
+
+  // Run Simulator
+  for (size_t t = 0; t < TIMES; t++) {
+    auto start = std::chrono::steady_clock::now();
+    cudaMAPartitioner.run_MA(NUM_THREADS, _NUM_SIMULATION_RDS);
+    auto end = std::chrono::steady_clock::now();
+    dur_sim += (end - start);
+  }
+  std::cout << "run MA simulator: " <<  round_to(((dur_sim.count()/TIMES))*1000, 0.001) << "\n";
+
+  // free memory
   cudaMAPartitioner.freeMem();
-  std::cout << "run_simulator: " <<  round_to(((dur_sim.count()/TIMES))*1000, 0.001) << "\n";
-
-
   return 0;
 }

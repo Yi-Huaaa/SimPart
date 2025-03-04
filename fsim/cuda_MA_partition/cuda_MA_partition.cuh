@@ -36,7 +36,9 @@
 // constexpr
 constexpr int _k = 16; // based on the kernel concurrency
 constexpr int _THRESHOLD_0 = 1024; // until which level should use levelization 
+constexpr uint32_t _NUM_GATES_PER_CL = 32; 
 
+#define MA_PAR // with defined MA_PAR: MA partition and simulation 
 
 // Define the enum class
 enum class gpuGateType : int {
@@ -145,6 +147,7 @@ public:
   void prepare_gpu_simulation();
 
   void run(const size_t num_threads, const size_t NUM_SIMULATION_RDS);
+  void run_MA(const size_t num_threads, const size_t NUM_SIMULATION_RDS);
   void freeMem() {
     _free();
   }
@@ -214,7 +217,19 @@ private:
   void _move_patterns_h2d();
   void _move_faults___h2d();
 
+  // MA preparation and simulation 
+  int _num_CLs;
+  std::vector<int> _which_CL; 
+  std::vector<int> _level_of_CLs;
+  std::vector<int> _weight_table;
 
+  void _MA_simu_preparation();
+    void _init_num_CLs(std::vector<int> &num_CLs_per_level);
+    void _construct_weight_tables();
+    void _construct_g_c_table();
+  
+
+  // free
   void _free() {
     // Host
     free(_adj);

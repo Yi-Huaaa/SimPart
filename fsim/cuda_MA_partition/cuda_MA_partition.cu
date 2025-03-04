@@ -27,7 +27,6 @@
 #include "cuda_MA_partition.cuh"
 #include <fsim/cuda_MA_partition/cuda_MA_simulation/gpu_simulation.cuh>
 
-
 // error checking macro
 #define cudaCheckErrors(msg) \
     do { \
@@ -210,6 +209,11 @@ void CUDAMAPartitioner::_read_graph(std::istream &ckt) {
   }
 
   // _print_read_graph();
+  
+#ifdef MA_PAR
+  printf("_max_level = %d\n", _max_level);
+  _MA_simu_preparation();
+#endif 
 }
 
 void CUDAMAPartitioner::_read_fault(std::istream &flst) {
@@ -242,9 +246,149 @@ void CUDAMAPartitioner::_read_pattern(std::istream &ptn) {
   }
 }
 
+void CUDAMAPartitioner::_init_num_CLs(std::vector<int> &num_CLs_per_level) {
+  _which_CL.resize(_sum_pi_gates_pos, 0); 
+  
+  int which_gate = 0;
+  _num_CLs = 0; // init 
+  // printf("_numGates_per_level = [");
+  for (size_t i = 0; i < _numGates_per_level.size(); i++) {
+    // printf("%d, ", _numGates_per_level[i]);
+    for (int j = 0; j < _numGates_per_level[i]; j++) {
+      _which_CL[which_gate] = _num_CLs+j/_NUM_GATES_PER_CL;
+      which_gate++;
+    }
+    _num_CLs += (_numGates_per_level[i] + _NUM_GATES_PER_CL - 1)/_NUM_GATES_PER_CL;
+  }
+  // printf("]\n");
+  // printf("_num_CLs = %d, %d, _sum = %d\n", _num_CLs, _max_level+1, _sum_pi_gates_pos);
+  // std::cout << *std::max_element(_which_CL.begin(), _which_CL.end()) << std::endl;
+
+  _level_of_CLs.resize(_num_CLs, 0);
+  int level = 0, pre_num_CLs = 0, acc_CLs = 0;
+  for (size_t i = 0; i < _numGates_per_level.size(); i++) {
+    pre_num_CLs = acc_CLs;
+    acc_CLs += (_numGates_per_level[i] + _NUM_GATES_PER_CL - 1)/_NUM_GATES_PER_CL;
+    for (int cl = pre_num_CLs; cl < acc_CLs; cl++) {
+      _level_of_CLs[cl] = level;
+    }
+    num_CLs_per_level[level] = acc_CLs-pre_num_CLs;
+    level++;
+  }
+
+  // for (size_t i = 0; i < _numGates_per_level.size(); i++) {
+  //   printf("level_%lu: %d\n", i, _numGates_per_level[i]);
+  // }
+  // for (size_t i = 0; i < _level_of_CLs.size(); i++) {
+  //   printf("CL_%lu: level %d\n", i, _level_of_CLs[i]);
+  // }
+  // for (size_t i = 0; i < num_CLs_per_level.size(); i++) {
+  //   printf("num_CLs_per_level[%lu]: %d\n", i, num_CLs_per_level[i]);
+  // }
+}
+
+void CUDAMAPartitioner::_construct_weight_tables() {
+  // prepare _num_CLs
+
+  std::vector<int> num_CLs_per_level;
+  num_CLs_per_level.resize(_total_num_levels, 0); 
+
+  _init_num_CLs(num_CLs_per_level);
+
+  _weight_table.resize(_num_CLs*_total_num_levels, 0);
+  
+  // init _weight_table
+  for (int gateIdx = 0; gateIdx < _sum_pi_gates_pos; gateIdx++) {
+    int num_output_gates = _adj_index_table[2*gateIdx+1] - _adj_index_table[2*gateIdx+0];
+    // printf("gateIdx = %d, num_output_gates = %d\n", gateIdx, num_output_gates);
+    _weight_table[_which_CL[gateIdx]] += num_output_gates;
+  }
+
+  // update _weight_table
+  int fin_level = 0, acc_g = 0;
+  bool level_update = false; 
+  for (int gateIdx = 0; gateIdx < _sum_pi_gates_pos; gateIdx++) {
+    // printf("gateIdx = %d\n", gateIdx);
+    // reduce 
+    for (int fmGate = _invAdj_index_table[2*gateIdx+0]; fmGate < _invAdj_index_table[2*gateIdx+1]; fmGate++) {
+      int fmGateIdx = _invAdj[fmGate];
+      int fmGateCLIdx = _which_CL[fmGateIdx];
+      _weight_table[fin_level*_num_CLs+fmGateCLIdx]--;
+      // printf("\t\tfmGateIdx = %d, fmGateCLIdx = %d (limit: %d), _weight_table[%d] = %d\n", 
+      //         fmGateIdx, fmGateCLIdx, _num_CLs, 
+      //         fin_level*_num_CLs+fmGateCLIdx, _weight_table[fin_level*_num_CLs+fmGateCLIdx]);
+    }
+    acc_g++; // accumulate one finished gate in this fin_level
+
+    level_update = ((acc_g == _numGates_per_level[fin_level]) && (fin_level < (_total_num_levels-1)))
+                  ? (true) : (false);
+    if (level_update) {
+      // printf("level_update!\n");
+      fin_level++; // update fin_level 
+      for (int i = 0; i < _num_CLs; i++) { // init the weight table for the next level 
+        // printf("\t\tupdate _weight_table[%d]\n", fin_level*_num_CLs+i);
+        _weight_table[fin_level*_num_CLs+i] = _weight_table[(fin_level-1)*_num_CLs+i];
+      }
+      level_update = false; // re-init level_update back to false
+      acc_g = 0; // re-init back to zero
+      // printf("\n\n");
+    }
+  }
+
+
+  // printf("_num_CLs = %d, _total_num_levels = %d\n", _num_CLs, _total_num_levels);
+
+  // printf("\n\n_weight_table = [\n");
+  // for (int l = 0; l < _total_num_levels; l++) {
+  //   printf("\tlevel_%d: ", l);
+  //   for (int i = l*_num_CLs; i < (l+1)*_num_CLs; i++) {
+  //     printf("%d, ", _weight_table[i]);
+  //   }
+  //   printf("\n");
+  // }
+  // printf("]\n");
+
+  // bool all_zeros = true; 
+  // for (int l = _total_num_levels-1; l < _total_num_levels; l++) {
+  //   for (int i = l*_num_CLs; i < (l+1)*_num_CLs; i++) {
+  //     all_zeros = (_weight_table[i] == 0) ? (true) : (false);
+  //   }
+  // }
+  // if (!all_zeros) {
+  //   printf("QQ FAIL ALL ZERO!!!\n");
+  // } else {
+  //   printf("PASS ALL ZERO!!!\n");
+  // }
+  
+}
+
+void CUDAMAPartitioner::_construct_g_c_table() {
+  
+}
+
+void CUDAMAPartitioner::_MA_simu_preparation() {
+  /*
+  TODO:
+  * need to prepare (init 需要計算): 
+  1. weight table 
+  2. update weight table 要用到的東西
+  
+  * Ask for GPU memory 
+  1. weight table 
+  2. update weight table 要用的東西
+  3. g_c table, 一開始全部 init 成 0
+  4. position table 
+  */
+  _construct_weight_tables();
+  _construct_g_c_table();
+}
+
+
+
+
 /* Prepare for GPU simulation */
 void CUDAMAPartitioner::_levelized(std::vector<std::vector<int>> &adj, 
-                                  std::vector<std::vector<int>> &invAdj) {
+                                   std::vector<std::vector<int>> &invAdj) {
   // Kahn's algorithm, topological sort
   std::vector<int> indegree; 
   
@@ -405,6 +549,7 @@ void CUDAMAPartitioner::prepare_gpu_simulation() {
   std::cout << "prepare_GPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << "\n";
 }
 
+
 // Simulation functions 
 void CUDAMAPartitioner::run(const size_t num_threads, const size_t NUM_SIMULATION_RDS) {  
   GALPS_MA_GPUSimulator gpuSimulator;
@@ -426,11 +571,40 @@ void CUDAMAPartitioner::run(const size_t num_threads, const size_t NUM_SIMULATIO
   cudaDeviceSynchronize();
 }
 
-// --------------- PRINT FUNCTIONS FOR CHECK THE CORRECTNESS ---------------
+void CUDAMAPartitioner::run_MA(const size_t num_threads, const size_t NUM_SIMULATION_RDS) {  
+  GALPS_MA_GPUSimulator gpuSimulator;
+  gpuSimulator.run_gpu_simulator_MA_gpu(_num_PIs, _num_inner_gates, _num_POs, 
+                                        _sum_pi_gates_pos, 
+                                        _num_pattern, _num_rounds, _num_fault,
+                                        _pi_gate_po_gate_type_gpu, 
+                                        _patterns_gpu,
+                                        _fault_gate_idx_gpu,
+                                        _fault_SA_fault_val_gpu,
+                                        _pi_gate_po_output_res_gpu,
+                                        _numGates_per_level,
+                                        _numGates_per_level_gpu,
+                                        _total_num_levels,
+                                        _invAdj_gpu,
+                                        _invAdj_index_table_gpu,
+                                        _patterns, 
+                                        NUM_SIMULATION_RDS);
+  cudaDeviceSynchronize();
+}
 
+
+
+
+
+
+
+// --------------- PRINT FUNCTIONS FOR CHECK THE CORRECTNESS ---------------
+// --------------- PRINT FUNCTIONS FOR CHECK THE CORRECTNESS ---------------
+// --------------- PRINT FUNCTIONS FOR CHECK THE CORRECTNESS ---------------
+// --------------- PRINT FUNCTIONS FOR CHECK THE CORRECTNESS ---------------
+// --------------- PRINT FUNCTIONS FOR CHECK THE CORRECTNESS ---------------
 void CUDAMAPartitioner::_print_patterns(const std::vector<Pattern> &patterns,
-                                    const int round,
-                                    const int num_PIs) const {
+                                        const int round,
+                                        const int num_PIs) const {
   std::cout << "\n=====\n\n";
     for (int i = 0; i < round; i++) {
       std::cout << "[" << SIZE_T_BITS * i << ", " << SIZE_T_BITS * (i + 1)
