@@ -40,6 +40,12 @@
         } \
     } while (0)
 
+
+inline int getCLIdx(int gateIdx) {
+  return gateIdx/_NUM_GATES_PER_CL;
+}
+
+
 // Read files
 void CUDAMAPartitioner::read(const std::string &ckt_path, const std::string &flst_path, const std::string &ptn_path) {
   // printf("Get inside CUDAMAPartitioner::read first\n");
@@ -246,43 +252,21 @@ void CUDAMAPartitioner::_read_pattern(std::istream &ptn) {
   }
 }
 
-void CUDAMAPartitioner::_init_num_CLs() {
-  _which_CL.resize(_sum_pi_gates_pos, 0); 
-  
-  int which_gate = 0;
-  _num_CLs = 0; // init 
-  // printf("_numGates_per_level = [");
-  for (size_t i = 0; i < _numGates_per_level.size(); i++) {
-    // printf("%d, ", _numGates_per_level[i]);
-    for (int j = 0; j < _numGates_per_level[i]; j++) {
-      _which_CL[which_gate] = _num_CLs+j/_NUM_GATES_PER_CL;
-      which_gate++;
-    }
-    _num_CLs += (_numGates_per_level[i] + _NUM_GATES_PER_CL - 1)/_NUM_GATES_PER_CL;
-  }
-  // printf("]\n");
-  // printf("_num_CLs = %d, %d, _sum = %d\n", _num_CLs, _max_level+1, _sum_pi_gates_pos);
-  // std::cout << *std::max_element(_which_CL.begin(), _which_CL.end()) << std::endl;
 
-  // for (size_t i = 0; i < _numGates_per_level.size(); i++) {
-  //   printf("level_%lu: %d\n", i, _numGates_per_level[i]);
-  // }
-  // for (size_t i = 0; i < _level_of_CLs.size(); i++) {
-  //   printf("CL_%lu: level %d\n", i, _level_of_CLs[i]);
-  // }  
-}
 
 void CUDAMAPartitioner::_construct_num_CLs_weight_tables() {
   // prepare _num_CLs
-  _init_num_CLs();
+  _num_CLs = (_sum_pi_gates_pos + _NUM_GATES_PER_CL - 1)/_NUM_GATES_PER_CL;
 
+  // prepare _weight_table
   _weight_table.resize(_num_CLs*_total_num_levels, 0);
   
   // init _weight_table
   for (int gateIdx = 0; gateIdx < _sum_pi_gates_pos; gateIdx++) {
     int num_output_gates = _adj_index_table[2*gateIdx+1] - _adj_index_table[2*gateIdx+0];
     // printf("gateIdx = %d, num_output_gates = %d\n", gateIdx, num_output_gates);
-    _weight_table[_which_CL[gateIdx]] += num_output_gates;
+    int which_CL = getCLIdx(gateIdx); 
+    _weight_table[which_CL] += num_output_gates;
   }
 
   // update _weight_table
@@ -294,7 +278,7 @@ void CUDAMAPartitioner::_construct_num_CLs_weight_tables() {
     // reduce 
     for (int fmGate = _invAdj_index_table[2*gateIdx+0]; fmGate < _invAdj_index_table[2*gateIdx+1]; fmGate++) {
       int fmGateIdx = _invAdj[fmGate];
-      int fmGateCLIdx = _which_CL[fmGateIdx];
+      int fmGateCLIdx = getCLIdx(fmGateIdx); 
       _weight_table[fin_level*_num_CLs+fmGateCLIdx]--;
       // printf("\t\tfmGateIdx = %d, fmGateCLIdx = %d (limit: %d), _weight_table[%d] = %d\n", 
       //         fmGateIdx, fmGateCLIdx, _num_CLs, 
@@ -318,7 +302,7 @@ void CUDAMAPartitioner::_construct_num_CLs_weight_tables() {
   }
 
   // // print weight table
-  // printf("\n\n_weight_table = [\n");
+  // printf("\n\n_sum_pi_gates_pos = %d, _weight_table = [\n", _sum_pi_gates_pos);
   // for (int l = 0; l < _total_num_levels; l++) {
   //   printf("\tlevel_%d: ", l);
   //   for (int i = l*_num_CLs; i < (l+1)*_num_CLs; i++) {
@@ -342,8 +326,48 @@ void CUDAMAPartitioner::_construct_num_CLs_weight_tables() {
   // }
 }
 
-void CUDAMAPartitioner::_construct_g_c_and_position_table() {
+void CUDAMAPartitioner::_construct_CLIdx_FT() {
+  _CLIdx_from_to.resize(2*_total_num_levels, 0);
+
+  int s_gateIdx = 0; // start gate index 
+  int e_gateIdx = 0; // end gate index 
+  for (int l = 0; l < _total_num_levels; l++) {
+    e_gateIdx += _numGates_per_level[l]; // exclude 
+    _CLIdx_from_to[2*l+0] = s_gateIdx/_NUM_GATES_PER_CL; // start CL: include 
+    _CLIdx_from_to[2*l+1] = e_gateIdx/_NUM_GATES_PER_CL+1; // end CL: exclude 
+    s_gateIdx = e_gateIdx; 
+  }
+
+  // printf("_numGates_per_level:\n");
+  // int acc = 0;
+  // for (size_t i = 0; i < _numGates_per_level.size(); i++) {
+  //   acc += _numGates_per_level[i];
+  //   printf("\tlevel %lu: _numGates_per_level[%lu] = %d (acc = %d)\n", i, i, _numGates_per_level[i], acc);
+  // }
   
+  // printf("_CLIdx_from_to:\n");
+  // for (size_t i = 0; i < _total_num_levels; i++) {
+  //   printf("\tlevel %lu: from CL = %d, to CL = %d\n", i, _CLIdx_from_to[2*i+0], _CLIdx_from_to[2*i+1]);
+  // }
+}
+
+void CUDAMAPartitioner::_construct_g_c_and_position_table() {
+  /*
+  1. 每次 level 都要判斷
+    1. 需不需要 update g_c table, position table 
+    1. 要 sd 什麼
+    1. 要 ld 什麼
+  */ 
+  // if (_num_CLs <= _NUM_GLOBAL_CLS) {
+  //   printf("PASS: _num_CLs = %d\n", _num_CLs) ;
+  // } else {
+  //   printf("FAIL: _num_CLs = %d\n", _num_CLs) ;
+  // }
+  _g_c_table.resize(_G_C_TABLE_SZ, 0);
+  _position_table.resize(_POSITION_TABLE_SZ, 0);
+  // printf("aa = %d %d\n", _G_C_TABLE_SZ, _POSITION_TABLE_SZ);
+  
+
 }
 
 void CUDAMAPartitioner::_MA_simu_preparation() {
@@ -360,7 +384,7 @@ void CUDAMAPartitioner::_MA_simu_preparation() {
   4. position table 
   */
   _construct_num_CLs_weight_tables();
-  // _();
+  _construct_CLIdx_FT();
   _construct_g_c_and_position_table();
 }
 

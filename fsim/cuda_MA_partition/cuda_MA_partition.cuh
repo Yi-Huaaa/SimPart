@@ -36,7 +36,13 @@
 // constexpr
 constexpr int _k = 16; // based on the kernel concurrency
 constexpr int _THRESHOLD_0 = 1024; // until which level should use levelization 
-constexpr uint32_t _NUM_GATES_PER_CL = 32; 
+constexpr int _NUM_GATES_PER_CL = 32;
+constexpr int _NUM_CLS_PER_BLOCK = 256; // cache: 32KB, others: 16KB
+constexpr int _NUM_GLOBAL_CLS = 14560; // cache: 32KB, others: 16KB
+constexpr int _G_C_TABLE_SZ = (_NUM_GLOBAL_CLS/32); // cache: 32KB, others: 16KB
+constexpr int _POSITION_TABLE_SZ = _NUM_GLOBAL_CLS/(32/8); // cache: 32KB, others: 16KB
+// constexpr int _NUM_CLS_PER_BLOCK = 320; // cache: 40KB, others: 8KB
+// constexpr int _NUM_GLOBAL_CLS = 5616; // cache: 40KB, others: 8KB
 
 #define MA_PAR // with defined MA_PAR: MA partition and simulation 
 
@@ -219,13 +225,14 @@ private:
 
   // MA preparation and simulation 
   int _num_CLs;
-  std::vector<int> _which_CL; 
-  std::vector<int> _level_of_CLs;
   std::vector<int> _weight_table;
+  std::vector<int> _CLIdx_from_to;
+  std::vector<uint32_t> _g_c_table;
+  std::vector<uint32_t> _position_table;
 
   void _MA_simu_preparation();
-    void _init_num_CLs();
     void _construct_num_CLs_weight_tables();
+    void _construct_CLIdx_FT();
     void _construct_g_c_and_position_table();
   
 
