@@ -242,11 +242,9 @@ private:
         void sorting(const int l, size_t smallNum, 
                     std::vector<int> &cache_index, 
                     std::vector<int> &topX_indexes);
-        void update_st(const std::vector<int> &topX_indexes); 
+        void update_st(const std::vector<int> &cache_index, const std::vector<int> &topX_indexes); 
         void update_ld(const std::set<int> &diffSet, 
                       std::vector<int> &cache_index, std::vector<int> &topX_indexes); 
-        void _update_cache_idx();              
-        void update_gc_table_pos_table(); 
 
 
 
@@ -297,6 +295,9 @@ private:
   double _round_to(double value, double precision = 1.0){
     return std::round(value / precision) * precision;
   }  
+  void _print_cache_set_cache_index(const std::set<int> diffSet, 
+                                    const std::vector<int> &topX_indexes,
+                                    const std::vector<int> &cache_index) const;
 
 };
 

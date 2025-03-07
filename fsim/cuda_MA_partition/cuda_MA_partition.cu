@@ -426,7 +426,8 @@ void CUDAMAPartitioner::sorting(const int l, size_t smallNum,
   // std::cout << std::endl;
 }
 
-void CUDAMAPartitioner::update_st(const std::vector<int> &topX_indexes)  {
+void CUDAMAPartitioner::update_st(const std::vector<int> &cache_index, 
+                                  const std::vector<int> &topX_indexes)  {
   printf("topX_indexes.size() = %lu\n", topX_indexes.size());
 
   // std::cout << "Top smallNum smallest indices: ";
@@ -435,12 +436,21 @@ void CUDAMAPartitioner::update_st(const std::vector<int> &topX_indexes)  {
   // }
   // std::cout << std::endl;
 
-  // 我需要 O(1) 時間知道：根據 CLIdx 知道 他現在在 cache 的哪一個 position
   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
   // TODO 
+  for (size_t i = 0; i < topX_indexes.size(); i++) {
+    int CLIdx = topX_indexes[i];
+    auto it = std::lower_bound(cache_index.begin(), cache_index.end(), CLIdx);
+    int index = std::distance(cache_index.begin(), it);
+    assert(it != cache_index.end() && "it != cache_index.end()");
+    // update _st_ld_CLIdxs
+    _st_ld_CLIdxs.push_back(CLIdx); 
+    // update _st_ld_positi
+    _st_ld_positi.push_back(index);
+    // update cache_index: No need
+  }
 
   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-
 }
 
 void CUDAMAPartitioner::update_ld(const std::set<int> &diffSet, 
@@ -464,15 +474,23 @@ void CUDAMAPartitioner::update_ld(const std::set<int> &diffSet,
   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
 }
 
-void CUDAMAPartitioner::_update_cache_idx() {
+void CUDAMAPartitioner::_print_cache_set_cache_index(const std::set<int> diffSet, 
+                                                    const std::vector<int> &topX_indexes,                                                
+                                                    const std::vector<int> &cache_index) const {
+  printf("\tdiffSet: (.size() = %lu){ ", diffSet.size());
+  for (int val : diffSet) {
+    printf("%d ", val);
+  } printf("}\n");
 
-}
+  printf("\ttopX_indexes: (.size() = %lu)[ ", topX_indexes.size());
+  for (int val : topX_indexes) {
+    printf("%d ", val);
+  } printf("]\n");
 
-void CUDAMAPartitioner::update_gc_table_pos_table()  {
-  // std::vector<uint32_t> _g_c_table;
-  // std::vector<uint32_t> _position_table;
-  // _g_c_table  
-  // _position_table
+  printf("\tcache_index: (.size() = %lu)[ ", cache_index.size());
+  for (int val : cache_index) {
+    printf("%d ", val);
+  } printf("]\n");
 
 }
 
@@ -516,8 +534,6 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
     _st_ld_positi.push_back(i);
   }
   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  // printf("1: _st_ld_CLs_index_table.size() = %lu\n", _st_ld_CLs_index_table.size());
-
 
   for (int l = 1; l < level; l++) {
     // st
@@ -527,26 +543,8 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
   }
-  // printf("2: _st_ld_CLs_index_table.size() = %lu\n", _st_ld_CLs_index_table.size());
 
-  // printf("\n\nst_ld_CLs:\n");
-  // for (int l = 0; l < 3; l++) {
-  //   printf("\tlevel %d CLs: \n\t\t", l);
-  //   for (int cl : needed_CLs_per_level[l]) { 
-  //     printf("%d, ", cl);
-  //   }
-  //   printf("\n");
-  // }
-
-  // for (int i = 0; i < level; i++) {
-  //   std::vector<int> &a = _st_ld_CLs_index_table;
-  //   printf("level %d, %d %d %d %d\n", i, a[4*i+0], a[4*i+1], a[4*i+2], a[4*i+3]);
-  // }
-  // for (size_t i = 0; i < _st_ld_CLIdxs.size(); i++) {
-  //   printf("(%d, %d), ", _st_ld_CLIdxs[i], _st_ld_positi[i]);
-  // }
-
-  for (int l = level; l < level+1; l++) {
+  for (int l = level; l < level+5; l++) {
     std::set<int> diffSet;
     std::set_difference(needed_CLs_per_level[l].begin(), needed_CLs_per_level[l].end(),
                         cache_set.begin(), cache_set.end(),
@@ -554,10 +552,14 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
 
     std::vector<int> topX_indexes; // cache 中哪幾個位置的 CLs 擁有最小的 weight
 
-    printf("level %d, fail with cache_set.size() = %lu, diffSet.size() = %lu\n", l, cache_set.size(), diffSet.size());
+    printf("level %d, with cache_set.size() = %lu, diffSet.size() = %lu, needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), diffSet.size(), l, needed_CLs_per_level[l].size());
     sorting(l, diffSet.size(), cache_index, topX_indexes);
-    // update_st(topX_indexes);
+    printf("st\n");
+    update_st(cache_index, topX_indexes);
+    _print_cache_set_cache_index(diffSet, topX_indexes, cache_index);
+    printf("ld\n");
     update_ld(diffSet, cache_index, topX_indexes);
+    _print_cache_set_cache_index(diffSet, topX_indexes, cache_index);
     
     // erase: Efficiently erase elements in topX_indexes from cache_set
     for (int val : topX_indexes) {
@@ -566,11 +568,16 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
         cache_set.erase(it); // O(1) erase
       }
     }
-    printf("\t1: level %d, cache_set.size() = %lu\n", l, cache_set.size());
 
     // merge 
     cache_set.merge(diffSet);
-    printf("\t2: level %d, cache_set.size() = %lu\n", l, cache_set.size());
+    printf("\tcache_set: (.size() = %lu){ ", cache_set.size());
+    for (int val : cache_set) {
+      printf("%d ", val);
+    } printf("}\n");
+  
+    cache_set 這裡錯了，
+    printf("\n");
   }
 
 
