@@ -45,6 +45,8 @@ constexpr int _POSITION_TABLE_SZ = _NUM_GLOBAL_CLS/(32/8); // cache: 32KB, other
 // constexpr int _NUM_GLOBAL_CLS = 5616; // cache: 40KB, others: 8KB
 
 #define MA_PAR // with defined MA_PAR: MA partition and simulation 
+#define MA_PAR_CPU_CHECK_ANSWER // gc and position table construct on CPU
+
 
 // Define the enum class
 enum class gpuGateType : int {
@@ -226,15 +228,28 @@ private:
   // MA preparation and simulation 
   int _num_CLs;
   std::vector<int> _weight_table;
-  std::vector<int> _CLIdx_from_to;
+  std::vector<int> _st_ld_CLIdxs;
+  std::vector<int> _st_ld_positi;
+  std::vector<int> _st_ld_CLs_index_table;
   std::vector<uint32_t> _g_c_table;
   std::vector<uint32_t> _position_table;
 
   void _MA_simu_preparation();
     void _construct_num_CLs_weight_tables();
-    void _construct_CLIdx_FT();
-    void _construct_g_c_and_position_table();
-  
+    void _update_st_ld_CLs_per_level();
+      void _needed_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level);
+      void _st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level);
+        void sorting(const int l, size_t smallNum, 
+                    std::vector<int> &cache_index, 
+                    std::vector<int> &topX_indexes);
+        void update_st(const std::vector<int> &topX_indexes); 
+        void update_ld(const std::set<int> &diffSet, 
+                      std::vector<int> &cache_index, std::vector<int> &topX_indexes); 
+        void _update_cache_idx();              
+        void update_gc_table_pos_table(); 
+
+
+
 
   // free
   void _free() {
