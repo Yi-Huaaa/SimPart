@@ -551,7 +551,7 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
 
   int diffSetSz = 0;
   int level = 0;
-  while (diffSetSz == 0) {
+  while (diffSetSz == 0 && level < _total_num_levels) {
     std::set<int> diffSet;
     std::set_difference(needed_CLs_per_level[level].begin(), needed_CLs_per_level[level].end(),
                         cache_set.begin(), cache_set.end(),
@@ -559,62 +559,107 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
     diffSetSz = diffSet.size();
     printf("level %d PASS, diffSet.size() = %lu (needed_CLs_per_level[%d].size() = %lu)\n", 
           level, diffSet.size(), level, needed_CLs_per_level[level].size());
-    level++;
+    if (diffSetSz == 0) {
+      level++;
+    }
   } 
-  level--; // reverted by 1
-  // printf("level = %d\n", level);   
 
-  // init _st_ld_CLs_index_table: level 0
-  // st: 
-  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  // ld: 
-  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  for (int i = 0; i < _NUM_CLS_PER_BLOCK; i++) {
-    _st_ld_CLIdxs.push_back(i);
-    _st_ld_positi.push_back(i);
-  }
-  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+  bool all_in_one_cache = (level == _total_num_levels);
+  if (all_in_one_cache) { // 所有東西都能被塞進 cache line 裡面
+    printf("level = %d, _total_num_levels = %d, _num_CLs = %d\n", level, _total_num_levels, _num_CLs);
+    
+    // init _st_ld_CLs_index_table: level 0
+    // st: 
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+    // ld: 
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+    assert(_num_CLs <= _NUM_CLS_PER_BLOCK && "assert(_num_CLs <= _NUM_CLS_PER_BLOCK");
+    int CLs = (_num_CLs < _NUM_CLS_PER_BLOCK) ? (_num_CLs) : (_NUM_CLS_PER_BLOCK);
+    for (int i = 0; i < CLs; i++) {
+      _st_ld_CLIdxs.push_back(i);
+      _st_ld_positi.push_back(i);
+    }
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
 
-  for (int l = 1; l < level; l++) {
+    for (int l = 1; l < (level-1); l++) {
+      // st
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      // ld
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
+    }
+
+    // last level:  need to WB
     // st
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+    for (int i = 0; i < CLs; i++) {
+      if (POs_in_this_CL[i]) {
+        _st_ld_CLIdxs.push_back(i);
+        _st_ld_positi.push_back(i);        
+      }
+    }
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
     // ld
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
-  }
-  printf("\n\n");
+  } else {
+    level--;
+    
+    // init _st_ld_CLs_index_table: level 0
+    // st: 
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+    // ld: 
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+    for (int i = 0; i < _NUM_CLS_PER_BLOCK; i++) {
+      _st_ld_CLIdxs.push_back(i);
+      _st_ld_positi.push_back(i);
+    }
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
 
-  for (int l = level; l < _total_num_levels; l++) {
-  // for (int l = level; l < level+1; l++) {
-    printf("level %d, with cache_set.size() = %lu, needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), l, needed_CLs_per_level[l].size());
-    std::set<int> erase_set;
-    std::set<int> insert_set;
-    _sorting(l, needed_CLs_per_level[l], cache_set, erase_set, insert_set);
-    printf("\nst-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st\n");
-    update_st(l, POs_in_this_CL, erase_set, cache_index);
-    printf("\nld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld\n");
-    update_ld(l, insert_set, cache_index);
-    update_cache_set(erase_set, insert_set, cache_set);
-    printf("After update_cache_set: cache_set.size() = %lu\n", cache_set.size());
-    assert(cache_set.size() == 256 && "assert(cache_set.size() == 256");
+    for (int l = 1; l < level; l++) {
+      // st
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      // ld
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
+    }
+
+    for (int l = level; l < _total_num_levels; l++) {
+      printf("level %d, with cache_set.size() = %lu, needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), l, needed_CLs_per_level[l].size());
+      std::set<int> erase_set;
+      std::set<int> insert_set;
+      _sorting(l, needed_CLs_per_level[l], cache_set, erase_set, insert_set);
+      printf("\nst-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st\n");
+      update_st(l, POs_in_this_CL, erase_set, cache_index);
+      printf("\nld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld\n");
+      update_ld(l, insert_set, cache_index);
+      update_cache_set(erase_set, insert_set, cache_set);
+      printf("After update_cache_set: cache_set.size() = %lu\n", cache_set.size());
+      assert(cache_set.size() == 256 && "assert(cache_set.size() == 256");
+    }
   }
-  
-  // printf("_st_ld_CLIdxs (sz = %lu) = [\n", a.size());
-  // for (size_t i = 0; i < a.size()/4; i++) {
-  //   printf("level %lu:\n", i);
-  //   // st
-  //   for (int j = a[4*i+0]; j < a[4*i+1]; j++) {
-  //     printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
-  //   }
-  //   // ld 
-  //   for (int j = a[4*i+2]; j < a[4*i+3]; j++) {
-  //     printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
-  //   }
-  //   printf("\n");
-  // }
-  // printf("]\n");
+    
+  std::vector<int> &a = _st_ld_CLs_index_table;
+  printf("_st_ld_CLIdxs (sz = %lu) = [\n", a.size());
+  for (size_t i = 0; i < a.size()/4; i++) {
+    // st
+    printf("\tlevel %lu st: ", i);
+    for (int j = a[4*i+0]; j < a[4*i+1]; j++) {
+      printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
+    }
+    printf("\n");
+    // ld 
+    printf("\tlevel %lu ld: ", i);
+    for (int j = a[4*i+2]; j < a[4*i+3]; j++) {
+      printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
+    }
+    printf("\n");
+  }
+  printf("]\n");
 
 }
 
