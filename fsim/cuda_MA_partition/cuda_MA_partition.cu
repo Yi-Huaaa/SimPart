@@ -327,7 +327,8 @@ void CUDAMAPartitioner::_construct_num_CLs_weight_tables() {
   // }
 }
 
-void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level) {
+void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level, 
+                                                    std::vector<bool> &POs_in_this_CL) {
   needed_CLs_per_level.resize(_total_num_levels);
   int acc_g = 0;
   for (int l = 0; l < _total_num_levels; l++) {
@@ -360,6 +361,8 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<std::set<int>> &
 
   assert(needed_CLs_per_level.size() == _total_num_levels && "needed_CLs_per_level.size() != _total_num_levels");
   printf("\n\n_num_CLs = %d\n", _num_CLs);
+
+
   // printf("\n\nst_ld_CLs:\n");
   // for (int l = 0; l < _total_num_levels; l++) {
   //   printf("needed_CLs_per_level[%d].size() = %lu\n", l, needed_CLs_per_level[l].size());
@@ -373,16 +376,35 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<std::set<int>> &
   //   }
   //   printf("\n");
   // }
+
+  POs_in_this_CL.resize(_num_CLs, false);
+  for (int i = 0; i < _sum_pi_gates_pos; i++) {
+    if (_gate_type[i] == GateType::PO) {
+      int which_CL = getCLIdx(i);
+      POs_in_this_CL[which_CL] = true; 
+    }
+  }
+
+  for (size_t i = 0; i < POs_in_this_CL.size(); i++) {
+    if (POs_in_this_CL[i]) {
+      printf("POs_in_this_CL[%lu] = true\n", i);
+    }
+  }
 }
 
-void CUDAMAPartitioner::sorting(const int l, size_t smallNum, 
-                                std::vector<int> &cache_index, 
-                                std::vector<int> &topX_indexes) {
-  topX_indexes.reserve(smallNum);
+void CUDAMAPartitioner::_sorting(const int l, 
+                                std::set<int> &needed_CLs_per_level_l, 
+                                std::set<int> &cache_set,
+                                std::set<int> &erase_set, std::set<int> &insert_set) {
+  // step 0. 取聯集                                
+  std::set<int> unionSet;
+  std::set_union(needed_CLs_per_level_l.begin(), needed_CLs_per_level_l.end(),
+                cache_set.begin(), cache_set.end(),
+                std::inserter(unionSet, unionSet.begin()));
 
   // step 1: 構建 (值, index) pair
   std::vector<std::pair<int, int>> indexed_cache;
-  indexed_cache.reserve(cache_index.size());
+  indexed_cache.reserve(unionSet.size());  
 
   // printf("_weight_table[%d] = [", l); 
   // for (int i = 0; i < 256; i++) {
@@ -390,12 +412,11 @@ void CUDAMAPartitioner::sorting(const int l, size_t smallNum,
   // }
   // printf("]\n"); 
 
-  for (size_t i = 0; i < cache_index.size(); ++i) {
-    int CLIdx = cache_index[i];
-    int CL_weight = _weight_table[l*_num_CLs+cache_index[i]];
+  for (const int CLIdx : unionSet) {
+    int CL_weight = _weight_table[l*_num_CLs+CLIdx];
     indexed_cache.emplace_back(CL_weight, CLIdx);
     // printf("push in CLIdx = %d, CL_weight = %d\n", CLIdx, CL_weight);
-  }
+  }  
 
   // // Print each pair (value, index)
   // printf("\tindexed_cache: ");
@@ -404,97 +425,117 @@ void CUDAMAPartitioner::sorting(const int l, size_t smallNum,
   // }
   // std::cout << std::endl << std::endl;
 
-  // step 2: 使用 `std::partial_sort()` 只排序前 smallNum 個最小值
-  std::partial_sort(
-    indexed_cache.begin(), indexed_cache.begin() + smallNum, indexed_cache.end(),
+  // step 2. sort from large to small 
+  std::sort(
+    indexed_cache.begin(), indexed_cache.end(),
     [](const auto &lhs, const auto &rhs) {
-      return lhs.first < rhs.first; // 依據數值排序
+      return lhs.first > rhs.first; // Sort based on the first element of the pair
     });
-
-  // step 3: 取得前 X 個最小值的索引
-  for (size_t i = 0; i < smallNum; ++i) {
-    topX_indexes.push_back(indexed_cache[i].second);
-  }
-  std::sort(topX_indexes.begin(), topX_indexes.end());
-
-
-  // // step 4: 輸出結果
-  // std::cout << "Top smallNum (smallNum.size() = "<< smallNum << ") smallest indices: ";
-  // for (int idx : topX_indexes) {
-  //   std::cout << idx << " ";
-  // }
-  // std::cout << std::endl;
-}
-
-void CUDAMAPartitioner::update_st(const std::vector<int> &cache_index, 
-                                  const std::vector<int> &topX_indexes)  {
-  printf("topX_indexes.size() = %lu\n", topX_indexes.size());
-
-  // std::cout << "Top smallNum smallest indices: ";
-  // for (int idx : topX_indexes) {
-  //   std::cout << idx << " ";
-  // }
-  // std::cout << std::endl;
-
-  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  // TODO 
-  for (size_t i = 0; i < topX_indexes.size(); i++) {
-    int CLIdx = topX_indexes[i];
-    auto it = std::lower_bound(cache_index.begin(), cache_index.end(), CLIdx);
-    int index = std::distance(cache_index.begin(), it);
-    assert(it != cache_index.end() && "it != cache_index.end()");
-    // update _st_ld_CLIdxs
-    _st_ld_CLIdxs.push_back(CLIdx); 
-    // update _st_ld_positi
-    _st_ld_positi.push_back(index);
-    // update cache_index: No need
+  std::set<int> remin_set;
+  assert(indexed_cache.size() >= _NUM_CLS_PER_BLOCK && "assert(indexed_cache.size() >= _NUM_CLS_PER_BLOCK");
+  for (size_t i = 0; i < _NUM_CLS_PER_BLOCK; i++) { // 留下 256 個需要被留下的
+    remin_set.insert(indexed_cache[i].second);
   }
 
-  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+  // // Print each pair (value, index)
+  // printf("\tindexed_cache: ");
+  // for (const auto& p : indexed_cache) {
+  //   std::cout << "(" << p.first << ", " << p.second << ") ";
+  // }
+  // std::cout << std::endl << std::endl;
+  
+  // printf("\tremin_set: ");
+  // for (const int& p : remin_set) {
+  //   std::cout << p << ", ";
+  // }
+  // std::cout << std::endl << std::endl;
+
+  // step 3. 取兩種差集
+  // Compute A - B (elements in a but not in b)
+  std::set_difference(cache_set.begin(), cache_set.end(), remin_set.begin(), remin_set.end(),
+                      std::inserter(erase_set, erase_set.begin()));
+
+  // Compute B - A (elements in b but not in a)
+  std::set_difference(remin_set.begin(), remin_set.end(), cache_set.begin(), cache_set.end(),
+                      std::inserter(insert_set, insert_set.begin()));
+
+  assert(erase_set.size() == insert_set.size() && "erase_set.size() == insert_set.size()");
+
+  printf("\terase_set (sz = %lu): ", erase_set.size());
+  for (const int& p : erase_set) {
+    std::cout << p << ", ";
+  }
+  std::cout << std::endl << std::endl;
+
+  printf("\tinsert_set (sz = %lu): ", insert_set.size());
+  for (const int& p : insert_set) {
+    std::cout << p << ", ";
+  }
+  std::cout << std::endl << std::endl;
 }
 
-void CUDAMAPartitioner::update_ld(const std::set<int> &diffSet, 
-                                  std::vector<int> &cache_index, std::vector<int> &topX_indexes) {
-  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-    assert(diffSet.size() == topX_indexes.size() && "update_ld: diffSet.size() == topX_indexes.size()");
-    // update _st_ld_CLIdxs
-    for (const int cl : diffSet) {
-      _st_ld_CLIdxs.push_back(cl); 
+void CUDAMAPartitioner::update_st(const int l, std::vector<bool> &POs_in_this_CL,
+                                  const std::set<int> &erase_set, 
+                                  const std::vector<int> &cache_index)  {
+  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size()); // starts 
+
+  // weight table != 0 才要寫回去
+  for (const int& CLIdx : erase_set) {
+    auto it = std::find(cache_index.begin(), cache_index.end(), CLIdx);
+    assert(it != cache_index.end() && "it != cache_index.end()"); // 保險起見放的而已
+    int posIdx = std::distance(cache_index.begin(), it); // 要被踢掉的 CLIdx 在 cache_index 中的位置
+    if ((_weight_table[l*_num_CLs+CLIdx] == 0) && (POs_in_this_CL[CLIdx] == false)) {
+      // update _st_ld_positi
+      _st_ld_positi.push_back(posIdx);
+      // update _st_ld_CLIdxs
+      _st_ld_CLIdxs.push_back(-1);       
+      printf("(X) No need to WB posIdx = %d, CLIdx = %d\n", posIdx, CLIdx);
+    } else {
+      // update _st_ld_positi
+      _st_ld_positi.push_back(posIdx);
+      // update _st_ld_CLIdxs
+      _st_ld_CLIdxs.push_back(CLIdx); 
+      printf("(V) Need to WB posIdx = %d, CLIdx = %d\n", posIdx, CLIdx);
     }
-    // update _st_ld_positi
-    for (size_t i = 0; i < topX_indexes.size(); i++) {
-      _st_ld_positi.push_back(topX_indexes[i]);
-    }
-    // update cache_index
-    auto it = diffSet.begin();
-    for (size_t i = 0; i < topX_indexes.size() && it != diffSet.end(); ++i, ++it) {
-        int pos = topX_indexes[i];  // Index from sorted topX_indexes
-        cache_index[i] = *it;  // Assign value from diffSet (dereferencing iterator)
-    }
-  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+  }
+  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size()); // ends
 }
 
-void CUDAMAPartitioner::_print_cache_set_cache_index(const std::set<int> diffSet, 
-                                                    const std::vector<int> &topX_indexes,                                                
-                                                    const std::vector<int> &cache_index) const {
-  printf("\tdiffSet: (.size() = %lu){ ", diffSet.size());
-  for (int val : diffSet) {
-    printf("%d ", val);
-  } printf("}\n");
+void CUDAMAPartitioner::update_ld(const int l, 
+                                  const std::set<int> &insert_set, 
+                                  std::vector<int> &cache_index) {
+  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size()); // starts 
 
-  printf("\ttopX_indexes: (.size() = %lu)[ ", topX_indexes.size());
-  for (int val : topX_indexes) {
-    printf("%d ", val);
-  } printf("]\n");
+    assert((_st_ld_CLs_index_table[4*l+1]-_st_ld_CLs_index_table[4*l+0]) == insert_set.size() 
+          && "(_st_ld_CLs_index_table[4*l+1]-_st_ld_CLs_index_table[4*l+0]) == insert_set.size() ");
+    const int starts = _st_ld_CLs_index_table[4*l+0]; int i = 0;
+    for (const int &newCLIdx : insert_set) {
+      int posIdx = _st_ld_positi[starts+i]; i++; 
+      // update _st_ld_positi
+      _st_ld_positi.push_back(posIdx);
+      // update _st_ld_CLIdxs
+      _st_ld_CLIdxs.push_back(newCLIdx); 
+      printf("posIdx = %d, newCLIdx = %d\n", posIdx, newCLIdx);
+      // update cache_index
+      cache_index[posIdx] = newCLIdx;
+    }
 
-  printf("\tcache_index: (.size() = %lu)[ ", cache_index.size());
-  for (int val : cache_index) {
-    printf("%d ", val);
-  } printf("]\n");
-
+  _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size()); // ends
 }
 
-void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level) {
+void CUDAMAPartitioner::update_cache_set(std::set<int> &erase_set, 
+                                        std::set<int> &insert_set, 
+                                        std::set<int> &cache_set) {
+  for (const int&clIdx : erase_set) {
+    cache_set.erase(clIdx);
+  }
+  for (const int&clIdx : insert_set) {
+    cache_set.insert(clIdx);
+  }
+}
+
+void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level, 
+                                            std::vector<bool> &POs_in_this_CL) {
   // init 
   _g_c_table.resize(_total_num_levels*(_NUM_CLS_PER_BLOCK/32)); 
   _position_table.resize(_total_num_levels*(_NUM_CLS_PER_BLOCK/4)); 
@@ -543,63 +584,48 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
   }
+  printf("\n\n");
 
-  for (int l = level; l < level+5; l++) {
-    std::set<int> diffSet;
-    std::set_difference(needed_CLs_per_level[l].begin(), needed_CLs_per_level[l].end(),
-                        cache_set.begin(), cache_set.end(),
-                        std::inserter(diffSet, diffSet.begin()));
-
-    std::vector<int> topX_indexes; // cache 中哪幾個位置的 CLs 擁有最小的 weight
-
-    printf("level %d, with cache_set.size() = %lu, diffSet.size() = %lu, needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), diffSet.size(), l, needed_CLs_per_level[l].size());
-    sorting(l, diffSet.size(), cache_index, topX_indexes);
-    printf("st\n");
-    update_st(cache_index, topX_indexes);
-    _print_cache_set_cache_index(diffSet, topX_indexes, cache_index);
-    printf("ld\n");
-    update_ld(diffSet, cache_index, topX_indexes);
-    _print_cache_set_cache_index(diffSet, topX_indexes, cache_index);
-    
-    // erase: Efficiently erase elements in topX_indexes from cache_set
-    for (int val : topX_indexes) {
-      auto it = cache_set.find(val); // O(log n) lookup
-      if (it != cache_set.end()) {
-        cache_set.erase(it); // O(1) erase
-      }
-    }
-
-    // merge 
-    cache_set.merge(diffSet);
-    printf("\tcache_set: (.size() = %lu){ ", cache_set.size());
-    for (int val : cache_set) {
-      printf("%d ", val);
-    } printf("}\n");
-  
-    cache_set 這裡錯了，
-    printf("\n");
+  for (int l = level; l < _total_num_levels; l++) {
+  // for (int l = level; l < level+1; l++) {
+    printf("level %d, with cache_set.size() = %lu, needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), l, needed_CLs_per_level[l].size());
+    std::set<int> erase_set;
+    std::set<int> insert_set;
+    _sorting(l, needed_CLs_per_level[l], cache_set, erase_set, insert_set);
+    printf("\nst-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st\n");
+    update_st(l, POs_in_this_CL, erase_set, cache_index);
+    printf("\nld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld\n");
+    update_ld(l, insert_set, cache_index);
+    update_cache_set(erase_set, insert_set, cache_set);
+    printf("After update_cache_set: cache_set.size() = %lu\n", cache_set.size());
+    assert(cache_set.size() == 256 && "assert(cache_set.size() == 256");
   }
-
-
-
-
-
-
-
-
-
-
-
+  
+  // printf("_st_ld_CLIdxs (sz = %lu) = [\n", a.size());
+  // for (size_t i = 0; i < a.size()/4; i++) {
+  //   printf("level %lu:\n", i);
+  //   // st
+  //   for (int j = a[4*i+0]; j < a[4*i+1]; j++) {
+  //     printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
+  //   }
+  //   // ld 
+  //   for (int j = a[4*i+2]; j < a[4*i+3]; j++) {
+  //     printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
+  //   }
+  //   printf("\n");
+  // }
+  // printf("]\n");
 
 }
 
 void CUDAMAPartitioner::_update_st_ld_CLs_per_level() {
   std::vector<std::set<int>> needed_CLs_per_level;
-  _needed_st_ld_CLs_per_level(needed_CLs_per_level);
+  std::vector<bool> POs_in_this_CL;
+  _needed_st_ld_CLs_per_level(needed_CLs_per_level, POs_in_this_CL);
   
   // 這裡要確定每一層需要重新 st/ld 哪些 CLs
   // for each level: 1. st start, 2. st end, 3. ld start, 4. ld end
-  _st_ld_CLs_per_level(needed_CLs_per_level); 
+  _st_ld_CLs_per_level(needed_CLs_per_level, POs_in_this_CL); 
 }
 
 void CUDAMAPartitioner::_MA_simu_preparation() {

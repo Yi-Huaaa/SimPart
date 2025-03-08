@@ -237,14 +237,23 @@ private:
   void _MA_simu_preparation();
     void _construct_num_CLs_weight_tables();
     void _update_st_ld_CLs_per_level();
-      void _needed_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level);
-      void _st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level);
-        void sorting(const int l, size_t smallNum, 
-                    std::vector<int> &cache_index, 
-                    std::vector<int> &topX_indexes);
-        void update_st(const std::vector<int> &cache_index, const std::vector<int> &topX_indexes); 
-        void update_ld(const std::set<int> &diffSet, 
-                      std::vector<int> &cache_index, std::vector<int> &topX_indexes); 
+      void _needed_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level,
+                                      std::vector<bool> &POs_in_this_CL);
+      void _st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level,
+                                std::vector<bool> &POs_in_this_CL);        
+        void _sorting(const int l, 
+                      std::set<int> &needed_CLs_per_level_l, 
+                      std::set<int> &cache_set,
+                      std::set<int> &erase_set, std::set<int> &insert_set);
+        void update_st(const int l, std::vector<bool> &POs_in_this_CL,
+                      const std::set<int> &erase_set, 
+                      const std::vector<int> &cache_index); 
+        void update_ld(const int l, 
+                      const std::set<int> &insert_set, 
+                      std::vector<int> &cache_index); 
+        void update_cache_set(std::set<int> &erase_set, 
+                              std::set<int> &insert_set,
+                              std::set<int> &cache_set);
 
 
 
@@ -295,10 +304,6 @@ private:
   double _round_to(double value, double precision = 1.0){
     return std::round(value / precision) * precision;
   }  
-  void _print_cache_set_cache_index(const std::set<int> diffSet, 
-                                    const std::vector<int> &topX_indexes,
-                                    const std::vector<int> &cache_index) const;
-
 };
 
 #endif
