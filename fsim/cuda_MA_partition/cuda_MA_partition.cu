@@ -550,8 +550,8 @@ void CUDAMAPartitioner::update_cache_set(std::set<int> &erase_set,
 
 void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) {
   // init 
-  _g_c_table.resize(_total_num_levels*(_NUM_CLS_PER_BLOCK/32)); 
-  _position_table.resize(_total_num_levels*(_NUM_CLS_PER_BLOCK/4)); 
+  // _g_c_table.resize(_total_num_levels*(_NUM_CLS_PER_BLOCK/32)); 
+  // _position_table.resize(_total_num_levels*(_NUM_CLS_PER_BLOCK/4)); 
 
   std::set<int> cache_set; // 紀錄 cahce 當下有個 CLs，用 sets 取聯集和差集比較快
   std::vector<int> cache_index; 
@@ -832,6 +832,24 @@ void CUDAMAPartitioner::_move_faults___h2d() {
 #endif
 }
 
+void CUDAMAPartitioner::_move_st_ld____h2d() {
+  cudaMalloc((void**)&_st_ld_CLIdxs_gpu, _st_ld_CLIdxs.size()*sizeof(int));
+  cudaMalloc((void**)&_st_ld_positi_gpu, _st_ld_positi.size()*sizeof(int));
+  cudaMalloc((void**)&_st_ld_CLs_index_table_gpu, _st_ld_CLs_index_table.size()*sizeof(int));
+  // cudaMalloc((void**)&_g_c_table, ((_num_CLs + 32 - 1)/32)*sizeof(uint32_t));
+  // cudaMalloc((void**)&_position_table, ((_num_CLs + 8 - 1)/8)*sizeof(uint32_t));
+  // printf("_num_CLs = %d, _g_c_table size = %d, _position_table size = %d\n", _num_CLs, ((_num_CLs + 32 - 1)/32), (_num_CLs + 8 - 1)/8);
+  cudaCheckErrors("CUDA: Asking _move_st_ld____h2d cudaMalloc - Failure");
+
+  cudaMemcpyAsync(_st_ld_CLIdxs_gpu, _st_ld_CLIdxs.data(), 
+                  _st_ld_CLIdxs.size()*sizeof(int), cudaMemcpyHostToDevice); 
+  cudaMemcpyAsync(_st_ld_positi_gpu, _st_ld_positi.data(), 
+                  _st_ld_positi.size()*sizeof(int), cudaMemcpyHostToDevice); 
+  cudaMemcpyAsync(_st_ld_CLs_index_table_gpu, _st_ld_CLs_index_table.data(), 
+                  _st_ld_CLs_index_table.size()*sizeof(int), cudaMemcpyHostToDevice); 
+  cudaCheckErrors("CUDA: Asking _move_st_ld____h2d cudaMemcpyAsync - Failure");
+}
+
 void CUDAMAPartitioner::prepare_gpu_simulation() {
   auto start = std::chrono::steady_clock::now();
   
@@ -855,7 +873,7 @@ void CUDAMAPartitioner::prepare_gpu_simulation() {
   _move_faults___h2d();
 
 #ifdef MA_PAR
-  
+  _move_st_ld____h2d();
 #endif 
 
   auto end = std::chrono::steady_clock::now();
@@ -901,7 +919,10 @@ void CUDAMAPartitioner::run_MA(const size_t num_threads, const size_t NUM_SIMULA
                                         _invAdj_gpu,
                                         _invAdj_index_table_gpu,
                                         _patterns, 
-                                        NUM_SIMULATION_RDS);
+                                        NUM_SIMULATION_RDS, 
+                                        _st_ld_CLIdxs_gpu, 
+                                        _st_ld_positi_gpu, 
+                                        _st_ld_CLs_index_table_gpu);
   cudaDeviceSynchronize();
 }
 

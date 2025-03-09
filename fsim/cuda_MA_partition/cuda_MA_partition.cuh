@@ -39,8 +39,6 @@ constexpr int _THRESHOLD_0 = 1024; // until which level should use levelization
 constexpr int _NUM_GATES_PER_CL = 32;
 constexpr int _NUM_CLS_PER_BLOCK = 256; // cache: 32KB, others: 16KB
 constexpr int _NUM_GLOBAL_CLS = 14560; // cache: 32KB, others: 16KB
-constexpr int _G_C_TABLE_SZ = (_NUM_GLOBAL_CLS/32); // cache: 32KB, others: 16KB
-constexpr int _POSITION_TABLE_SZ = _NUM_GLOBAL_CLS/(32/8); // cache: 32KB, others: 16KB
 constexpr uint32_t UINT32T_BITS = std::numeric_limits<uint32_t>::digits;
 // constexpr int _NUM_CLS_PER_BLOCK = 320; // cache: 40KB, others: 8KB
 // constexpr int _NUM_GLOBAL_CLS = 5616; // cache: 40KB, others: 8KB
@@ -223,6 +221,7 @@ private:
   void _move_GateType_h2d();
   void _move_patterns_h2d();
   void _move_faults___h2d();
+  void _move_st_ld____h2d();
 
   // MA preparation and simulation 
   int _num_CLs;
@@ -231,8 +230,11 @@ private:
   std::vector<int> _st_ld_CLIdxs;
   std::vector<int> _st_ld_positi;
   std::vector<int> _st_ld_CLs_index_table;
-  std::vector<uint32_t> _g_c_table;
-  std::vector<uint32_t> _position_table;
+  int *_st_ld_CLIdxs_gpu;
+  int *_st_ld_positi_gpu;
+  int *_st_ld_CLs_index_table_gpu;
+  uint32_t *_g_c_table; 
+  uint32_t *_position_table; 
 
   void _MA_simu_preparation();
     void _construct_num_CLs_weight_tables();
@@ -253,9 +255,7 @@ private:
                               std::set<int> &insert_set,
                               std::set<int> &cache_set);
 
-
-
-
+                              
   // free
   void _free() {
     // Host
@@ -277,6 +277,11 @@ private:
     cudaFree(_fault_gate_idx_gpu);
     cudaFree(_fault_SA_fault_val_gpu);
     cudaFree(_pi_gate_po_output_res_gpu);
+    cudaFree(_st_ld_CLIdxs_gpu);
+    cudaFree(_st_ld_positi_gpu);
+    cudaFree(_st_ld_CLs_index_table_gpu);
+    cudaFree(_g_c_table);
+    cudaFree(_position_table);
   }
 
   // --------------------------------------------------------------------------

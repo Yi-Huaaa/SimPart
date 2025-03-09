@@ -64,7 +64,29 @@ __global__ void _run_gate_DSP(const int num_accumGates, const int *_numGates_per
                               const int *_fault_gate_idx_gpu, const size_t *_fault_SA_fault_val_gpu,
                               const size_t fault_num, const size_t bad_case, 
                               const int num_gates_per_level, 
-                              const int _num_PIs) ;
+                              const int _num_PIs);
+__device__ __forceinline__ void _apply_INV_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_AND_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_OR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_XOR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_NAND_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_NOR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_XNOR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_MUX_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_CLKBUF_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_PI_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu, const uint32_t pattern_val);
+__device__ __forceinline__ void _apply_PO_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);                              
+__global__ void _run_gate_MA(const int num_accumGates, const int *_numGates_per_level_gpu,
+                            const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, 
+                            const int *_pi_gate_po_gate_type_gpu, uint32_t *_pi_gate_po_output_res_gpu, 
+                            const uint32_t *_patterns_gpu, const size_t rd, 
+                            const int *_fault_gate_idx_gpu, const size_t *_fault_SA_fault_val_gpu,
+                            const size_t fault_num, const size_t bad_case, 
+                            const int num_gates_per_level, 
+                            const int _num_PIs, 
+                            const int *_st_ld_CLIdxs_gpu,
+                            const int *_st_ld_positi_gpu,
+                            const int *_st_ld_CLs_index_table_gpu);                              
 __global__ void _write_and_shift_to_array_gpu(const size_t bits, 
                                               uint32_t *_pi_gate_po_output_res_gpu, 
                                               const int total_num_gates);
@@ -145,7 +167,10 @@ public:
                                 const int *_invAdj_gpu,
                                 const int *_invAdj_index_table_gpu,
                                 const std::vector<Pattern> _patterns,
-                                const size_t NUM_SIMULATION_RDS) {
+                                const size_t NUM_SIMULATION_RDS,
+                                const int *_st_ld_CLIdxs_gpu,
+                                const int *_st_ld_positi_gpu,
+                                const int *_st_ld_CLs_index_table_gpu) {
     // Get vars   
     _num_PIs = num_PIs;
     _num_inner_gates = num_inner_gates;
@@ -168,7 +193,10 @@ public:
                         _patterns,
                         _fault_gate_idx_gpu,
                         _fault_SA_fault_val_gpu,
-                        _pi_gate_po_output_res_gpu);
+                        _pi_gate_po_output_res_gpu, 
+                        _st_ld_CLIdxs_gpu, 
+                        _st_ld_positi_gpu, 
+                        _st_ld_CLs_index_table_gpu);
     } // NUM_SIMULATION_RDS
   }
 
@@ -218,7 +246,26 @@ private:
                         const std::vector<Pattern> _patterns,
                         const int *_fault_gate_idx_gpu,
                         const size_t *_fault_SA_fault_val_gpu,
-                        uint32_t *_pi_gate_po_output_res_gpu);
+                        uint32_t *_pi_gate_po_output_res_gpu,
+                        const int *_st_ld_CLIdxs_gpu,
+                        const int *_st_ld_positi_gpu,
+                        const int *_st_ld_CLs_index_table_gpu);
+  void _run_cones_good_case_MA_gpu(const int _total_num_levels, 
+                                    const std::vector<int> &_numGates_per_level,
+                                    const int *_numGates_per_level_gpu,
+                                    const int *_invAdj_gpu,
+                                    const int *_invAdj_index_table_gpu,
+                                    const int *_pi_gate_po_gate_type_gpu,
+                                    const uint32_t *_patterns_gpu,
+                                    const int *_fault_gate_idx_gpu,
+                                    const size_t *_fault_SA_fault_val_gpu,
+                                    const size_t bits,
+                                    const size_t rd, 
+                                    uint32_t *_pi_gate_po_output_res_gpu,
+                                    const int *_st_ld_CLIdxs_gpu,
+                                    const int *_st_ld_positi_gpu,
+                                    const int *_st_ld_CLs_index_table_gpu);
+                        
 };
 
 #endif  // GALPS_MA_GPU_SIMULATION_H
