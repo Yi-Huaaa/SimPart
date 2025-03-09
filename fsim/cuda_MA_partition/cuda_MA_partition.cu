@@ -329,16 +329,15 @@ void CUDAMAPartitioner::_construct_num_CLs_weight_tables() {
   // }
 }
 
-void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level, 
-                                                    std::vector<bool> &POs_in_this_CL) {
-  needed_CLs_per_level.resize(_total_num_levels);
+void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) {
+  _needed_CLs_per_level.resize(_total_num_levels);
   int acc_g = 0;
   for (int l = 0; l < _total_num_levels; l++) {
     // printf("level = %d\n", l);
     for (int g = 0; g < _numGates_per_level[l]; g++) {
       int gateIdx = acc_g+g;
       int which_CL = getCLIdx(gateIdx);
-      needed_CLs_per_level[l].insert(which_CL);
+      _needed_CLs_per_level[l].insert(which_CL);
       // printf("\tlevel %d, gateIdx = %d, insert CL_%d\n", 
       //         l, gateIdx, which_CL);
       for (int fmGate = _invAdj_index_table[2*gateIdx+0]; 
@@ -346,7 +345,7 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<std::set<int>> &
                fmGate++) {
         int fmGateIdx = _invAdj[fmGate];
         which_CL = getCLIdx(fmGateIdx);
-        needed_CLs_per_level[l].insert(which_CL);
+        _needed_CLs_per_level[l].insert(which_CL);
         // printf("\tlevel %d, gateIdx = %d, fmGateIdx = %d, insert CL_%d\n", 
         //         l, gateIdx, fmGateIdx, which_CL);
       }
@@ -361,22 +360,22 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<std::set<int>> &
   //   printf("\tlevel %lu: _numGates_per_level[%lu] = %d (acc = %d)\n", i, i, _numGates_per_level[i], acc);
   // }
 
-  assert(needed_CLs_per_level.size() == _total_num_levels && "needed_CLs_per_level.size() != _total_num_levels");
+  assert(_needed_CLs_per_level.size() == _total_num_levels && "_needed_CLs_per_level.size() != _total_num_levels");
   // printf("\n\n_num_CLs = %d\n", _num_CLs);
 
 
   // printf("\n\nst_ld_CLs:\n");
   // for (int l = 0; l < _total_num_levels; l++) {
-  //   printf("needed_CLs_per_level[%d].size() = %lu\n", l, needed_CLs_per_level[l].size());
+  //   printf("_needed_CLs_per_level[%d].size() = %lu\n", l, _needed_CLs_per_level[l].size());
   // }
 
-  // printf("\n\nst_ld_CLs:\n");
   // for (int l = 0; l < _total_num_levels; l++) {
   //   printf("\tlevel %d CLs: \n\t\t", l);
-  //   for (int cl : needed_CLs_per_level[l]) { 
-  //     printf("%d, ", cl);
+  //   std::cout << "Iterating needed_CLs_per_level_l: ";
+  //   for (const int &val : _needed_CLs_per_level[l]) {
+  //       std::cout << val << " ";
   //   }
-  //   printf("\n");
+  //   std::cout << std::endl;
   // }
 
   POs_in_this_CL.resize(_num_CLs, false);
@@ -395,11 +394,24 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<std::set<int>> &
 }
 
 void CUDAMAPartitioner::_sorting(const int l, 
-                                std::set<int> &needed_CLs_per_level_l, 
-                                std::set<int> &cache_set,
+                                const std::set<int> &needed_CLs_per_level_l, 
+                                const std::set<int> &cache_set,
                                 std::set<int> &erase_set, std::set<int> &insert_set) {
   // step 0. 取聯集                                
   std::set<int> unionSet;
+  // printf("needed_CLs_per_level_l.size() = %lu %lu\n", needed_CLs_per_level_l.size(), cache_set.size());
+  // std::cout << "Iterating needed_CLs_per_level_l: ";
+  // for (const int &val : needed_CLs_per_level_l) {
+  //     std::cout << val << " ";
+  // }
+  // std::cout << std::endl;
+    
+  // std::cout << "Iterating cache_set: ";
+  // for (const int &val : cache_set) {
+  //     std::cout << val << " ";
+  // }
+  // std::cout << std::endl;
+  
   std::set_union(needed_CLs_per_level_l.begin(), needed_CLs_per_level_l.end(),
                 cache_set.begin(), cache_set.end(),
                 std::inserter(unionSet, unionSet.begin()));
@@ -536,8 +548,7 @@ void CUDAMAPartitioner::update_cache_set(std::set<int> &erase_set,
   }
 }
 
-void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_CLs_per_level, 
-                                            std::vector<bool> &POs_in_this_CL) {
+void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) {
   // init 
   _g_c_table.resize(_total_num_levels*(_NUM_CLS_PER_BLOCK/32)); 
   _position_table.resize(_total_num_levels*(_NUM_CLS_PER_BLOCK/4)); 
@@ -555,20 +566,21 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
   int level = 0;
   while (diffSetSz == 0 && level < _total_num_levels) {
     std::set<int> diffSet;
-    std::set_difference(needed_CLs_per_level[level].begin(), needed_CLs_per_level[level].end(),
+    std::set_difference(_needed_CLs_per_level[level].begin(), _needed_CLs_per_level[level].end(),
                         cache_set.begin(), cache_set.end(),
                         std::inserter(diffSet, diffSet.begin()));
     diffSetSz = diffSet.size();
-    // printf("level %d PASS, diffSet.size() = %lu (needed_CLs_per_level[%d].size() = %lu)\n", 
-          // level, diffSet.size(), level, needed_CLs_per_level[level].size());
+    printf("level %d PASS, diffSet.size() = %lu (_needed_CLs_per_level[%d].size() = %lu)\n", 
+          level, diffSet.size(), level, _needed_CLs_per_level[level].size());
     if (diffSetSz == 0) {
       level++;
     }
   } 
+  printf("level = %d\n", level);
 
   bool all_in_one_cache = (level == _total_num_levels);
   if (all_in_one_cache) { // 所有東西都能被塞進 cache line 裡面
-    // printf("level = %d, _total_num_levels = %d, _num_CLs = %d\n", level, _total_num_levels, _num_CLs);
+    printf("level = %d, _total_num_levels = %d, _num_CLs = %d\n", level, _total_num_levels, _num_CLs);
     
     // init _st_ld_CLs_index_table: level 0
     // st: 
@@ -607,8 +619,6 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
   } else {
-    level--;
-    
     // init _st_ld_CLs_index_table: level 0
     // st: 
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
@@ -630,11 +640,12 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
       _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
     }
 
+    // printf("!?level = %d\n", level);
     for (int l = level; l < _total_num_levels; l++) {
-      // printf("level %d, with cache_set.size() = %lu, needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), l, needed_CLs_per_level[l].size());
+      // printf("level %d, with cache_set.size() = %lu, _needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), l, _needed_CLs_per_level[l].size());
       std::set<int> erase_set;
       std::set<int> insert_set;
-      _sorting(l, needed_CLs_per_level[l], cache_set, erase_set, insert_set);
+      _sorting(l, _needed_CLs_per_level[l], cache_set, erase_set, insert_set);
       // printf("\nst-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st\n");
       update_st(l, POs_in_this_CL, erase_set, cache_index);
       // printf("\nld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld\n");
@@ -643,6 +654,9 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
       // printf("After update_cache_set: cache_set.size() = %lu\n", cache_set.size());
       assert(cache_set.size() == 256 && "assert(cache_set.size() == 256");
     }
+
+
+    
   }
     
   // std::vector<int> &a = _st_ld_CLs_index_table;
@@ -662,32 +676,19 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
   //   printf("\n");
   // }
   // printf("]\n");
-
 }
 
 void CUDAMAPartitioner::_update_st_ld_CLs_per_level() {
-  std::vector<std::set<int>> needed_CLs_per_level;
+  
   std::vector<bool> POs_in_this_CL;
-  _needed_st_ld_CLs_per_level(needed_CLs_per_level, POs_in_this_CL);
+  _needed_st_ld_CLs_per_level(POs_in_this_CL);
   
   // 這裡要確定每一層需要重新 st/ld 哪些 CLs
   // for each level: 1. st start, 2. st end, 3. ld start, 4. ld end
-  _st_ld_CLs_per_level(needed_CLs_per_level, POs_in_this_CL); 
+  _st_ld_CLs_per_level(POs_in_this_CL); 
 }
 
 void CUDAMAPartitioner::_MA_simu_preparation() {
-  /*
-  TODO:
-  * need to prepare (init 需要計算): 
-  1. weight table 
-  2. update weight table 要用到的東西
-  
-  * Ask for GPU memory 
-  1. weight table 
-  2. update weight table 要用的東西
-  3. g_c table, 一開始全部 init 成 0
-  4. position table 
-  */
   _construct_num_CLs_weight_tables();
   _update_st_ld_CLs_per_level();
 }
