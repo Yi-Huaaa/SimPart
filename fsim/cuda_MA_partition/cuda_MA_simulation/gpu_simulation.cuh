@@ -28,6 +28,8 @@
 #include <cublas_v2.h>
 #include <set>
 
+// constexpr uint32_t UINT32T_BITS = std::numeric_limits<uint32_t>::digits;
+
 
 // error checking macro
 #define cudaCheckErrors(msg) \
@@ -44,38 +46,38 @@
 
 
 // GPU functions pre-declarations
-__device__ __forceinline__ void _apply_INV(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_AND(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_OR(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_XOR(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_NAND(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_NOR(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_XNOR(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_MUX(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_CLKBUF(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_PI(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu, const size_t pattern_val);
-__device__ __forceinline__ void _apply_PO(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, size_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_INV(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_AND(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_OR(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_XOR(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_NAND(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_NOR(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_XNOR(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_MUX(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_CLKBUF(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_PI(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu, const size_t pattern_val);
+__device__ __forceinline__ void _apply_PO(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
 __global__ void _run_gate_DSP(const int num_accumGates, const int *_numGates_per_level_gpu,
                               const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, 
-                              const int *_pi_gate_po_gate_type_gpu, size_t *_pi_gate_po_output_res_gpu, 
-                              const size_t *_patterns_gpu, const size_t rd, 
+                              const int *_pi_gate_po_gate_type_gpu, uint32_t *_pi_gate_po_output_res_gpu, 
+                              const uint32_t *_patterns_gpu, const size_t rd, 
                               const int *_fault_gate_idx_gpu, const size_t *_fault_SA_fault_val_gpu,
                               const size_t fault_num, const size_t bad_case, 
                               const int num_gates_per_level, 
                               const int _num_PIs) ;
 __global__ void _write_and_shift_to_array_gpu(const size_t bits, 
-                                              size_t *_pi_gate_po_output_res_gpu, 
+                                              uint32_t *_pi_gate_po_output_res_gpu, 
                                               const int total_num_gates);
 
 // print function 
-__global__ void _print_simulation_results(const size_t *_pi_gate_po_output_res_gpu, const int total_num_gates);
+__global__ void _print_simulation_results(const uint32_t *_pi_gate_po_output_res_gpu, const int total_num_gates);
 
 
 // Forward declaration of CUDAMAPartitioner
 class CUDAMAPartitioner;
 
 class GALPS_MA_GPUSimulator {
-  const size_t SIZE_T_BITS = std::numeric_limits<size_t>::digits;
+  // const uint32_t UINT32T_BITS = std::numeric_limits<uint32_t>::digits;
 
   friend class CUDAMAPartitioner;
 
@@ -88,10 +90,10 @@ public:
                                 const size_t num_rounds,
                                 const int num_fault, 
                                 const int *_pi_gate_po_gate_type_gpu,
-                                const size_t *_patterns_gpu,
+                                const uint32_t *_patterns_gpu,
                                 const int *_fault_gate_idx_gpu,
                                 const size_t *_fault_SA_fault_val_gpu,
-                                size_t *_pi_gate_po_output_res_gpu,
+                                uint32_t *_pi_gate_po_output_res_gpu,
                                 std::vector<int> &_numGates_per_level,
                                 const int *_numGates_per_level_gpu,
                                 const int _total_num_levels,
@@ -133,10 +135,10 @@ public:
                                 const size_t num_rounds,
                                 const int num_fault, 
                                 const int *_pi_gate_po_gate_type_gpu,
-                                const size_t *_patterns_gpu,
+                                const uint32_t *_patterns_gpu,
                                 const int *_fault_gate_idx_gpu,
                                 const size_t *_fault_SA_fault_val_gpu,
-                                size_t *_pi_gate_po_output_res_gpu,
+                                uint32_t *_pi_gate_po_output_res_gpu,
                                 std::vector<int> &_numGates_per_level,
                                 const int *_numGates_per_level_gpu,
                                 const int _total_num_levels,
@@ -188,23 +190,23 @@ private:
                           const int *_invAdj_gpu,
                           const int *_invAdj_index_table_gpu,
                           const int *_pi_gate_po_gate_type_gpu,
-                          const size_t *_patterns_gpu,
+                          const uint32_t *_patterns_gpu,
                           const std::vector<Pattern> _patterns,
                           const int *_fault_gate_idx_gpu,
                           const size_t *_fault_SA_fault_val_gpu,
-                          size_t *_pi_gate_po_output_res_gpu);   
+                          uint32_t *_pi_gate_po_output_res_gpu);   
   void _run_cones_good_case_DSP_gpu(const int _total_num_levels, 
                                     const std::vector<int> &_numGates_per_level,
                                     const int *_numGates_per_level_gpu,
                                     const int *_invAdj_gpu,
                                     const int *_invAdj_index_table_gpu,
                                     const int *_pi_gate_po_gate_type_gpu,
-                                    const size_t *_patterns_gpu,
+                                    const uint32_t *_patterns_gpu,
                                     const int *_fault_gate_idx_gpu,
                                     const size_t *_fault_SA_fault_val_gpu,
                                     const size_t bits,
                                     const size_t rd, 
-                                    size_t *_pi_gate_po_output_res_gpu);
+                                    uint32_t *_pi_gate_po_output_res_gpu);
   // MA simulation
   void _run_gates_MA_gpu(const int _total_num_levels, 
                         const std::vector<int> &_numGates_per_level,
@@ -212,11 +214,11 @@ private:
                         const int *_invAdj_gpu,
                         const int *_invAdj_index_table_gpu,
                         const int *_pi_gate_po_gate_type_gpu,
-                        const size_t *_patterns_gpu,
+                        const uint32_t *_patterns_gpu,
                         const std::vector<Pattern> _patterns,
                         const int *_fault_gate_idx_gpu,
                         const size_t *_fault_SA_fault_val_gpu,
-                        size_t *_pi_gate_po_output_res_gpu);
+                        uint32_t *_pi_gate_po_output_res_gpu);
 };
 
 #endif  // GALPS_MA_GPU_SIMULATION_H

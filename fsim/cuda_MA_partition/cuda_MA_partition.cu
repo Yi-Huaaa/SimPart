@@ -243,7 +243,9 @@ void CUDAMAPartitioner::_read_fault(std::istream &flst) {
 void CUDAMAPartitioner::_read_pattern(std::istream &ptn) {
   ptn >> _num_pattern;
 
-  _num_rounds = (_num_pattern + SIZE_T_BITS - 1) / SIZE_T_BITS; // ceiling
+  _num_rounds = (_num_pattern + UINT32T_BITS - 1) / UINT32T_BITS; // ceiling
+  _num_rounds = (_sum_pi_gates_pos > 40) ? (_num_rounds/2) : (_num_rounds); // 這行只是為了從 size_t -> uint32_t
+  // printf("_num_rounds = %lu, _num_pattern = %d, gates = %d\n", _num_rounds, _num_pattern, _sum_pi_gates_pos);
 
   _patterns.resize(_num_rounds);
   for (size_t i = 0; i < _num_rounds; i++) {
@@ -360,7 +362,7 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<std::set<int>> &
   // }
 
   assert(needed_CLs_per_level.size() == _total_num_levels && "needed_CLs_per_level.size() != _total_num_levels");
-  printf("\n\n_num_CLs = %d\n", _num_CLs);
+  // printf("\n\n_num_CLs = %d\n", _num_CLs);
 
 
   // printf("\n\nst_ld_CLs:\n");
@@ -385,11 +387,11 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<std::set<int>> &
     }
   }
 
-  for (size_t i = 0; i < POs_in_this_CL.size(); i++) {
-    if (POs_in_this_CL[i]) {
-      printf("POs_in_this_CL[%lu] = true\n", i);
-    }
-  }
+  // for (size_t i = 0; i < POs_in_this_CL.size(); i++) {
+  //   if (POs_in_this_CL[i]) {
+  //     printf("POs_in_this_CL[%lu] = true\n", i);
+  //   }
+  // }
 }
 
 void CUDAMAPartitioner::_sorting(const int l, 
@@ -461,17 +463,17 @@ void CUDAMAPartitioner::_sorting(const int l,
 
   assert(erase_set.size() == insert_set.size() && "erase_set.size() == insert_set.size()");
 
-  printf("\terase_set (sz = %lu): ", erase_set.size());
-  for (const int& p : erase_set) {
-    std::cout << p << ", ";
-  }
-  std::cout << std::endl << std::endl;
+  // printf("\terase_set (sz = %lu): ", erase_set.size());
+  // for (const int& p : erase_set) {
+  //   std::cout << p << ", ";
+  // }
+  // std::cout << std::endl << std::endl;
 
-  printf("\tinsert_set (sz = %lu): ", insert_set.size());
-  for (const int& p : insert_set) {
-    std::cout << p << ", ";
-  }
-  std::cout << std::endl << std::endl;
+  // printf("\tinsert_set (sz = %lu): ", insert_set.size());
+  // for (const int& p : insert_set) {
+  //   std::cout << p << ", ";
+  // }
+  // std::cout << std::endl << std::endl;
 }
 
 void CUDAMAPartitioner::update_st(const int l, std::vector<bool> &POs_in_this_CL,
@@ -489,13 +491,13 @@ void CUDAMAPartitioner::update_st(const int l, std::vector<bool> &POs_in_this_CL
       _st_ld_positi.push_back(posIdx);
       // update _st_ld_CLIdxs
       _st_ld_CLIdxs.push_back(-1);       
-      printf("(X) No need to WB posIdx = %d, CLIdx = %d\n", posIdx, CLIdx);
+      // printf("(X) No need to WB posIdx = %d, CLIdx = %d\n", posIdx, CLIdx);
     } else {
       // update _st_ld_positi
       _st_ld_positi.push_back(posIdx);
       // update _st_ld_CLIdxs
       _st_ld_CLIdxs.push_back(CLIdx); 
-      printf("(V) Need to WB posIdx = %d, CLIdx = %d\n", posIdx, CLIdx);
+      // printf("(V) Need to WB posIdx = %d, CLIdx = %d\n", posIdx, CLIdx);
     }
   }
   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size()); // ends
@@ -515,7 +517,7 @@ void CUDAMAPartitioner::update_ld(const int l,
       _st_ld_positi.push_back(posIdx);
       // update _st_ld_CLIdxs
       _st_ld_CLIdxs.push_back(newCLIdx); 
-      printf("posIdx = %d, newCLIdx = %d\n", posIdx, newCLIdx);
+      // printf("posIdx = %d, newCLIdx = %d\n", posIdx, newCLIdx);
       // update cache_index
       cache_index[posIdx] = newCLIdx;
     }
@@ -557,8 +559,8 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
                         cache_set.begin(), cache_set.end(),
                         std::inserter(diffSet, diffSet.begin()));
     diffSetSz = diffSet.size();
-    printf("level %d PASS, diffSet.size() = %lu (needed_CLs_per_level[%d].size() = %lu)\n", 
-          level, diffSet.size(), level, needed_CLs_per_level[level].size());
+    // printf("level %d PASS, diffSet.size() = %lu (needed_CLs_per_level[%d].size() = %lu)\n", 
+          // level, diffSet.size(), level, needed_CLs_per_level[level].size());
     if (diffSetSz == 0) {
       level++;
     }
@@ -566,7 +568,7 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
 
   bool all_in_one_cache = (level == _total_num_levels);
   if (all_in_one_cache) { // 所有東西都能被塞進 cache line 裡面
-    printf("level = %d, _total_num_levels = %d, _num_CLs = %d\n", level, _total_num_levels, _num_CLs);
+    // printf("level = %d, _total_num_levels = %d, _num_CLs = %d\n", level, _total_num_levels, _num_CLs);
     
     // init _st_ld_CLs_index_table: level 0
     // st: 
@@ -629,37 +631,37 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<std::set<int>> &needed_
     }
 
     for (int l = level; l < _total_num_levels; l++) {
-      printf("level %d, with cache_set.size() = %lu, needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), l, needed_CLs_per_level[l].size());
+      // printf("level %d, with cache_set.size() = %lu, needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), l, needed_CLs_per_level[l].size());
       std::set<int> erase_set;
       std::set<int> insert_set;
       _sorting(l, needed_CLs_per_level[l], cache_set, erase_set, insert_set);
-      printf("\nst-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st\n");
+      // printf("\nst-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st\n");
       update_st(l, POs_in_this_CL, erase_set, cache_index);
-      printf("\nld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld\n");
+      // printf("\nld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld\n");
       update_ld(l, insert_set, cache_index);
       update_cache_set(erase_set, insert_set, cache_set);
-      printf("After update_cache_set: cache_set.size() = %lu\n", cache_set.size());
+      // printf("After update_cache_set: cache_set.size() = %lu\n", cache_set.size());
       assert(cache_set.size() == 256 && "assert(cache_set.size() == 256");
     }
   }
     
-  std::vector<int> &a = _st_ld_CLs_index_table;
-  printf("_st_ld_CLIdxs (sz = %lu) = [\n", a.size());
-  for (size_t i = 0; i < a.size()/4; i++) {
-    // st
-    printf("\tlevel %lu st: ", i);
-    for (int j = a[4*i+0]; j < a[4*i+1]; j++) {
-      printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
-    }
-    printf("\n");
-    // ld 
-    printf("\tlevel %lu ld: ", i);
-    for (int j = a[4*i+2]; j < a[4*i+3]; j++) {
-      printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
-    }
-    printf("\n");
-  }
-  printf("]\n");
+  // std::vector<int> &a = _st_ld_CLs_index_table;
+  // printf("_st_ld_CLIdxs (sz = %lu) = [\n", a.size());
+  // for (size_t i = 0; i < a.size()/4; i++) {
+  //   // st
+  //   printf("\tlevel %lu st: ", i);
+  //   for (int j = a[4*i+0]; j < a[4*i+1]; j++) {
+  //     printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
+  //   }
+  //   printf("\n");
+  //   // ld 
+  //   printf("\tlevel %lu ld: ", i);
+  //   for (int j = a[4*i+2]; j < a[4*i+3]; j++) {
+  //     printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
+  //   }
+  //   printf("\n");
+  // }
+  // printf("]\n");
 
 }
 
@@ -757,11 +759,11 @@ void CUDAMAPartitioner::_levelized(std::vector<std::vector<int>> &adj,
 void CUDAMAPartitioner::_ask_gpu_simulation_memory() {
   // Memory allocation
   cudaMalloc((void**)&_pi_gate_po_gate_type_gpu, _sum_pi_gates_pos*sizeof(int));
-  cudaMalloc((void**)&_patterns_gpu, _num_rounds*_num_PIs*sizeof(size_t));
+  cudaMalloc((void**)&_patterns_gpu, _num_rounds*_num_PIs*sizeof(uint32_t));
   cudaMalloc((void**)&_fault_gate_idx_gpu, _num_fault*sizeof(int));
   cudaMalloc((void**)&_fault_SA_fault_val_gpu, _num_fault*sizeof(size_t));
   
-  cudaMalloc((void**)&_pi_gate_po_output_res_gpu, _sum_pi_gates_pos*sizeof(size_t));
+  cudaMalloc((void**)&_pi_gate_po_output_res_gpu, _sum_pi_gates_pos*sizeof(uint32_t));
   cudaMalloc((void**)&_numGates_per_level_gpu, _numGates_per_level.size()*sizeof(int));
   cudaCheckErrors("CUDA: ask gpu simulation memory - cudaMalloc - Failure");
 
@@ -789,23 +791,25 @@ void CUDAMAPartitioner::_move_GateType_h2d() {
 #endif 
 }
 
+
 void CUDAMAPartitioner::_move_patterns_h2d() {
-  std::vector<size_t> patterns_cpu;
+  std::vector<uint32_t> patterns_cpu;
   for (size_t i = 0; i < _num_rounds; i++) {
     for (int pi = 0; pi < _num_PIs; pi++) {
       patterns_cpu.push_back(_patterns[i]._value[pi]);
+      // printf("_patterns[%lu]._value[%d] = %u\n", i, pi, _patterns[i]._value[pi]);
     }
   }
 
   cudaMemcpy(_patterns_gpu, patterns_cpu.data(), 
-            (_num_rounds*_num_PIs)*sizeof(size_t), cudaMemcpyHostToDevice);
+            (_num_rounds*_num_PIs)*sizeof(uint32_t), cudaMemcpyHostToDevice);
   cudaCheckErrors("CUDA: _patterns_gpu cudaMemcpy failure");
 
 #ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
-  cudaDeviceSynchronize();
-  print_patterns_gpu <<< 1, 1 >>> (_patterns_gpu, _num_rounds, _num_PIs);
+  cudaDeviceSynchronize(); 
+  print_patterns_gpu <<< 1, 1 >>> (_patterns_gpu, _num_rounds, _num_pattern);
   cudaCheckErrors("CUDA: print_patterns_gpu failure");
-  cudaDeviceSynchronize();
+  cudaDeviceSynchronize(); 
 #endif
 }
 
@@ -851,6 +855,11 @@ void CUDAMAPartitioner::prepare_gpu_simulation() {
   _move_GateType_h2d();
   _move_patterns_h2d();
   _move_faults___h2d();
+
+#ifdef MA_PAR
+  
+#endif 
+
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> duration_prepare = end - start;
   std::cout << "prepare_GPU_simulation: " << _round_to((duration_prepare.count())*1000, 0.001) << "\n";
@@ -859,7 +868,7 @@ void CUDAMAPartitioner::prepare_gpu_simulation() {
 
 // Simulation functions 
 void CUDAMAPartitioner::run(const size_t num_threads, const size_t NUM_SIMULATION_RDS) {  
-  GALPS_MA_GPUSimulator gpuSimulator;
+  GALPS_MA_GPUSimulator gpuSimulator; 
   gpuSimulator.run_gpu_simulator_DSP_gpu(_num_PIs, _num_inner_gates, _num_POs, 
                                           _sum_pi_gates_pos, 
                                           _num_pattern, _num_rounds, _num_fault,
@@ -914,7 +923,7 @@ void CUDAMAPartitioner::_print_patterns(const std::vector<Pattern> &patterns,
                                         const int num_PIs) const {
   std::cout << "\n=====\n\n";
     for (int i = 0; i < round; i++) {
-      std::cout << "[" << SIZE_T_BITS * i << ", " << SIZE_T_BITS * (i + 1)
+      std::cout << "[" << UINT32T_BITS * i << ", " << UINT32T_BITS * (i + 1)
                 << "] bits = [\n";
       for (int j = 0; j < num_PIs; j++) {
         _print_bits_stack(sizeof(patterns[i]._value[j]), &patterns[i]._value[j]);
@@ -1035,6 +1044,19 @@ void CUDAMAPartitioner::_print_levelized(){
   printf("_level_of_gates:\n");
   for (size_t i = 0; i < _level_of_gates.size(); i++) {
     printf("_level_of_gates[%lu] = %d\n", i, _level_of_gates[i]);
+  }
+  printf("\n");
+}
+
+
+__global__ void print_patterns_gpu (uint32_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs) {
+  for (size_t i = 0; i < _num_rounds; i++) {
+    printf("round %lu: ", i);
+    for (size_t j = 0; j < _num_PIs; j++) {
+      uint32_t p = _patterns_gpu[_num_PIs*i+j];
+      printf("%u, ", p);
+    }
+    printf("\n");
   }
   printf("\n");
 }

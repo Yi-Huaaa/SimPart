@@ -41,11 +41,11 @@ constexpr int _NUM_CLS_PER_BLOCK = 256; // cache: 32KB, others: 16KB
 constexpr int _NUM_GLOBAL_CLS = 14560; // cache: 32KB, others: 16KB
 constexpr int _G_C_TABLE_SZ = (_NUM_GLOBAL_CLS/32); // cache: 32KB, others: 16KB
 constexpr int _POSITION_TABLE_SZ = _NUM_GLOBAL_CLS/(32/8); // cache: 32KB, others: 16KB
+constexpr uint32_t UINT32T_BITS = std::numeric_limits<uint32_t>::digits;
 // constexpr int _NUM_CLS_PER_BLOCK = 320; // cache: 40KB, others: 8KB
 // constexpr int _NUM_GLOBAL_CLS = 5616; // cache: 40KB, others: 8KB
 
 #define MA_PAR // with defined MA_PAR: MA partition and simulation 
-#define MA_PAR_CPU_CHECK_ANSWER // gc and position table construct on CPU
 
 
 // Define the enum class
@@ -121,7 +121,6 @@ __global__ void _print_construct_cones_partitioned_gpu(IndexType *_total_numGate
                                                       IndexType *_cones_partitioned_gpu);
 template<typename IndexType>                                                      
 __global__ void print_pi_gate_po_gate_type_gpu(const IndexType *_pi_gate_po_gate_type_gpu, const IndexType num);
-__global__ void print_patterns_gpu(size_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs);
 template<typename IndexType>
 __global__ void print_fault_gate_idx_gpu(IndexType *_fault_gate_idx_gpu, size_t *_fault_SA_fault_val_gpu, IndexType _num_fault);
 __global__ void check_cones_partitioned_gpu_visited(int *visited, 
@@ -133,7 +132,7 @@ __global__ void print_ask_gpu_simulation_memory(const size_t sz1,
                                                 const size_t sz2,
                                                 const int *_cones_partitioned_gpu);
                                                 
-
+__global__ void print_patterns_gpu (uint32_t *_patterns_gpu, size_t _num_rounds, size_t _num_PIs);
 /* Forward declaration */
 class CUDASimulator;
 
@@ -180,7 +179,7 @@ private:
   std::vector<Fault<int>> _faults;
 
   int _num_pattern; // total number of patterns that need to be tested
-  size_t _num_rounds;  // ceiling(_num_pattern/SIZE_T_BITS)
+  size_t _num_rounds;  // ceiling(_num_pattern/UINT32T_BITS)
   std::vector<Pattern> _patterns;
 
   // For levelization
@@ -205,10 +204,10 @@ private:
 
   int *_numGates_per_level_gpu;
   int *_pi_gate_po_gate_type_gpu;
-  size_t *_patterns_gpu;
   int *_fault_gate_idx_gpu;
   size_t *_fault_SA_fault_val_gpu;
-  size_t *_pi_gate_po_output_res_gpu;
+  uint32_t *_patterns_gpu; // for MA: 就這兩個要特別改就好
+  uint32_t *_pi_gate_po_output_res_gpu; // for MA: 就這兩個要特別改就好
 
   /* Read files - CPU function */
   void _read_graph(std::istream &ckt);
