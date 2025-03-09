@@ -570,8 +570,8 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
                         cache_set.begin(), cache_set.end(),
                         std::inserter(diffSet, diffSet.begin()));
     diffSetSz = diffSet.size();
-    printf("level %d PASS, diffSet.size() = %lu (_needed_CLs_per_level[%d].size() = %lu)\n", 
-          level, diffSet.size(), level, _needed_CLs_per_level[level].size());
+    // printf("level %d PASS, diffSet.size() = %lu (_needed_CLs_per_level[%d].size() = %lu)\n", 
+    //       level, diffSet.size(), level, _needed_CLs_per_level[level].size());
     if (diffSetSz == 0) {
       level++;
     }
@@ -580,7 +580,7 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
 
   bool all_in_one_cache = (level == _total_num_levels);
   if (all_in_one_cache) { // 所有東西都能被塞進 cache line 裡面
-    printf("level = %d, _total_num_levels = %d, _num_CLs = %d\n", level, _total_num_levels, _num_CLs);
+    // printf("level = %d, _total_num_levels = %d, _num_CLs = %d\n", level, _total_num_levels, _num_CLs);
     
     // init _st_ld_CLs_index_table: level 0
     // st: 
@@ -654,9 +654,6 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
       // printf("After update_cache_set: cache_set.size() = %lu\n", cache_set.size());
       assert(cache_set.size() == 256 && "assert(cache_set.size() == 256");
     }
-
-
-    
   }
     
   // std::vector<int> &a = _st_ld_CLs_index_table;

@@ -341,7 +341,7 @@ __device__ __forceinline__ void _apply_CLKBUF(const int gate_idx, const int *_in
 __device__ __forceinline__ void _apply_PI(const int gate_idx, const int *_invAdj_gpu, 
                                           const int *_invAdj_index_table_gpu, 
                                           uint32_t *_pi_gate_po_output_res_gpu, 
-                                          const size_t pattern_val) {
+                                          const uint32_t pattern_val) {
   _pi_gate_po_output_res_gpu[gate_idx] = pattern_val; 
   // printf("_apply_PI: gate_idx = %d, pattern_val = %lu, %lu\n", gate_idx, pattern_val, _pi_gate_po_output_res_gpu[gate_idx]);
 }

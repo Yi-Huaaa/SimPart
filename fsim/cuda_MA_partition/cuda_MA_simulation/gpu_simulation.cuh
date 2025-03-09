@@ -55,7 +55,7 @@ __device__ __forceinline__ void _apply_NOR(const int gate_idx, const int *_invAd
 __device__ __forceinline__ void _apply_XNOR(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
 __device__ __forceinline__ void _apply_MUX(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
 __device__ __forceinline__ void _apply_CLKBUF(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_PI(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu, const size_t pattern_val);
+__device__ __forceinline__ void _apply_PI(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu, const uint32_t pattern_val);
 __device__ __forceinline__ void _apply_PO(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
 __global__ void _run_gate_DSP(const int num_accumGates, const int *_numGates_per_level_gpu,
                               const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, 
