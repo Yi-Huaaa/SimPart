@@ -62,13 +62,13 @@ int main(int argc, char *argv[]) {
   cudaMAPartitioner.run_MA(NUM_THREADS, _NUM_SIMULATION_RDS);
   dur_sim = chro_zero();
 
-  // // Run Simulator
-  // for (size_t t = 0; t < TIMES; t++) {
-  //   auto start = std::chrono::steady_clock::now();
-  //   cudaMAPartitioner.run_MA(NUM_THREADS, _NUM_SIMULATION_RDS);
-  //   auto end = std::chrono::steady_clock::now();
-  //   dur_sim += (end - start);
-  // }
+  // Run Simulator
+  for (size_t t = 0; t < TIMES; t++) {
+    auto start = std::chrono::steady_clock::now();
+    cudaMAPartitioner.run_MA(NUM_THREADS, _NUM_SIMULATION_RDS);
+    auto end = std::chrono::steady_clock::now();
+    dur_sim += (end - start);
+  }
   std::cout << "run MA simulator: " <<  round_to(((dur_sim.count()/TIMES))*1000, 0.001) << "\n";
 
   // free memory

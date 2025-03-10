@@ -807,6 +807,9 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
   const int w_t_idx = t_idx&31; // %32
   int num_accumGates = 0; 
   const int SA_fault = 0; 
+  // if (t_idx == 0) {
+  //   printf("hihihi\n");
+  // }
 
   for (int l = 0; l < _total_num_levels; l++) {
     // ST/LD cachelines 
@@ -857,7 +860,7 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
     num_accumGates += _numGates_per_level_gpu[l];
   }
 
-  // TODO:  last WB POs
+  // Last WB POs
   const int st_s_f = _getSLIdx(_st_ld_CLs_index_table_gpu, _total_num_levels, 0);
   const int st_e_f = _getSLIdx(_st_ld_CLs_index_table_gpu, _total_num_levels, 1);
   const int numST_f = st_e_f-st_s_f;
