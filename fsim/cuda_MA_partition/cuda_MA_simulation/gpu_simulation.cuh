@@ -65,21 +65,30 @@ __global__ void _run_gate_DSP(const int num_accumGates, const int *_numGates_per
                               const size_t fault_num, const size_t bad_case, 
                               const int num_gates_per_level, 
                               const int _num_PIs);
-__device__ __forceinline__ void _apply_INV_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_AND_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_INV_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
+                                              uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
+__device__ __forceinline__ void _apply_AND_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
+                                              uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
 __device__ __forceinline__ void _apply_OR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
                                             uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
-__device__ __forceinline__ void _apply_XOR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_NAND_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_NOR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_XNOR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_MUX_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
-__device__ __forceinline__ void _apply_CLKBUF_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);
+__device__ __forceinline__ void _apply_XOR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
+                                              uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
+__device__ __forceinline__ void _apply_NAND_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
+                                              uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
+__device__ __forceinline__ void _apply_NOR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
+                                              uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
+__device__ __forceinline__ void _apply_XNOR_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
+                                              uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
+__device__ __forceinline__ void _apply_MUX_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
+                                              uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
+__device__ __forceinline__ void _apply_CLKBUF_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
+                                                  uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
 __device__ __forceinline__ void _apply_PI_MA(const int gate_idx, 
                                             uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table,
                                             uint32_t *_pi_gate_po_output_res_gpu, 
                                             const uint32_t pattern_va);
-__device__ __forceinline__ void _apply_PO_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu);                              
+__device__ __forceinline__ void _apply_PO_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
+                                          uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
 __device__ __forceinline__ int _getSLIdx(const int *_st_ld_CLs_index_table_gpu, const int l, const int cases);
 __device__ __forceinline__ void _modify_bits(uint32_t *a, const int p, const int val, const int lane);
 __device__ __forceinline__ int _get_CLIdx(int gateIdx);
@@ -91,7 +100,10 @@ __device__ __forceinline__ uint32_t _get_val(const int gate_idx,
                                             const uint32_t *g_c_table, const uint32_t *pos_table);
 __device__ __forceinline__ void _wb_val(const int gate_idx, const uint32_t wb_val, 
                                       uint32_t *_pi_gate_po_output_res_gpu, uint32_t *cache, 
-                                      const uint32_t *g_c_table, const uint32_t *pos_table);                                            
+                                      const uint32_t *g_c_table, const uint32_t *pos_table);
+__device__ __forceinline__ void _wb_neg_val(const int gate_idx, const uint32_t wb_val, 
+                                            uint32_t *_pi_gate_po_output_res_gpu, uint32_t *cache, 
+                                            const uint32_t *g_c_table, const uint32_t *pos_table);                                      
 __device__ __forceinline__ void __syncthreadsAllBlocks(uint32_t *_gpu_sync, 
                                                       const int l, 
                                                       const int num_blocks);
