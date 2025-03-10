@@ -815,6 +815,8 @@ void CUDAMAPartitioner::_move_patterns_h2d() {
 
   cudaMemcpy(_patterns_gpu, patterns_cpu.data(), 
             (_num_rounds*_num_PIs)*sizeof(uint32_t), cudaMemcpyHostToDevice);
+  cudaMemcpy(_pi_gate_po_output_res_gpu, patterns_cpu.data(), 
+            (_num_PIs)*sizeof(uint32_t), cudaMemcpyHostToDevice); // init PI
   cudaCheckErrors("CUDA: _patterns_gpu cudaMemcpy failure");
 
 #ifdef GPU_PREPARE_SIMULATION_PRINT_CHECK
