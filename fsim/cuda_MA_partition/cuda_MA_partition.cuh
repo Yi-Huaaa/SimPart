@@ -235,6 +235,7 @@ private:
   int *_st_ld_CLs_index_table_gpu;
   uint32_t *_g_c_table; 
   uint32_t *_position_table; 
+  uint32_t *_gpu_sync;
 
   void _MA_simu_preparation();
     void _construct_num_CLs_weight_tables();

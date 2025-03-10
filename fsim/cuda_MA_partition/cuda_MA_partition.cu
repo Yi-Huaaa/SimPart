@@ -596,7 +596,7 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
     }
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
 
-    for (int l = 1; l < (level-1); l++) {
+    for (int l = 1; l < level; l++) {
       // st
       _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
       _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
@@ -605,7 +605,7 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
       _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
     }
 
-    // last level:  need to WB
+    // last level + 1:  need to WB
     // st
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
     for (int i = 0; i < CLs; i++) {
@@ -654,10 +654,24 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
       // printf("After update_cache_set: cache_set.size() = %lu\n", cache_set.size());
       assert(cache_set.size() == 256 && "assert(cache_set.size() == 256");
     }
+
+    // last level + 1:  need to WB
+    // st
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+    for (const int i:_needed_CLs_per_level[_total_num_levels-1]) {
+      if (POs_in_this_CL[i]) {
+        _st_ld_CLIdxs.push_back(i);
+        _st_ld_positi.push_back(i);
+      }
+    }
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+    // ld
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());       
   }
     
   // std::vector<int> &a = _st_ld_CLs_index_table;
-  // printf("_st_ld_CLIdxs (sz = %lu) = [\n", a.size());
+  // printf("_st_ld_CLIdxs (sz = %lu, _total_num_levels = %d) = [\n", a.size(), _total_num_levels);
   // for (size_t i = 0; i < a.size()/4; i++) {
   //   // st
   //   printf("\tlevel %lu st: ", i);
@@ -836,6 +850,7 @@ void CUDAMAPartitioner::_move_st_ld____h2d() {
   cudaMalloc((void**)&_st_ld_CLIdxs_gpu, _st_ld_CLIdxs.size()*sizeof(int));
   cudaMalloc((void**)&_st_ld_positi_gpu, _st_ld_positi.size()*sizeof(int));
   cudaMalloc((void**)&_st_ld_CLs_index_table_gpu, _st_ld_CLs_index_table.size()*sizeof(int));
+  cudaMalloc((void**)&_gpu_sync, 4*sizeof(uint32_t));
   // cudaMalloc((void**)&_g_c_table, ((_num_CLs + 32 - 1)/32)*sizeof(uint32_t));
   // cudaMalloc((void**)&_position_table, ((_num_CLs + 8 - 1)/8)*sizeof(uint32_t));
   // printf("_num_CLs = %d, _g_c_table size = %d, _position_table size = %d\n", _num_CLs, ((_num_CLs + 32 - 1)/32), (_num_CLs + 8 - 1)/8);
@@ -847,6 +862,8 @@ void CUDAMAPartitioner::_move_st_ld____h2d() {
                   _st_ld_positi.size()*sizeof(int), cudaMemcpyHostToDevice); 
   cudaMemcpyAsync(_st_ld_CLs_index_table_gpu, _st_ld_CLs_index_table.data(), 
                   _st_ld_CLs_index_table.size()*sizeof(int), cudaMemcpyHostToDevice); 
+  cudaMemset(_gpu_sync, 0, 4*sizeof(uint32_t));
+  printf("_num_CLs = %d\n", _num_CLs);
   cudaCheckErrors("CUDA: Asking _move_st_ld____h2d cudaMemcpyAsync - Failure");
 }
 
@@ -922,7 +939,8 @@ void CUDAMAPartitioner::run_MA(const size_t num_threads, const size_t NUM_SIMULA
                                         NUM_SIMULATION_RDS, 
                                         _st_ld_CLIdxs_gpu, 
                                         _st_ld_positi_gpu, 
-                                        _st_ld_CLs_index_table_gpu);
+                                        _st_ld_CLs_index_table_gpu,
+                                        _gpu_sync);
   cudaDeviceSynchronize();
 }
 
