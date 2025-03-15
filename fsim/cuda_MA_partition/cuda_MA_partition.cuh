@@ -225,7 +225,7 @@ private:
 
   // MA preparation and simulation 
   int _num_CLs;
-  std::vector<std::set<int>> _needed_CLs_per_level;
+  std::vector<std::vector<std::set<int>>> _needed_CLs_per_level_block; 
   std::vector<int> _weight_table;
   std::vector<int> _st_ld_CLIdxs;
   std::vector<int> _st_ld_positi;
@@ -240,7 +240,7 @@ private:
   void _MA_simu_preparation();
     void _construct_num_CLs_weight_tables();
     void _update_st_ld_CLs_per_level();
-      void _needed_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL);
+      void _needed_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL, std::vector<int> &ret_level);
       void _st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL);        
         void _sorting(const int l, 
                       const std::set<int> &needed_CLs_per_level_l, 
@@ -256,7 +256,9 @@ private:
                               std::set<int> &insert_set,
                               std::set<int> &cache_set);
 
+        
                               
+
   // free
   void _free() {
     // Host

@@ -36,7 +36,7 @@
 #include <cstdio>
 
 // constexpr
-constexpr int _NUM_THREADS = 1024;
+constexpr int _NUM_THREADS = 512;
 constexpr int _NUM_GATES_PER_CL = 32;
 constexpr uint32_t UINT32T_BITS = std::numeric_limits<uint32_t>::digits;
 
@@ -250,39 +250,6 @@ void GALPS_MA_GPUSimulator::_run_cones_good_case_MA_gpu(const int _total_num_lev
                                                         const int *_st_ld_CLs_index_table_gpu,
                                                         uint32_t *_gpu_sync) {
   // printf("Getting inside _run_cones_good_case_MA_gpu\n");
-
-//   const size_t fault_num = 0; const size_t bad_case = 0;
-//   int num_blocks, num_threads;
-//   int num_accumGates = 0;
-
-//   int maxNumBlks = 0; 
-
-//   for (int level = 0; level < _total_num_levels; level++) {
-//     const int num_gates_per_level = (_numGates_per_level[level]);
-//     num_blocks  = (num_gates_per_level > _NUM_THREADS) ? 
-//                   (num_gates_per_level + _NUM_THREADS - 1)/_NUM_THREADS : 
-//                   (1);
-//     num_threads = (num_gates_per_level > _NUM_THREADS) ? 
-//                   (_NUM_THREADS) : 
-//                   (num_gates_per_level);
-
-//     printf("level = %d num_gates_per_level = %d, num_blocks = %d, num_threads = %d\n", level, num_gates_per_level, num_blocks, num_threads);
-//     maxNumBlks = (maxNumBlks < num_blocks) ? (num_blocks) : (maxNumBlks);
-//     _run_gate_MA <<< num_blocks, num_threads >>> (num_accumGates, _numGates_per_level_gpu, _total_num_levels, 
-//                                                   _invAdj_gpu, _invAdj_index_table_gpu, 
-//                                                   _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
-//                                                   _patterns_gpu, rd, 
-//                                                   _fault_gate_idx_gpu, _fault_SA_fault_val_gpu, 
-//                                                   fault_num, bad_case, 
-//                                                   num_gates_per_level, 
-//                                                   _num_PIs, 
-//                                                   _st_ld_CLIdxs_gpu, _st_ld_positi_gpu, _st_ld_CLs_index_table_gpu);
-//     num_accumGates += num_gates_per_level; 
-    
-// #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
-//   cudaDeviceSynchronize();
-// #endif      
-//   }
 
   int maxNumBlks = 0;
 
