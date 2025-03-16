@@ -240,7 +240,7 @@ private:
   void _MA_simu_preparation();
     void _construct_num_CLs_weight_tables();
     void _update_st_ld_CLs_per_level();
-      void _needed_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL, std::vector<int> &ret_level);
+      void _needed_st_ld_CLs_per_level_per_block(std::vector<bool> &POs_in_this_CL, std::vector<int> &ret_level);
       void _st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL);        
         void _sorting(const int l, 
                       const std::set<int> &needed_CLs_per_level_l, 

@@ -624,7 +624,7 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
   // // printf("]\n");
 }
 
-void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL, std::vector<int> &ret_level) {
+void CUDAMAPartitioner::_needed_st_ld_CLs_per_level_per_block(std::vector<bool> &POs_in_this_CL, std::vector<int> &ret_level) {
   // Settings for limitation from size of shared memory 
   const int num_threads = 1024; 
   const int limit_num_blocks = (num_threads == 1024) ? (48) : (48*2);
@@ -727,7 +727,7 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level(std::vector<bool> &POs_in_th
 void CUDAMAPartitioner::_update_st_ld_CLs_per_level() {
   std::vector<bool> POs_in_this_CL;
   std::vector<int> ret_level;
-  _needed_st_ld_CLs_per_level(POs_in_this_CL, ret_level);
+  _needed_st_ld_CLs_per_level_per_block(POs_in_this_CL, ret_level);
   
   // // 這裡要確定每一層需要重新 st/ld 哪些 CLs
   // // for each level: 1. st start, 2. st end, 3. ld start, 4. ld end
