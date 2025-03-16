@@ -378,18 +378,32 @@ void CUDAMAPartitioner::_sorting(const int l,
   // }
   // std::cout << std::endl << std::endl;
 
-  // step 2. sort from large to small 
+  // step 2. sort from large to small (only push in those without conflict)
   std::sort(
     indexed_cache.begin(), indexed_cache.end(),
     [](const auto &lhs, const auto &rhs) {
       return lhs.first > rhs.first; // Sort based on the first element of the pair
     });
-  std::set<int> remin_set;
-  assert(indexed_cache.size() >= _NUM_CLS_PER_BLOCK && "assert(indexed_cache.size() >= _NUM_CLS_PER_BLOCK");
-  for (size_t i = 0; i < _NUM_CLS_PER_BLOCK; i++) { // 留下 256 個需要被留下的
-    remin_set.insert(indexed_cache[i].second);
+  
+  // check for gc table conflict
+  std::vector<int> accum; accum.resize(8192, 0);
+  for (size_t i = 0; i < indexed_cache.size(); i++) {
+    const int CLIdx_mod_8192 = (indexed_cache[i].second)&8191; // mod 8192
+    accum[CLIdx_mod_8192]++;
   }
 
+  assert(indexed_cache.size() >= _NUM_CLS_PER_BLOCK && "assert(indexed_cache.size() >= _NUM_CLS_PER_BLOCK");
+  std::set<int> remin_set;
+  for (size_t i = 0; i < indexed_cache.size(); i++) { // 留下 256 個需要被留下的
+    const int CLIdx_mod_8192 = (indexed_cache[i].second)&8191; // mod 8192
+    if ((remin_set.size() < _NUM_CLS_PER_BLOCK) && (accum[CLIdx_mod_8192] == 1)) {
+      remin_set.insert(indexed_cache[i].second);
+    } 
+    if (remin_set.size() == _NUM_CLS_PER_BLOCK) {
+      // printf("\tEarly break, remin_set.size() = %lu (%lu), level = %d\n", remin_set.size(), i, l);
+      break;
+    }
+  }
   // // Print each pair (value, index)
   // printf("\tindexed_cache: ");
   // for (const auto& p : indexed_cache) {
@@ -414,13 +428,13 @@ void CUDAMAPartitioner::_sorting(const int l,
 
   assert(erase_set.size() == insert_set.size() && "erase_set.size() == insert_set.size()");
 
-  // printf("\terase_set (sz = %lu): ", erase_set.size());
+  // printf("\terase_set (sz = %lu, l = %d): ", erase_set.size(), l);
   // for (const int& p : erase_set) {
   //   std::cout << p << ", ";
   // }
   // std::cout << std::endl << std::endl;
 
-  // printf("\tinsert_set (sz = %lu): ", insert_set.size());
+  // printf("\tinsert_set (sz = %lu, l = %d): ", insert_set.size(), l);
   // for (const int& p : insert_set) {
   //   std::cout << p << ", ";
   // }
@@ -488,140 +502,151 @@ void CUDAMAPartitioner::update_cache_set(std::set<int> &erase_set,
 }
 
 void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) {
-  std::set<int> cache_set; // 紀錄 cahce 當下有個 CLs，用 sets 取聯集和差集比較快
-  std::vector<int> cache_index; 
+  for (int b = 0; b < _used_num_blocks; b++) {
+    // printf("\t_st_ld_CLs_index_table.size() = %lu (%d), _total_num_levels = %d\n", _st_ld_CLs_index_table.size(), b*(_total_num_levels+1)*4, _total_num_levels);
+
+    std::vector<std::set<int>> &needed_CLs_per_level = _needed_CLs_per_level_block[b];
+    std::set<int> cache_set; // 紀錄 cahce 當下有個 CLs，用 sets 取聯集和差集比較快
+    std::vector<int> cache_index; 
+    
+    // 一開始先把 256 條都放進去
+    for (int i = 0; i < _NUM_CLS_PER_BLOCK; i++) {
+      cache_set.insert(i);
+      cache_index.push_back(i); 
+    }
+
+    int diffSetSz = 0;
+    int level = 0;
+    while (diffSetSz == 0 && level < _total_num_levels) {
+      std::set<int> diffSet;
+      std::set_difference(needed_CLs_per_level[level].begin(), needed_CLs_per_level[level].end(),
+                          cache_set.begin(), cache_set.end(),
+                          std::inserter(diffSet, diffSet.begin()));
+      diffSetSz = diffSet.size();
+      // printf("\tlevel %d PASS, diffSet.size() = %lu (needed_CLs_per_level[%d].size() = %lu)\n", 
+      //       level, diffSet.size(), level, needed_CLs_per_level[level].size());
+      if (diffSetSz == 0) {
+        level++;
+      }
+    } 
+    // printf("block %d, level = %d\n", b, level);
+
+    bool all_in_one_cache = (level == _total_num_levels);
+    if (all_in_one_cache) { // 所有東西都能被塞進 cache line 裡面
+      // printf("level = %d, _total_num_levels = %d, _num_CLs = %d\n", level, _total_num_levels, _num_CLs);
+      
+      // init _st_ld_CLs_index_table: level 0
+      // st: 
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      // ld: 
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      assert(_num_CLs <= _NUM_CLS_PER_BLOCK && "assert(_num_CLs <= _NUM_CLS_PER_BLOCK");
+      int CLs = (_num_CLs < _NUM_CLS_PER_BLOCK) ? (_num_CLs) : (_NUM_CLS_PER_BLOCK);
+      for (int i = 0; i < CLs; i++) {
+        _st_ld_CLIdxs.push_back(i);
+        _st_ld_positi.push_back(i);
+      }
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
   
-  // // 一開始先把 256 條都放進去
-  // for (int i = 0; i < _NUM_CLS_PER_BLOCK; i++) {
-  //   cache_set.insert(i);
-  //   cache_index.push_back(i); 
-  // }
+      for (int l = 1; l < level; l++) {
+        // st
+        _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+        _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+        // ld
+        _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+        _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
+      }
+  
+      // last level + 1:  need to WB
+      // st
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      for (int i = 0; i < CLs; i++) {
+        if (POs_in_this_CL[i]) {
+          _st_ld_CLIdxs.push_back(i);
+          _st_ld_positi.push_back(i);        
+        }
+      }
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      // ld
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
+    } else { // 不是所有東西都能被塞進 cache line 裡面
+      // init _st_ld_CLs_index_table: level 0
+      // st: 
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      // ld: 
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      for (int i = 0; i < _NUM_CLS_PER_BLOCK; i++) {
+        _st_ld_CLIdxs.push_back(i);
+        _st_ld_positi.push_back(i);
+      }
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+  
+      for (int l = 1; l < level; l++) {
+        // st
+        _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+        _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+        // ld
+        _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+        _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
+      }
+  
+      // printf("!?level = %d\n", level);
+      for (int l = level; l < _total_num_levels; l++) {
+        // printf("level %d, with cache_set.size() = %lu, needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), l, needed_CLs_per_level[l].size());
+        std::set<int> erase_set;
+        std::set<int> insert_set;
+        _sorting(l, needed_CLs_per_level[l], cache_set, erase_set, insert_set);
+        // printf("\nst-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st\n");
+        update_st(l, POs_in_this_CL, erase_set, cache_index);
+        // printf("\nld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld\n");
+        update_ld(l, insert_set, cache_index);
+        update_cache_set(erase_set, insert_set, cache_set);
+        // printf("After update_cache_set: cache_set.size() = %lu\n", cache_set.size());
+        assert(cache_set.size() == 256 && "assert(cache_set.size() == 256");
+      }
+  
+      // last level + 1:  need to WB
+      // st
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      for (const int i:needed_CLs_per_level[_total_num_levels-1]) {
+        if (POs_in_this_CL[i]) {
+          _st_ld_CLIdxs.push_back(i);
+          _st_ld_positi.push_back(i);
+        }
+      }
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      // ld
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
+      _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());       
+    }  
+  }
 
-  // int diffSetSz = 0;
-  // int level = 0;
-  // while (diffSetSz == 0 && level < _total_num_levels) {
-  //   std::set<int> diffSet;
-  //   std::set_difference(_needed_CLs_per_level[level].begin(), _needed_CLs_per_level[level].end(),
-  //                       cache_set.begin(), cache_set.end(),
-  //                       std::inserter(diffSet, diffSet.begin()));
-  //   diffSetSz = diffSet.size();
-  //   // printf("level %d PASS, diffSet.size() = %lu (_needed_CLs_per_level[%d].size() = %lu)\n", 
-  //   //       level, diffSet.size(), level, _needed_CLs_per_level[level].size());
-  //   if (diffSetSz == 0) {
-  //     level++;
-  //   }
-  // } 
-  // printf("level = %d\n", level);
-
-  // bool all_in_one_cache = (level == _total_num_levels);
-  // if (all_in_one_cache) { // 所有東西都能被塞進 cache line 裡面
-  //   // printf("level = %d, _total_num_levels = %d, _num_CLs = %d\n", level, _total_num_levels, _num_CLs);
-    
-  //   // init _st_ld_CLs_index_table: level 0
-  //   // st: 
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   // ld: 
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   assert(_num_CLs <= _NUM_CLS_PER_BLOCK && "assert(_num_CLs <= _NUM_CLS_PER_BLOCK");
-  //   int CLs = (_num_CLs < _NUM_CLS_PER_BLOCK) ? (_num_CLs) : (_NUM_CLS_PER_BLOCK);
-  //   for (int i = 0; i < CLs; i++) {
-  //     _st_ld_CLIdxs.push_back(i);
-  //     _st_ld_positi.push_back(i);
-  //   }
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-
-  //   for (int l = 1; l < level; l++) {
+  // // print
+  // for (int b = 0; b < _used_num_blocks; b++) {
+  //   printf("block %d\n", b);
+  //   printf("_st_ld_CLIdxs (block = %d, _total_num_levels = %d) = [\n", b, _total_num_levels);
+  //   for (size_t i = 0; i < _st_ld_CLs_index_table.size()/(4*_used_num_blocks); i++) {
   //     // st
-  //     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //     // ld
-  //     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
-  //   }
-
-  //   // last level + 1:  need to WB
-  //   // st
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   for (int i = 0; i < CLs; i++) {
-  //     if (POs_in_this_CL[i]) {
-  //       _st_ld_CLIdxs.push_back(i);
-  //       _st_ld_positi.push_back(i);        
+  //     printf("\tlevel %lu st: ", i);
+  //     for (int j = _st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+0]; j < _st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+1]; j++) {
+  //       printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
   //     }
-  //   }
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   // ld
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
-  // } else {
-  //   // init _st_ld_CLs_index_table: level 0
-  //   // st: 
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   // ld: 
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   for (int i = 0; i < _NUM_CLS_PER_BLOCK; i++) {
-  //     _st_ld_CLIdxs.push_back(i);
-  //     _st_ld_positi.push_back(i);
-  //   }
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-
-  //   for (int l = 1; l < level; l++) {
-  //     // st
-  //     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //     // ld
-  //     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
-  //   }
-
-  //   // printf("!?level = %d\n", level);
-  //   for (int l = level; l < _total_num_levels; l++) {
-  //     // printf("level %d, with cache_set.size() = %lu, _needed_CLs_per_level[%d].size() = %lu\n", l, cache_set.size(), l, _needed_CLs_per_level[l].size());
-  //     std::set<int> erase_set;
-  //     std::set<int> insert_set;
-  //     _sorting(l, _needed_CLs_per_level[l], cache_set, erase_set, insert_set);
-  //     // printf("\nst-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st-st\n");
-  //     update_st(l, POs_in_this_CL, erase_set, cache_index);
-  //     // printf("\nld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld-ld\n");
-  //     update_ld(l, insert_set, cache_index);
-  //     update_cache_set(erase_set, insert_set, cache_set);
-  //     // printf("After update_cache_set: cache_set.size() = %lu\n", cache_set.size());
-  //     assert(cache_set.size() == 256 && "assert(cache_set.size() == 256");
-  //   }
-
-  //   // last level + 1:  need to WB
-  //   // st
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   for (const int i:_needed_CLs_per_level[_total_num_levels-1]) {
-  //     if (POs_in_this_CL[i]) {
-  //       _st_ld_CLIdxs.push_back(i);
-  //       _st_ld_positi.push_back(i);
+  //     printf("\n");
+  //     // ld 
+  //     printf("\tlevel %lu ld: ", i);
+  //     for (int j = _st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+2]; j < _st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+3]; j++) {
+  //       printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
   //     }
+  //     printf("\n");
   //   }
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   // ld
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-  //   _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());       
+  //   printf("]\n");    
   // }
-    
-  // // std::vector<int> &a = _st_ld_CLs_index_table;
-  // // printf("_st_ld_CLIdxs (sz = %lu, _total_num_levels = %d) = [\n", a.size(), _total_num_levels);
-  // // for (size_t i = 0; i < a.size()/4; i++) {
-  // //   // st
-  // //   printf("\tlevel %lu st: ", i);
-  // //   for (int j = a[4*i+0]; j < a[4*i+1]; j++) {
-  // //     printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
-  // //   }
-  // //   printf("\n");
-  // //   // ld 
-  // //   printf("\tlevel %lu ld: ", i);
-  // //   for (int j = a[4*i+2]; j < a[4*i+3]; j++) {
-  // //     printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
-  // //   }
-  // //   printf("\n");
-  // // }
-  // // printf("]\n");
+  // TODO
+  // 檢查：有重複的 gc idx 肯定沒有被 LD/ST -> 該 gc table 一定只能是 false, 必定回到 global memory 拿資料
+
 }
 
 void CUDAMAPartitioner::_needed_st_ld_CLs_per_level_per_block(std::vector<bool> &POs_in_this_CL, std::vector<int> &ret_level) {
@@ -631,20 +656,21 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level_per_block(std::vector<bool> 
   const int maxGates = limit_num_blocks*num_threads;
   // printf("num_threads = %d, limit_num_blocks = %d, maxGates = %d\n", num_threads, limit_num_blocks, maxGates);
   // find the max_num_blocks 
-  int max_l = 0, max_num_blocks = 0;
+  // int max_l = 0, 
+  int max_num_blocks = 0;
   for (int l = 0; l < _total_num_levels; l++) {
     int tmp = (_numGates_per_level[l] + num_threads - 1)/num_threads; 
     if (tmp > max_num_blocks) {
-      max_l = l; 
+      // max_l = l; 
       max_num_blocks = tmp; 
     }
   }
   // printf("max_l = %d max_num_blocks = %d, _numGates_per_level[%d] = %d\n", 
   //         max_l, max_num_blocks, max_l, _numGates_per_level[max_l]);
-  int used_num_blocks = (max_num_blocks < limit_num_blocks) 
+  _used_num_blocks = (max_num_blocks < limit_num_blocks) 
                         ? (max_num_blocks) 
                         : (limit_num_blocks);
-  _needed_CLs_per_level_block.resize(used_num_blocks);
+  _needed_CLs_per_level_block.resize(_used_num_blocks);
   for (size_t b = 0; b < _needed_CLs_per_level_block.size(); b++) {
     _needed_CLs_per_level_block[b].resize(_total_num_levels);
   }
@@ -670,7 +696,7 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level_per_block(std::vector<bool> 
   } 
 
   // for (size_t b = 0; b < _needed_CLs_per_level_block.size(); b++) {
-  //   printf("blocks %lu\n", b);
+  //   // printf("blocks %lu\n", b);
   //   for (size_t l = 0; l < _needed_CLs_per_level_block[b].size(); l++) {
   //     if (_needed_CLs_per_level_block[b][l].size() != 0) {
   //       printf("\tlevel %lu numCLs = %lu, ", l, _needed_CLs_per_level_block[b][l].size());
@@ -697,9 +723,9 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level_per_block(std::vector<bool> 
   //   }
   // }  
 
-  // judge return level per block
-  ret_level.resize(used_num_blocks); 
-  for (int b = used_num_blocks-1; b > -1; b--) {
+  // Judge return level per block
+  ret_level.resize(_used_num_blocks); 
+  for (int b = _used_num_blocks-1; b > -1; b--) {
     // printf("block %d\n", b);
     int ret_l = _total_num_levels; 
     for (int l = _total_num_levels-1; l > -1; l--) {
@@ -710,17 +736,17 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level_per_block(std::vector<bool> 
         break;
       }
     }
-    ret_level[b] = (b == (used_num_blocks - 1)) 
+    ret_level[b] = (b == (_used_num_blocks - 1)) 
                   ? ret_l 
                   : ((ret_l > ret_level[b + 1]) 
                     ? ret_l 
                     : ret_level[b + 1]);
   }
   
-  // for (int b = 0; b < used_num_blocks; b++) {
+  // for (int b = 0; b < _used_num_blocks; b++) {
   //   printf("block %d, ret_level[%d] = %d\n", b, b, ret_level[b]);
   // }
-  // printf("_total_num_levels = %d", _total_num_levels);
+  // printf("_total_num_levels = %d\n", _total_num_levels);
 }
 
 
@@ -729,9 +755,9 @@ void CUDAMAPartitioner::_update_st_ld_CLs_per_level() {
   std::vector<int> ret_level;
   _needed_st_ld_CLs_per_level_per_block(POs_in_this_CL, ret_level);
   
-  // // 這裡要確定每一層需要重新 st/ld 哪些 CLs
-  // // for each level: 1. st start, 2. st end, 3. ld start, 4. ld end
-  // _st_ld_CLs_per_level(POs_in_this_CL); 
+  // 這裡要確定每一層需要重新 st/ld 哪些 CLs
+  // for each level: 1. st start, 2. st end, 3. ld start, 4. ld end
+  _st_ld_CLs_per_level(POs_in_this_CL); 
 }
 
 void CUDAMAPartitioner::_MA_simu_preparation() {
