@@ -180,7 +180,8 @@ void GALPS_MA_GPUSimulator::_run_gates_MA_gpu(const int _total_num_levels,
                                               const int *_st_ld_CLIdxs_gpu,
                                               const int *_st_ld_positi_gpu,
                                               const int *_st_ld_CLs_index_table_gpu,
-                                              uint32_t *_gpu_sync) {
+                                              uint32_t *_gpu_sync,
+                                              const int *_num_needed_blocks_gpu) {
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
   std::cout << "execute simulation._run_gates_MA_gpu();\n";
 #endif
@@ -206,7 +207,7 @@ void GALPS_MA_GPUSimulator::_run_gates_MA_gpu(const int _total_num_levels,
                                   _st_ld_CLIdxs_gpu,
                                   _st_ld_positi_gpu,
                                   _st_ld_CLs_index_table_gpu,
-                                  _gpu_sync);
+                                  _gpu_sync, _num_needed_blocks_gpu);
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
     if (rd == 0) {
       // shift and copy answer to the good results
@@ -248,30 +249,22 @@ void GALPS_MA_GPUSimulator::_run_cones_good_case_MA_gpu(const int _total_num_lev
                                                         const int *_st_ld_CLIdxs_gpu,
                                                         const int *_st_ld_positi_gpu,
                                                         const int *_st_ld_CLs_index_table_gpu,
-                                                        uint32_t *_gpu_sync) {
+                                                        uint32_t *_gpu_sync,
+                                                        const int *_num_needed_blocks_gpu) {
   // printf("Getting inside _run_cones_good_case_MA_gpu\n");
-
-  int maxNumBlks = 0;
-
   const size_t fault_num = 0; const size_t bad_case = 0;
-  for (int level = 0; level < _total_num_levels; level++) {
-    int num_blocks  = (_numGates_per_level[level] > _NUM_THREADS) ? 
-                  (_numGates_per_level[level] + _NUM_THREADS - 1)/_NUM_THREADS : 
-                  (1);
-    maxNumBlks = (maxNumBlks < num_blocks) ? (num_blocks) : (maxNumBlks);
-  }
-  const int num_blocks = maxNumBlks;
-  const int num_threads = _NUM_THREADS;
+  // printf("num_blocks = %d, num_threads = %d\n", _used_num_blocks, _num_threads);
 
-  _run_gate_MA <<< num_blocks, num_threads >>> (num_blocks, _gpu_sync, _sum_pi_gates_pos, 
-                                                _numGates_per_level_gpu, _total_num_levels, 
-                                                _invAdj_gpu, _invAdj_index_table_gpu, 
-                                                _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
-                                                _patterns_gpu, rd, 
-                                                _fault_gate_idx_gpu, _fault_SA_fault_val_gpu, 
-                                                fault_num, bad_case, 
-                                                _num_PIs, 
-                                                _st_ld_CLIdxs_gpu, _st_ld_positi_gpu, _st_ld_CLs_index_table_gpu);
+  _run_gate_MA <<< _used_num_blocks, _num_threads >>> (_used_num_blocks, _gpu_sync, _sum_pi_gates_pos, 
+                                                      _numGates_per_level_gpu, _total_num_levels, 
+                                                      _invAdj_gpu, _invAdj_index_table_gpu, 
+                                                      _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
+                                                      _patterns_gpu, rd, 
+                                                      _fault_gate_idx_gpu, _fault_SA_fault_val_gpu, 
+                                                      fault_num, bad_case, 
+                                                      _num_PIs, 
+                                                      _st_ld_CLIdxs_gpu, _st_ld_positi_gpu, 
+                                                      _st_ld_CLs_index_table_gpu);
 
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
   cudaDeviceSynchronize();
@@ -683,7 +676,7 @@ __device__ __forceinline__ int _getSLIdx(const int *_st_ld_CLs_index_table_gpu, 
 }
 
 
-__device__ void _run_gate_MA_thd(const int t_idx, const int num_gates_per_level, const int num_accumGates, 
+__device__ void _run_gate_MA_thd(const int real_g_idx, const int num_gates_per_level, const int num_accumGates, 
                                 const int SA_fault, 
                                 const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, 
                                 const int *_pi_gate_po_gate_type_gpu, uint32_t *_pi_gate_po_output_res_gpu, 
@@ -693,45 +686,41 @@ __device__ void _run_gate_MA_thd(const int t_idx, const int num_gates_per_level,
                                 const int *_st_ld_positi_gpu,
                                 const int *_st_ld_CLs_index_table_gpu,
                                 uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table) {
-  if (num_gates_per_level > t_idx) {
-    int real_g_idx = num_accumGates+t_idx;
+  if (num_gates_per_level > real_g_idx) {
     int type = _pi_gate_po_gate_type_gpu[real_g_idx];
-    // if (t_idx == 0) {
-    //   printf("hi\n");
-    // }
     switch (type) { 
       case 0:
-      // _apply_INV_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
+      _apply_INV_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 1:
-      // _apply_AND_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
+      _apply_AND_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 2:
-      // _apply_OR_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
+      _apply_OR_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 3:
-      // _apply_XOR_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
+      _apply_XOR_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 4:
-      // _apply_NAND_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
+      _apply_NAND_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 5:
-      // _apply_NOR_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
+      _apply_NOR_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 6:
-      // _apply_XNOR_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
+      _apply_XNOR_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 7:
-      // _apply_MUX_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
+      _apply_MUX_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 8:
-      // _apply_CLKBUF_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
+      _apply_CLKBUF_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 9:
-      // _apply_PI_MA(real_g_idx, cache, g_c_table, pos_table, _pi_gate_po_output_res_gpu, _patterns_gpu[_num_PIs*rd+real_g_idx]);
+      _apply_PI_MA(real_g_idx, cache, g_c_table, pos_table, _pi_gate_po_output_res_gpu, _patterns_gpu[_num_PIs*rd+real_g_idx]);
       break;
     case 10:
-      // _apply_PO_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
+      _apply_PO_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 11:
       break;
@@ -767,81 +756,102 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
   uint32_t *cache = shared_mem;                   // First 32 KB (8192 elements)
   uint32_t *g_c_table = shared_mem + 8192;        // Next 8 KB (starting from element 8192)
   uint32_t *pos_table = shared_mem + 8192 + 2048; // Last 8 KB (starting from element 8192 + 2048)
+  const int *_st_ld_CLs_index_table_b = _st_ld_CLs_index_table_gpu+blockIdx.x*(_total_num_levels+1)*4;
 
   // starts 
-  const int t_idx = blockDim.x*blockIdx.x + threadIdx.x;
-  const int w_idx = t_idx/32;   // /32
+  const int t_idx = blockDim.x*blockIdx.x+threadIdx.x;
+  const int w_idx = threadIdx.x>>5;   // 你是該 block 中的哪一個 warp
+  const int numWarpsPerBlk = blockDim.x>>5;
   const int w_t_idx = t_idx&31; // %32
   int num_accumGates = 0; 
   const int SA_fault = 0; 
-  // if (t_idx == 0) {
-  //   printf("hihihi\n");
-  // }
 
   for (int l = 0; l < _total_num_levels; l++) {
-    // ST/LD cachelines 
-    // ST
-    const int st_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 0);
-    const int st_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 1);
-    const int numST = st_e-st_s;
-    if (w_idx < numST) {
-      const int CLIdx = _st_ld_CLIdxs_gpu[st_s+w_idx];
-      const int CLPos = _st_ld_positi_gpu[st_s+w_idx];
-      _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, w_t_idx)] = cache[_CLIdx_to_idx(CLPos, w_t_idx)];
-
-      // update g_c_table, pos_table
-      _modify_bits(&g_c_table[CLIdx/4], CLIdx&3, 1, w_t_idx);
-    }
-    __syncthreadsAllBlocks(&_gpu_sync[1], l, num_blocks); 
+    // // ST/LD cachelines 
+    // // ST
+    // const int st_s = _getSLIdx(_st_ld_CLs_index_table_b, l, 0);
+    // const int st_e = _getSLIdx(_st_ld_CLs_index_table_b, l, 1);
+    // const int numST = st_e-st_s;
+    // const int STRounds = (numST + numWarpsPerBlk - 1)/numWarpsPerBlk;
+    // if (blockIdx.x == 2 && threadIdx.x == 0) {
+    //   printf("blockIdx.x = %d, l = %d, numST = %d, STRounds = %d\n", blockIdx.x, l, numST, STRounds);
+    // }
+    // for (int rd = 0; rd < STRounds; rd++) {
+    //   const int acc_idx = rd*numWarpsPerBlk+w_idx;
+    //   if (acc_idx < numST) {
+    //     const int CLIdx = _st_ld_CLIdxs_gpu[st_s+acc_idx];
+    //     const int CLPos = _st_ld_positi_gpu[st_s+acc_idx];
+    //     if (CLIdx != -1) {
+    //       if (blockIdx.x == 2 && threadIdx.x%32 == 0) {
+    //         printf("\trd = %d, st_s+acc_idx = %d, CLIdx = %d, CLPos = %d\n", 
+    //                 rd, st_s+acc_idx, CLIdx, CLPos);
+    //       }
+    //       _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, w_t_idx)] = cache[_CLIdx_to_idx(CLPos, w_t_idx)];
+    //       // update g_c_table, pos_table
+    //       _modify_bits(&g_c_table[(CLIdx&8191)/4], CLIdx&3, 0, w_t_idx);
+    //     }
+    //   }
+    // }
+    // __syncthreadsAllBlocks(&_gpu_sync[1], l, num_blocks);
  
-    // LD
-    const int ld_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 2);
-    const int ld_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 3);
-    const int numLD = ld_e-ld_s;
-    if (w_idx < numLD) {
-      // load 
-      const int CLIdx = _st_ld_CLIdxs_gpu[ld_s+w_idx];
-      const int CLPos = _st_ld_positi_gpu[ld_s+w_idx];
-      cache[_CLIdx_to_idx(CLPos, w_t_idx)] = _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, w_t_idx)];
+    // // LD
+    // // TODO: LD 壞掉了
+    // const int ld_s = _getSLIdx(_st_ld_CLs_index_table_b, l, 2);
+    // const int ld_e = _getSLIdx(_st_ld_CLs_index_table_b, l, 3);
+    // const int numLD = ld_e-ld_s;
+    // if (w_idx < numLD) {
+    //   // load 
+    //   const int CLIdx = _st_ld_CLIdxs_gpu[ld_s+w_idx];
+    //   const int CLPos = _st_ld_positi_gpu[ld_s+w_idx];
+    //   cache[_CLIdx_to_idx(CLPos, w_t_idx)] = _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, w_t_idx)];
 
-      // update g_c_table, pos_table
-      // g_c_table[CLIdx] = 1;
-      _modify_bits(&g_c_table[CLIdx/4], CLIdx&3, 1, w_t_idx);
-      // pos_table[CLIdx] = CLPos;
-      _modify_bits(&pos_table[CLIdx/4], CLIdx&3, CLPos, w_t_idx);
-    }
-    __syncthreadsAllBlocks(&_gpu_sync[2], l, num_blocks); 
+    //   // update g_c_table, pos_table
+    //   // g_c_table[CLIdx] = 1;
+    //   _modify_bits(&g_c_table[CLIdx/4], CLIdx&3, 1, w_t_idx);
+    //   // pos_table[CLIdx] = CLPos;
+    //   _modify_bits(&pos_table[CLIdx/4], CLIdx&3, CLPos, w_t_idx);
+    // }
+    // __syncthreadsAllBlocks(&_gpu_sync[2], l, num_blocks); 
 
-    // Do works 
-    _run_gate_MA_thd(t_idx, _numGates_per_level_gpu[l], num_accumGates, SA_fault, 
-                      _invAdj_gpu, _invAdj_index_table_gpu,
-                      _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
-                      _patterns_gpu, rd, 
-                      _num_PIs, 
-                      _st_ld_CLIdxs_gpu, 
-                      _st_ld_positi_gpu, 
-                      _st_ld_CLs_index_table_gpu, 
-                      cache, g_c_table, pos_table);
+    // // // Do works
+    // // // since one block may need to do multiple rounds of block 
+    // const int totalNumThreads = num_blocks*blockDim.x;
+    // const int rounds = (_numGates_per_level_gpu[l] + totalNumThreads - 1)/totalNumThreads;
+    // // if (threadIdx.x == 0) {
+    // //   printf("l = %d, blockIdx.x = %d, rounds = %d, _total_num_levels = %d\n", l, blockIdx.x, rounds, _total_num_levels);
+    // // }    
+    // for (int rd = 0; rd < rounds; rd++) {
+    //   const int rdAccum = rd*totalNumThreads;
+    //   const int real_g_idx = num_accumGates+rdAccum+t_idx;
+    //   _run_gate_MA_thd(real_g_idx, _numGates_per_level_gpu[l], num_accumGates, SA_fault, 
+    //                     _invAdj_gpu, _invAdj_index_table_gpu,
+    //                     _pi_gate_po_gate_type_gpu, _pi_gate_po_output_res_gpu, 
+    //                     _patterns_gpu, rd, 
+    //                     _num_PIs, 
+    //                     _st_ld_CLIdxs_gpu, 
+    //                     _st_ld_positi_gpu, 
+    //                     _st_ld_CLs_index_table_b, 
+    //                     cache, g_c_table, pos_table);
+    // }
+    // __syncthreadsAllBlocks(&_gpu_sync[3], l, num_blocks); 
+    // num_accumGates += _numGates_per_level_gpu[l];
+  } // for loop: _total_num_levels 
 
-    __syncthreadsAllBlocks(&_gpu_sync[3], l, num_blocks); 
-    num_accumGates += _numGates_per_level_gpu[l];
-  }
+  // // Last WB POs
+  // const int st_s_f = _getSLIdx(_st_ld_CLs_index_table_b, _total_num_levels, 0);
+  // const int st_e_f = _getSLIdx(_st_ld_CLs_index_table_b, _total_num_levels, 1);
+  // const int numST_f = st_e_f-st_s_f;
 
-  // Last WB POs
-  const int st_s_f = _getSLIdx(_st_ld_CLs_index_table_gpu, _total_num_levels, 0);
-  const int st_e_f = _getSLIdx(_st_ld_CLs_index_table_gpu, _total_num_levels, 1);
-  const int numST_f = st_e_f-st_s_f;
-
-  if (w_idx < numST_f) {
-    const int CLIdx = _st_ld_CLIdxs_gpu[st_s_f+w_idx];
-    const int CLPos = _st_ld_positi_gpu[st_s_f+w_idx];
-    if (_CLIdx_to_idx(CLIdx, w_t_idx) < _sum_pi_gates_pos) {
-      _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, w_t_idx)] = cache[_CLIdx_to_idx(CLPos, w_t_idx)];
-      // printf("numST_f = %d, w_idx = %d, CLIdx = %d, CLPos = %d, pp = %d, cache_val = %u, g_val[%d] = %u\n", numST_f, 
-      //         w_idx, CLIdx, CLPos, _CLIdx_to_idx(CLPos, w_t_idx), cache[_CLIdx_to_idx(CLPos, w_t_idx)], 
-      //         _CLIdx_to_idx(CLIdx, w_t_idx), _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, w_t_idx)]);
-    }
-  }
+  // if (w_idx < numST_f) {
+  //   const int CLIdx = _st_ld_CLIdxs_gpu[st_s_f+w_idx];
+  //   const int CLPos = _st_ld_positi_gpu[st_s_f+w_idx];
+  //   if (_CLIdx_to_idx(CLIdx, w_t_idx) < _sum_pi_gates_pos) {
+  //     _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, w_t_idx)] = cache[_CLIdx_to_idx(CLPos, w_t_idx)];
+  //     // printf("numST_f = %d, w_idx = %d, CLIdx = %d, CLPos = %d, pp = %d, cache_val = %u, g_val[%d] = %u\n", numST_f, 
+  //     //         w_idx, CLIdx, CLPos, _CLIdx_to_idx(CLPos, w_t_idx), cache[_CLIdx_to_idx(CLPos, w_t_idx)], 
+  //     //         _CLIdx_to_idx(CLIdx, w_t_idx), _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, w_t_idx)]);
+  //   }
+  // } // if (w_idx < numST_f) 
 }
 
 

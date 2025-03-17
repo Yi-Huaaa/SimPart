@@ -40,6 +40,7 @@ constexpr int _NUM_GATES_PER_CL = 32;
 constexpr int _NUM_CLS_PER_BLOCK = 256; // cache: 32KB, others: 16KB
 constexpr int _NUM_GLOBAL_CLS = 14560; // cache: 32KB, others: 16KB
 constexpr uint32_t UINT32T_BITS = std::numeric_limits<uint32_t>::digits;
+constexpr int _num_threads = 1024;  // for GPU kernel 
 // constexpr int _NUM_CLS_PER_BLOCK = 320; // cache: 40KB, others: 8KB
 // constexpr int _NUM_GLOBAL_CLS = 5616; // cache: 40KB, others: 8KB
 
@@ -226,6 +227,7 @@ private:
   // MA preparation and simulation 
   int _num_CLs;
   std::vector<std::vector<std::set<int>>> _needed_CLs_per_level_block; 
+  std::vector<int> _num_needed_blocks;
   int _used_num_blocks;
   std::vector<int> _weight_table;
   std::vector<int> _st_ld_CLIdxs;
@@ -237,25 +239,27 @@ private:
   uint32_t *_g_c_table; 
   uint32_t *_position_table; 
   uint32_t *_gpu_sync;
+  int *_num_needed_blocks_gpu; 
 
   void _MA_simu_preparation();
     void _construct_num_CLs_weight_tables();
     void _update_st_ld_CLs_per_level();
-      void _needed_st_ld_CLs_per_level_per_block(std::vector<bool> &POs_in_this_CL, std::vector<int> &ret_level);
+      void _needed_st_ld_CLs_per_level_per_block(std::vector<bool> &POs_in_this_CL);
       void _st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL);
         void _sorting(const int l, 
                       const std::set<int> &needed_CLs_per_level_l, 
                       const std::set<int> &cache_set,
                       std::set<int> &erase_set, std::set<int> &insert_set);
-        void update_st(const int l, std::vector<bool> &POs_in_this_CL,
+        void _update_st(const int l, std::vector<bool> &POs_in_this_CL,
                       const std::set<int> &erase_set, 
                       const std::vector<int> &cache_index); 
-        void update_ld(const int l, 
+        void _update_ld(const int b, const int l, 
                       const std::set<int> &insert_set, 
+                      const std::set<int> &erase_set, 
                       std::vector<int> &cache_index); 
-        void update_cache_set(std::set<int> &erase_set, 
-                              std::set<int> &insert_set,
-                              std::set<int> &cache_set);
+        void _update_cache_set(std::set<int> &erase_set, 
+                                std::set<int> &insert_set,
+                                std::set<int> &cache_set);
 
         
                               
@@ -286,6 +290,8 @@ private:
     cudaFree(_st_ld_CLs_index_table_gpu);
     cudaFree(_g_c_table);
     cudaFree(_position_table);
+    cudaFree(_num_needed_blocks_gpu);
+    cudaFree(_gpu_sync);    
   }
 
   // --------------------------------------------------------------------------

@@ -60,7 +60,7 @@ int main(int argc, char *argv[]) {
 
   // // pre-run
   // cudaMAPartitioner.run_MA(NUM_THREADS, _NUM_SIMULATION_RDS);
-  // dur_sim = chro_zero();
+  // // dur_sim = chro_zero();
 
   // // Run Simulator
   // for (size_t t = 0; t < TIMES; t++) {
