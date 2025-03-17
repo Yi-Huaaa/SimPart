@@ -404,6 +404,7 @@ void CUDAMAPartitioner::_sorting(const int l,
       break;
     }
   }
+
   // // Print each pair (value, index)
   // printf("\tindexed_cache: ");
   // for (const auto& p : indexed_cache) {
@@ -439,6 +440,21 @@ void CUDAMAPartitioner::_sorting(const int l,
   //   std::cout << p << ", ";
   // }
   // std::cout << std::endl << std::endl;
+  
+  // The following code only used for check the correctness 
+  // 檢查：有重複的 gc idx 肯定沒有被 LD/ST -> 該 gc table 一定只能是 false, 必定回到 global memory 拿資料
+  // // TODO: 這個再測時間的時候要拿掉
+  // accum.clear(); accum.resize(8192, 0);
+  // for (const int CLIdx : insert_set) {
+  //   const int CLIdx_mod_8192 = CLIdx&8191; // mod 8192
+  //   accum[CLIdx_mod_8192]++;
+  // }
+  // for (const int a : accum) {
+  //   if (a > 1) {
+  //     printf("ERROR, a = %d\n", a);
+  //     exit(1);
+  //   }
+  // }
 }
 
 void CUDAMAPartitioner::update_st(const int l, std::vector<bool> &POs_in_this_CL,
@@ -644,9 +660,6 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
   //   }
   //   printf("]\n");    
   // }
-  // TODO
-  // 檢查：有重複的 gc idx 肯定沒有被 LD/ST -> 該 gc table 一定只能是 false, 必定回到 global memory 拿資料
-
 }
 
 void CUDAMAPartitioner::_needed_st_ld_CLs_per_level_per_block(std::vector<bool> &POs_in_this_CL, std::vector<int> &ret_level) {
