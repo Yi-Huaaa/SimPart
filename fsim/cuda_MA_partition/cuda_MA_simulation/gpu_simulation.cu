@@ -847,13 +847,13 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
                         _st_ld_CLs_index_table_b, 
                         cache, g_c_table, pos_table);
     }
-    // __syncthreadsAllBlocks(&_gpu_sync[3], l, num_blocks);
-    __syncthreadsAllBlocks_early_ret(&_gpu_sync[3], num_needed_blocks_acc+_num_needed_blocks_gpu[l]);
+    __syncthreadsAllBlocks(&_gpu_sync[3], l, num_blocks);
+    // __syncthreadsAllBlocks_early_ret(&_gpu_sync[3], num_needed_blocks_acc+_num_needed_blocks_gpu[l]);
     num_accumGates += _numGates_per_level_gpu[l];
     num_needed_blocks_acc += _num_needed_blocks_gpu[l];
-    if (blockIdx.x > _num_needed_blocks_gpu[l+1]) {
-      return;
-    }    
+    // if (blockIdx.x > _num_needed_blocks_gpu[l+1]) {
+    //   return;
+    // }    
   } // for loop: _total_num_levels 
 
   // Last WB POs
