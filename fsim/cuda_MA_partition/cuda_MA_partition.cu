@@ -660,7 +660,8 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
   }
 
   // // print
-  // for (int b = 2; b < 3; b++) {
+  // printf("_total_num_levels = %d\n", _total_num_levels);
+  // for (int b = _used_num_blocks-1; b < _used_num_blocks; b++) {
   //   printf("block %d\n", b);
   //   printf("_st_ld_CLIdxs (block = %d, _total_num_levels = %d) = [\n", b, _total_num_levels);
   //   for (size_t i = 0; i < _st_ld_CLs_index_table.size()/(4*_used_num_blocks); i++) {
