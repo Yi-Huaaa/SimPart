@@ -58,9 +58,9 @@ int main(int argc, char *argv[]) {
   // }
   // std::cout << "run pure DSP simulator: " <<  round_to(((dur_sim.count()/TIMES))*1000, 0.001) << "\n";
 
-  // // pre-run
-  // cudaMAPartitioner.run_MA(NUM_THREADS, _NUM_SIMULATION_RDS);
-  // // dur_sim = chro_zero();
+  // pre-run
+  cudaMAPartitioner.run_MA(NUM_THREADS, _NUM_SIMULATION_RDS);
+  // dur_sim = chro_zero();
 
   // // Run Simulator
   // for (size_t t = 0; t < TIMES; t++) {
