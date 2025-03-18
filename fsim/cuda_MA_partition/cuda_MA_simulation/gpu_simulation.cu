@@ -181,7 +181,7 @@ void GALPS_MA_GPUSimulator::_run_gates_MA_gpu(const int _total_num_levels,
                                               const int *_st_ld_positi_gpu,
                                               const int *_st_ld_CLs_index_table_gpu,
                                               uint32_t *_gpu_sync,
-                                              const int *_num_needed_blocks_gpu) {
+                                              const uint32_t *_num_needed_blocks_gpu) {
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
   std::cout << "execute simulation._run_gates_MA_gpu();\n";
 #endif
@@ -250,7 +250,7 @@ void GALPS_MA_GPUSimulator::_run_cones_good_case_MA_gpu(const int _total_num_lev
                                                         const int *_st_ld_positi_gpu,
                                                         const int *_st_ld_CLs_index_table_gpu,
                                                         uint32_t *_gpu_sync,
-                                                        const int *_num_needed_blocks_gpu) {
+                                                        const uint32_t *_num_needed_blocks_gpu) {
   // printf("Getting inside _run_cones_good_case_MA_gpu\n");
   const size_t fault_num = 0; const size_t bad_case = 0;
   // printf("num_blocks = %d, num_threads = %d\n", _used_num_blocks, _num_threads);
@@ -264,7 +264,8 @@ void GALPS_MA_GPUSimulator::_run_cones_good_case_MA_gpu(const int _total_num_lev
                                                       fault_num, bad_case, 
                                                       _num_PIs, 
                                                       _st_ld_CLIdxs_gpu, _st_ld_positi_gpu, 
-                                                      _st_ld_CLs_index_table_gpu);
+                                                      _st_ld_CLs_index_table_gpu,
+                                                      _num_needed_blocks_gpu);
 
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
   cudaDeviceSynchronize();
@@ -477,11 +478,11 @@ __device__ __forceinline__ uint32_t _get_bits(const uint32_t *value, const int p
 }
 
 __device__ __forceinline__ int _get_g_c(const uint32_t *g_c_table, const int CLIdx) {
-  return _get_bits(&g_c_table[CLIdx/4], CLIdx&3); // 0: global, 1: cache
+  return _get_bits(&g_c_table[(CLIdx&8191)/4], CLIdx&3); // 0: global, 1: cache
 }
 
 __device__ __forceinline__ int _get_pos(const int gate_idx, const uint32_t *pos_table, const int CLIdx) {
-  int clpos = _get_bits(&pos_table[CLIdx/4], CLIdx&3); // 0: global, 1: cache
+  int clpos = _get_bits(&pos_table[(CLIdx&8191)/4], CLIdx&3); // 0: global, 1: cache
   return (clpos<<5)+gate_idx&31;
 }
 
@@ -670,11 +671,25 @@ __device__ __forceinline__ void __syncthreadsAllBlocks(uint32_t *_gpu_sync,
   }
 }
 
+__device__ __forceinline__ void __syncthreadsAllBlocks_early_ret(uint32_t *_gpu_sync, const uint32_t acc) {
+  // sync threads in the same block 
+  __syncthreads(); 
+
+  // centralized sync threads in all blocks 
+  if (threadIdx.x == 0) {
+    atomicAdd(_gpu_sync, 1);
+  }
+
+  // Busy-wait: wait for all blocks to finish
+  while (atomicAdd(_gpu_sync, 0) < acc) {
+    __threadfence();  
+  }
+}
+
 // get store/load index 
 __device__ __forceinline__ int _getSLIdx(const int *_st_ld_CLs_index_table_gpu, const int l, const int cases) {
   return _st_ld_CLs_index_table_gpu[4*l+cases];
 }
-
 
 __device__ void _run_gate_MA_thd(const int real_g_idx, const int num_gates_per_level, const int num_accumGates, 
                                 const int SA_fault, 
@@ -686,7 +701,7 @@ __device__ void _run_gate_MA_thd(const int real_g_idx, const int num_gates_per_l
                                 const int *_st_ld_positi_gpu,
                                 const int *_st_ld_CLs_index_table_gpu,
                                 uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table) {
-  if (num_gates_per_level > real_g_idx) {
+  if ((num_gates_per_level+num_accumGates) > real_g_idx) {
     int type = _pi_gate_po_gate_type_gpu[real_g_idx];
     switch (type) { 
       case 0:
@@ -717,7 +732,7 @@ __device__ void _run_gate_MA_thd(const int real_g_idx, const int num_gates_per_l
       _apply_CLKBUF_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
       break;
     case 9:
-      _apply_PI_MA(real_g_idx, cache, g_c_table, pos_table, _pi_gate_po_output_res_gpu, _patterns_gpu[_num_PIs*rd+real_g_idx]);
+      // _apply_PI_MA(real_g_idx, cache, g_c_table, pos_table, _pi_gate_po_output_res_gpu, _patterns_gpu[_num_PIs*rd+real_g_idx]);
       break;
     case 10:
       _apply_PO_MA(real_g_idx, _invAdj_gpu, _invAdj_index_table_gpu, _pi_gate_po_output_res_gpu, cache, g_c_table, pos_table);
@@ -750,7 +765,8 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
                             const int _num_PIs,
                             const int *_st_ld_CLIdxs_gpu,
                             const int *_st_ld_positi_gpu,
-                            const int *_st_ld_CLs_index_table_gpu) {  
+                            const int *_st_ld_CLs_index_table_gpu,
+                            const uint32_t *_num_needed_blocks_gpu) {
   // shared memory allocation 
   __shared__ uint32_t shared_mem[48 * 1024 / sizeof(uint32_t)]; // 48 KB shared memory as int array
   uint32_t *cache = shared_mem;                   // First 32 KB (8192 elements)
@@ -765,6 +781,7 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
   const int w_t_idx = t_idx&31; // %32
   int num_accumGates = 0; 
   const int SA_fault = 0; 
+  uint32_t num_needed_blocks_acc = 0;
 
   for (int l = 0; l < _total_num_levels; l++) {
     // if (t_idx == 0) {
@@ -776,9 +793,6 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
     const int st_e = _getSLIdx(_st_ld_CLs_index_table_b, l, 1);
     const int numST = st_e-st_s;
     const int STRounds = (numST + numWarpsPerBlk - 1)/numWarpsPerBlk;
-    // if (blockIdx.x == (num_blocks-1) && threadIdx.x == 0) {
-    //   printf("blockIdx.x = %d, l = %d, numST = %d, STRounds = %d\n", blockIdx.x, l, numST, STRounds);
-    // }
     for (int rd = 0; rd < STRounds; rd++) {
       const int acc_idx = rd*numWarpsPerBlk+w_idx;
       if (acc_idx < numST) {
@@ -793,8 +807,8 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
         }
       }
     }
-    __syncthreadsAllBlocks(&_gpu_sync[1], l, num_blocks);
- 
+    // Note: no need to sync here
+
     // LD
     const int ld_s = _getSLIdx(_st_ld_CLs_index_table_b, l, 2);
     const int ld_e = _getSLIdx(_st_ld_CLs_index_table_b, l, 3);
@@ -809,14 +823,12 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
 
         if (w_t_idx == 0) {
           // update g_c_table, pos_table
-          // g_c_table[CLIdx] = 1;
           _modify_bits(&g_c_table[(CLIdx&8191)>>2], CLIdx&3, 1, w_t_idx);
-          // pos_table[CLIdx] = CLPos;
           _modify_bits(&pos_table[(CLIdx&8191)>>2], CLIdx&3, CLPos, w_t_idx);
         }
       }
     }
-    __syncthreadsAllBlocks(&_gpu_sync[2], l, num_blocks); 
+    __syncthreads();
 
     // Do works
     // since one block may need to do multiple rounds of block 
@@ -835,8 +847,13 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
                         _st_ld_CLs_index_table_b, 
                         cache, g_c_table, pos_table);
     }
-    __syncthreadsAllBlocks(&_gpu_sync[3], l, num_blocks); 
+    // __syncthreadsAllBlocks(&_gpu_sync[3], l, num_blocks);
+    __syncthreadsAllBlocks_early_ret(&_gpu_sync[3], num_needed_blocks_acc+_num_needed_blocks_gpu[l]);
     num_accumGates += _numGates_per_level_gpu[l];
+    num_needed_blocks_acc += _num_needed_blocks_gpu[l];
+    if (blockIdx.x > _num_needed_blocks_gpu[l+1]) {
+      return;
+    }    
   } // for loop: _total_num_levels 
 
   // Last WB POs

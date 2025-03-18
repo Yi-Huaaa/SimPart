@@ -227,7 +227,7 @@ private:
   // MA preparation and simulation 
   int _num_CLs;
   std::vector<std::vector<std::set<int>>> _needed_CLs_per_level_block; 
-  std::vector<int> _num_needed_blocks;
+  std::vector<uint32_t> _num_needed_blocks;
   int _used_num_blocks;
   std::vector<int> _weight_table;
   std::vector<int> _st_ld_CLIdxs;
@@ -239,7 +239,7 @@ private:
   uint32_t *_g_c_table; 
   uint32_t *_position_table; 
   uint32_t *_gpu_sync;
-  int *_num_needed_blocks_gpu; 
+  uint32_t *_num_needed_blocks_gpu; 
 
   void _MA_simu_preparation();
     void _construct_num_CLs_weight_tables();

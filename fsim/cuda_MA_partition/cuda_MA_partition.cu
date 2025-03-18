@@ -788,9 +788,11 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level_per_block(std::vector<bool> 
       _num_needed_blocks[l]++;
     }
   }
+  size_t s = _num_needed_blocks.size();
+  _num_needed_blocks.push_back(_num_needed_blocks[s-1]);
   // for (size_t l = 0; l < _num_needed_blocks.size(); l++) {
-  //   printf("_num_needed_blocks[%d] = %d\n", l, _num_needed_blocks[l]);
-  // }  
+  //   printf("_num_needed_blocks[%lu] = %d\n", l, _num_needed_blocks[l]);
+  // }
 }
 
 
@@ -957,7 +959,7 @@ void CUDAMAPartitioner::_move_st_ld____h2d() {
   cudaMalloc((void**)&_st_ld_positi_gpu, _st_ld_positi.size()*sizeof(int));
   cudaMalloc((void**)&_st_ld_CLs_index_table_gpu, _st_ld_CLs_index_table.size()*sizeof(int));
   cudaMalloc((void**)&_gpu_sync, 4*sizeof(uint32_t));
-  cudaMalloc((void**)&_num_needed_blocks_gpu, _num_needed_blocks.size()*sizeof(int));
+  cudaMalloc((void**)&_num_needed_blocks_gpu, _num_needed_blocks.size()*sizeof(uint32_t));
   // cudaMalloc((void**)&_g_c_table, ((_num_CLs + 32 - 1)/32)*sizeof(uint32_t));
   // cudaMalloc((void**)&_position_table, ((_num_CLs + 8 - 1)/8)*sizeof(uint32_t));
   // printf("_num_CLs = %d, _g_c_table size = %d, _position_table size = %d\n", _num_CLs, ((_num_CLs + 32 - 1)/32), (_num_CLs + 8 - 1)/8);
@@ -971,7 +973,7 @@ void CUDAMAPartitioner::_move_st_ld____h2d() {
                   _st_ld_CLs_index_table.size()*sizeof(int), cudaMemcpyHostToDevice); 
   cudaMemset(_gpu_sync, 0, 4*sizeof(uint32_t));
   cudaMemcpyAsync(_num_needed_blocks_gpu, _num_needed_blocks.data(), 
-                  _num_needed_blocks.size()*sizeof(int), cudaMemcpyHostToDevice);   
+                  _num_needed_blocks.size()*sizeof(uint32_t), cudaMemcpyHostToDevice);   
   // printf("_num_CLs = %d\n", _num_CLs);
   cudaCheckErrors("CUDA: Asking _move_st_ld____h2d cudaMemcpyAsync - Failure");
 }

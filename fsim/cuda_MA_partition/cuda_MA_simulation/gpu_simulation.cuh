@@ -107,6 +107,7 @@ __device__ __forceinline__ void _wb_neg_val(const int gate_idx, const uint32_t w
 __device__ __forceinline__ void __syncthreadsAllBlocks(uint32_t *_gpu_sync, 
                                                       const int l, 
                                                       const int num_blocks);
+__device__ __forceinline__ void __syncthreadsAllBlocks_early_ret(uint32_t *_gpu_sync, const uint32_t acc);
 __device__ void _run_gate_MA_thd(const int real_g_idx, const int num_gates_per_level, const int num_accumGates, 
                                 const int SA_fault, 
                                 const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, 
@@ -127,7 +128,8 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
                             const int _num_PIs, 
                             const int *_st_ld_CLIdxs_gpu,
                             const int *_st_ld_positi_gpu,
-                            const int *_st_ld_CLs_index_table_gpu);                              
+                            const int *_st_ld_CLs_index_table_gpu,
+                            const uint32_t *_num_needed_blocks_gpu);
 __global__ void _write_and_shift_to_array_gpu(const size_t bits, 
                                               uint32_t *_pi_gate_po_output_res_gpu, 
                                               const int total_num_gates);
@@ -215,7 +217,7 @@ public:
                                 uint32_t *_gpu_sync,
                                 const int used_num_blocks,
                                 const int num_threads,
-                                const int *_num_needed_blocks_gpu) {
+                                const uint32_t *_num_needed_blocks_gpu) {
     // Get vars   
     _num_PIs = num_PIs;
     _num_inner_gates = num_inner_gates;
@@ -302,7 +304,7 @@ private:
                         const int *_st_ld_positi_gpu,
                         const int *_st_ld_CLs_index_table_gpu,
                         uint32_t *_gpu_sync,
-                        const int *_num_needed_blocks_gpu);
+                        const uint32_t *_num_needed_blocks_gpu);
   void _run_cones_good_case_MA_gpu(const int _total_num_levels, 
                                     const std::vector<int> &_numGates_per_level,
                                     const int *_numGates_per_level_gpu,
@@ -319,7 +321,7 @@ private:
                                     const int *_st_ld_positi_gpu,
                                     const int *_st_ld_CLs_index_table_gpu,
                                     uint32_t *_gpu_sync,
-                                    const int *_num_needed_blocks_gpu); 
+                                    const uint32_t *_num_needed_blocks_gpu); 
                         
 };
 
