@@ -228,7 +228,7 @@ public:
     _num_fault = num_fault;
     _used_num_blocks = used_num_blocks; 
     _num_threads = num_threads;
-    printf("Get inside run_gpu_simulator_MA_gpu\n");
+    // printf("Get inside run_gpu_simulator_MA_gpu\n");
     
     // Run simulation
     for (size_t rd = 0; rd < NUM_SIMULATION_RDS; rd++) {
