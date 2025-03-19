@@ -226,7 +226,7 @@ private:
 
   // MA preparation and simulation 
   int _num_CLs;
-  std::vector<std::vector<std::set<int>>> _needed_CLs_per_level_block; 
+  std::vector<std::set<int>> _needed_CLs_all_blocks; 
   std::vector<uint32_t> _num_needed_blocks;
   int _used_num_blocks;
   std::vector<int> _weight_table;
@@ -253,7 +253,7 @@ private:
         void _update_st(const int l, std::vector<bool> &POs_in_this_CL,
                       const std::set<int> &erase_set, 
                       const std::vector<int> &cache_index); 
-        void _update_ld(const int b, const int l, 
+        void _update_ld(const int l, 
                       const std::set<int> &insert_set, 
                       const std::set<int> &erase_set, 
                       std::vector<int> &cache_index); 
