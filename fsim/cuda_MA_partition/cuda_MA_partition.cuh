@@ -40,7 +40,7 @@ constexpr int _NUM_GATES_PER_CL = 32;
 constexpr int _NUM_CLS_PER_BLOCK = 256; // cache: 32KB, others: 16KB
 constexpr int _NUM_GLOBAL_CLS = 14560; // cache: 32KB, others: 16KB
 constexpr uint32_t UINT32T_BITS = std::numeric_limits<uint32_t>::digits;
-constexpr int _num_threads = 1024;  // for GPU kernel 
+constexpr int _num_threads = 512;  // for GPU kernel 
 // constexpr int _NUM_CLS_PER_BLOCK = 320; // cache: 40KB, others: 8KB
 // constexpr int _NUM_GLOBAL_CLS = 5616; // cache: 40KB, others: 8KB
 
