@@ -90,7 +90,7 @@ __device__ __forceinline__ void _apply_PI_MA(const int gate_idx,
 __device__ __forceinline__ void _apply_PO_MA(const int gate_idx, const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, uint32_t *_pi_gate_po_output_res_gpu,
                                           uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
 __device__ __forceinline__ int _getSLIdx(const int *_st_ld_CLs_index_table_gpu, const int l, const int cases);
-__device__ __forceinline__ void _modify_bits(uint32_t *a, const int p, const int val, const int lane);
+__device__ __forceinline__ void _modify_bits(uint32_t *a, const int p, const int val);
 __device__ __forceinline__ int _get_CLIdx(int gateIdx);
 __device__ __forceinline__ uint32_t _get_bits(const uint32_t *value, const int p);
 __device__ __forceinline__ int _get_g_c(const uint32_t *g_c_table, const int CLIdx);

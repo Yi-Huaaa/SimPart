@@ -550,7 +550,7 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
       level++;
     }
   } 
-  // printf("block %d, level = %d\n", b, level);
+  // printf("level = %d\n", level);
 
   bool all_in_one_cache = (level == _total_num_levels);
   if (all_in_one_cache) { // 所有東西都能被塞進 cache line 裡面
@@ -562,7 +562,7 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
     // ld: 
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-    assert(_num_CLs <= _NUM_CLS_PER_BLOCK && "assert(_num_CLs <= _NUM_CLS_PER_BLOCK");
+    
     int CLs = (_num_CLs < _NUM_CLS_PER_BLOCK) ? (_num_CLs) : (_NUM_CLS_PER_BLOCK);
     for (int i = 0; i < CLs; i++) {
       _st_ld_CLIdxs.push_back(i);
