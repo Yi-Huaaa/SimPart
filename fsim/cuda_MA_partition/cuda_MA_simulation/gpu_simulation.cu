@@ -41,7 +41,7 @@ constexpr int _NUM_GATES_PER_CL = 32;
 constexpr uint32_t UINT32T_BITS = std::numeric_limits<uint32_t>::digits;
 
 // #define PRINT_SIMULATION_OUTPUTS_DSP
-// #define PRINT_SIMULATION_OUTPUTS_CACHE
+#define PRINT_SIMULATION_OUTPUTS_CACHE
 
 #define CUDA_CHECK(call) \
     do { \
@@ -798,53 +798,51 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
 
   for (int l = 0; l < _total_num_levels; l++) {
     // ST/LD cachelines 
-    // ST
-    const int st_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 0);
-    const int st_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 1);
-    const int numST = st_e-st_s;
-    const int STRounds = (numST + numWarpsPerBlk - 1)/numWarpsPerBlk;
-    for (int rd = 0; rd < STRounds; rd++) {
-      const int acc_idx = rd*numWarpsPerBlk+w_idx;
-      if (acc_idx < numST) {
-        // ST
-        const int CLIdx = _st_ld_CLIdxs_gpu[st_s+acc_idx];
-        const int CLPos = _st_ld_positi_gpu[st_s+acc_idx];
-        if (CLIdx != -1) {
-          _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, lane_idx)] = cache[_CLIdx_to_idx(CLPos, lane_idx)];
-          if (lane_idx == 0) {
-            // update g_c_table, pos_table
-            _modify_bits(&g_c_table[(CLIdx&8191)>>2], CLIdx&3, 0);
+      // ST
+      const int st_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 0);
+      const int st_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 1);
+      const int numST = st_e-st_s;
+      const int STrounds = (numST + numWarpsPerBlk - 1)/numWarpsPerBlk;
+      for (int rd = 0; rd < STrounds; rd++) {
+        const int acc_idx = rd*numWarpsPerBlk+w_idx;
+        if (acc_idx < numST) {
+          // ST
+          const int STCLIdx = _st_ld_CLIdxs_gpu[st_s+acc_idx];
+          const int STCLPos = _st_ld_positi_gpu[st_s+acc_idx];
+          if (STCLIdx != -1) {
+            _pi_gate_po_output_res_gpu[_CLIdx_to_idx(STCLIdx, lane_idx)] = cache[_CLIdx_to_idx(STCLPos, lane_idx)];
+            if (lane_idx == 0) {
+              _modify_bits(&g_c_table[(STCLIdx&8191)>>2], STCLIdx&3, 0); // update g_c_table
+            }
           }
-        }
-      }
-    }
-    // Note: no need to sync here
+        } // if (acc_idx < numST)
+      } // for loop: STrounds
 
-    // LD
-    const int ld_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 2);
-    const int ld_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 3);
-    const int numLD = ld_e-ld_s;
-    const int LDRounds = (numLD + numWarpsPerBlk - 1)/numWarpsPerBlk;
-    for (int rd = 0; rd < LDRounds; rd++) {
-      const int acc_idx = rd*numWarpsPerBlk+w_idx;
-      if (acc_idx < numLD) {
-        const int CLIdx = _st_ld_CLIdxs_gpu[ld_s+acc_idx];
-        const int CLPos = _st_ld_positi_gpu[ld_s+acc_idx];
-        cache[_CLIdx_to_idx(CLPos, lane_idx)] = _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, lane_idx)];
-        if (lane_idx == 0) {
-          _modify_bits(&g_c_table[(CLIdx&8191)>>2], CLIdx&3, 1); // update g_c_table
-          _modify_bits(&pos_table[(CLIdx&8191)>>2], CLIdx&3, CLPos); // update pos_table
-        }
-      }
-    }
+      // LD
+      const int ld_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 2);
+      const int ld_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 3);    
+      const int numLD = ld_e-ld_s;
+      const int LDrounds = (numLD + numWarpsPerBlk - 1)/numWarpsPerBlk;
+      for (int rd = 0; rd < LDrounds; rd++) {
+        const int acc_idx = rd*numWarpsPerBlk+w_idx;
+        if (acc_idx < numLD) {
+          // LD
+          const int LDCLIdx = _st_ld_CLIdxs_gpu[ld_s+acc_idx];
+          const int LDCLPos = _st_ld_positi_gpu[ld_e+acc_idx];
+          cache[_CLIdx_to_idx(LDCLPos, lane_idx)] = _pi_gate_po_output_res_gpu[_CLIdx_to_idx(LDCLIdx, lane_idx)];
+          if (lane_idx == 0) {
+            _modify_bits(&g_c_table[(LDCLIdx&8191)>>2], LDCLIdx&3, 1); // update g_c_table
+            _modify_bits(&pos_table[(LDCLIdx&8191)>>2], LDCLIdx&3, LDCLPos); // update pos_table
+          }
+        } // if (acc_idx < numLD)
+      } // for loop: rounds      
     __syncthreads();
 
-
     // Do works
-    // since one block may need to do multiple rounds of block 
+    // since one block may need to do multiple w_rounds of block 
     const int totalNumThreads = num_blocks*blockDim.x;
-    const int rounds = (_numGates_per_level_gpu[l] + totalNumThreads - 1)/totalNumThreads;
-    for (int rd = 0; rd < rounds; rd++) {
+    const int w_rounds = (_numGates_per_level_gpu[l] + totalNumThreads - 1)/totalNumThreads;
+    for (int rd = 0; rd < w_rounds; rd++) {
       const int rdAccum = rd*totalNumThreads;
       const int real_g_idx = num_accumGates+rdAccum+t_idx;
       _run_gate_MA_thd(real_g_idx, _numGates_per_level_gpu[l], num_accumGates, SA_fault, 
@@ -859,11 +857,6 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
     }
     __syncthreadsAllBlocks(&_gpu_sync[3], l, num_blocks);
     num_accumGates += _numGates_per_level_gpu[l];
-    // num_needed_blocks_acc += _num_needed_blocks_gpu[l];
-    // __syncthreadsAllBlocks_early_ret(&_gpu_sync[3], num_needed_blocks_acc+_num_needed_blocks_gpu[l]);
-    // if (blockIdx.x > _num_needed_blocks_gpu[l+1]) {
-    //   return;
-    // }    
   } // for loop: _total_num_levels 
 
   // Last WB POs
@@ -878,39 +871,20 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
       _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, lane_idx)] = cache[_CLIdx_to_idx(CLPos, lane_idx)];
     }
   } // if (w_idx < numST_f) 
-  
-  // -----------------------------------------------------------------------------------------------
+
   // __syncthreads(); 
   // if (t_idx == 0) {
   //   printf("cache:\n");
-  //   // for (int i = 0; i < 256; i++) {
-  //   for (int i = 0; i < 8; i++) {  
+  //   for (int i = 0; i < 32; i++) {
   //     printf("CL_%d: ", i);
   //     for (int j = 0; j < 32; j++) {
   //       printf("%u, ", cache[32*i+j]);
   //     }
   //     printf("\n");
   //   }
-  //   printf("\n\n");
-  //   printf("g_c_table:\n"); 
-  //   for (int i = 0; i < 8; i++) {
-  //     printf("CL_%d: ", i);
-  //     for (int j = 0; j < 8; j++) {
-  //       printf("%u, ", g_c_table[8*i+j]);
-  //     }
-  //     printf("\n");
-  //   }
-  //   printf("\n\n");
-  //   printf("pos_table:\n"); 
-  //   for (int i = 0; i < 8; i++) {
-  //     printf("CL_%d: ", i);
-  //     for (int j = 0; j < 8; j++) {
-  //       printf("%u, ", pos_table[8*i+j]);
-  //     }
-  //     printf("\n");
-  //   }
-  //   printf("\n\n"); 
+  //   printf("\n");
   // }
+  // __syncthreads(); 
 
 }
 

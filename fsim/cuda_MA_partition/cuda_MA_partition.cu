@@ -591,7 +591,7 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
     // ld
     _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());
-    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());    
+    _st_ld_CLs_index_table.push_back(_st_ld_CLIdxs.size());  
   } else { // 不是所有東西都能被塞進 cache line 裡面
     // init _st_ld_CLs_index_table: level 0
     // st: 
@@ -652,26 +652,23 @@ void CUDAMAPartitioner::_st_ld_CLs_per_level(std::vector<bool> &POs_in_this_CL) 
 
   // // print
   // printf("_total_num_levels = %d\n", _total_num_levels);
-  // for (int b = _used_num_blocks-1; b < _used_num_blocks; b++) {
-  //   printf("block %d\n", b);
-  //   printf("_st_ld_CLIdxs (block = %d, _total_num_levels = %d) = [\n", b, _total_num_levels);
-  //   for (size_t i = 0; i < _st_ld_CLs_index_table.size()/(4*_used_num_blocks); i++) {
-  //     // st
-  //     printf("\tlevel %lu st (sz = %d): ", i, _st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+1]-_st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+0]);
-  //     for (int j = _st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+0]; j < _st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+1]; j++) {
-  //       if (_st_ld_CLIdxs[j] != -1)
-  //         printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
-  //     }
-  //     printf("\n");
-  //     // ld 
-  //     // printf("\tlevel %lu ld (sz = %d): ", i, _st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+3]-_st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+2]);
-  //     // for (int j = _st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+2]; j < _st_ld_CLs_index_table[(_total_num_levels+1)*4*b+4*i+3]; j++) {
-  //     //   printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
-  //     // }
-  //     // printf("\n");
+  // printf("_st_ld_CLIdxs (block = %d, _total_num_levels = %d) = [\n", _total_num_levels);
+  // for (size_t i = 0; i < _st_ld_CLs_index_table.size()/(4); i++) {
+  //   // st
+  //   printf("\tlevel %lu st (sz = %d): ", i, _st_ld_CLs_index_table[4*i+1]-_st_ld_CLs_index_table[4*i+0]);
+  //   for (int j = _st_ld_CLs_index_table[4*i+0]; j < _st_ld_CLs_index_table[4*i+1]; j++) {
+  //     if (_st_ld_CLIdxs[j] != -1)
+  //       printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
   //   }
-  //   printf("]\n");    
+  //   printf("\n");
+  //   // ld 
+  //   printf("\tlevel %lu ld (sz = %d): ", i, _st_ld_CLs_index_table[4*i+3]-_st_ld_CLs_index_table[4*i+2]);
+  //   for (int j = _st_ld_CLs_index_table[4*i+2]; j < _st_ld_CLs_index_table[4*i+3]; j++) {
+  //     printf("(pos, CLIdx) = (%d, %d), ", _st_ld_positi[j], _st_ld_CLIdxs[j]);
+  //   }
+  //   printf("\n");
   // }
+  // printf("]\n");    
 }
 
 void CUDAMAPartitioner::_needed_st_ld_CLs_per_level_per_block(std::vector<bool> &POs_in_this_CL) {
