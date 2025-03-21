@@ -485,7 +485,7 @@ __global__ void _run_gate_DSP(const int num_accumGates, const int *_numGates_per
     case 11:
       break;
     }      
-    printf("gate_idx = %d\n", real_g_idx);
+    // printf("gate_idx = %d\n", real_g_idx);
   }
 }
 
