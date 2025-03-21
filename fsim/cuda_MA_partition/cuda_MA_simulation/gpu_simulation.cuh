@@ -117,7 +117,8 @@ __device__ void _run_gate_MA_thd(const int real_g_idx, const int num_gates_per_l
                                 const int *_st_ld_CLIdxs_gpu,
                                 const int *_st_ld_positi_gpu,
                                 const int *_st_ld_CLs_index_table_gpu,
-                                uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table);
+                                uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table,
+                                int *bibicheck);
 __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const int _sum_pi_gates_pos, 
                             const int *_numGates_per_level_gpu, const int _total_num_levels, 
                             const int *_invAdj_gpu, const int *_invAdj_index_table_gpu, 
@@ -129,7 +130,8 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
                             const int *_st_ld_CLIdxs_gpu,
                             const int *_st_ld_positi_gpu,
                             const int *_st_ld_CLs_index_table_gpu,
-                            const uint32_t *_num_needed_blocks_gpu);
+                            const uint32_t *_num_needed_blocks_gpu,
+                          int* bibicheck);
 __global__ void _write_and_shift_to_array_gpu(const size_t bits, 
                                               uint32_t *_pi_gate_po_output_res_gpu, 
                                               const int total_num_gates);

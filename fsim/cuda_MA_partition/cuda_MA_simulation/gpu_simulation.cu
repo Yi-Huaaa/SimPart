@@ -41,7 +41,7 @@ constexpr int _NUM_GATES_PER_CL = 32;
 constexpr uint32_t UINT32T_BITS = std::numeric_limits<uint32_t>::digits;
 
 // #define PRINT_SIMULATION_OUTPUTS_DSP
-#define PRINT_SIMULATION_OUTPUTS_CACHE
+// #define PRINT_SIMULATION_OUTPUTS_CACHE
 
 #define CUDA_CHECK(call) \
     do { \
@@ -163,9 +163,9 @@ void GALPS_MA_GPUSimulator::_run_cones_good_case_DSP_gpu(const int _total_num_le
                                                     _num_PIs);
     num_accumGates += num_gates_per_level; 
     
-#ifdef GPU_PART_DEBUG_PRINT_SIMULATION
+// #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
   cudaDeviceSynchronize();
-#endif      
+// #endif      
   }
 }
 
@@ -190,6 +190,7 @@ void GALPS_MA_GPUSimulator::_run_gates_MA_gpu(const int _total_num_levels,
 #endif
 
   // Simulation
+  // for (size_t rd = 0; rd < 1; rd++) {
   for (size_t rd = 0; rd < _num_rounds; rd++) {
     size_t num_testcases_this_round =
         ((_num_pattern / (UINT32T_BITS * (rd + 1))))
@@ -258,6 +259,10 @@ void GALPS_MA_GPUSimulator::_run_cones_good_case_MA_gpu(const int _total_num_lev
   const size_t fault_num = 0; const size_t bad_case = 0;
   // printf("num_blocks = %d, num_threads = %d\n", _used_num_blocks, _num_threads);
 
+  int *bibicheck; 
+  // cudaMalloc((void**)&bibicheck, _sum_pi_gates_pos*sizeof(int));
+  // cudaMemset(bibicheck, 0, _sum_pi_gates_pos*sizeof(int));
+
   _run_gate_MA <<< _used_num_blocks, _num_threads >>> (_used_num_blocks, _gpu_sync, _sum_pi_gates_pos, 
                                                       _numGates_per_level_gpu, _total_num_levels, 
                                                       _invAdj_gpu, _invAdj_index_table_gpu, 
@@ -268,11 +273,27 @@ void GALPS_MA_GPUSimulator::_run_cones_good_case_MA_gpu(const int _total_num_lev
                                                       _num_PIs, 
                                                       _st_ld_CLIdxs_gpu, _st_ld_positi_gpu, 
                                                       _st_ld_CLs_index_table_gpu,
-                                                      _num_needed_blocks_gpu);
+                                                      _num_needed_blocks_gpu,
+                                                      bibicheck);
 
 #ifdef GPU_PART_DEBUG_PRINT_SIMULATION
   cudaDeviceSynchronize();
 #endif  
+
+  // cudaDeviceSynchronize();
+  // std::vector<int> bibicheck_cpu; 
+  // bibicheck_cpu.resize(_sum_pi_gates_pos, 0);
+  // cudaMemcpyAsync(bibicheck_cpu.data(), bibicheck, 
+  //                 _sum_pi_gates_pos*sizeof(int), cudaMemcpyDeviceToHost);
+  // cudaCheckErrors("CUDA: bibicheck - cudaMemcpyAsync - Failure");  
+  // cudaDeviceSynchronize();
+  // for (int i = 0 ; i < _sum_pi_gates_pos; i++) {
+  //   if (bibicheck_cpu[i] != 1) {
+  //     printf("bibicheck_cpu[%d] = %d\n", i, bibicheck_cpu[i]);
+
+  //   }
+  // }
+
 
 }
 
@@ -464,6 +485,7 @@ __global__ void _run_gate_DSP(const int num_accumGates, const int *_numGates_per
     case 11:
       break;
     }      
+    printf("gate_idx = %d\n", real_g_idx);
   }
 }
 
@@ -496,8 +518,8 @@ __device__ __forceinline__ uint32_t _get_val(const int gate_idx,
   const int g_c = _get_g_c(g_c_table, CLIdx);
   const int pos = _get_pos(gate_idx, pos_table, CLIdx);
   const uint32_t ret = (g_c == 0) 
-                  ? (_pi_gate_po_output_res_gpu[gate_idx])
-                  : (cache[pos]);
+                    ? (_pi_gate_po_output_res_gpu[gate_idx])
+                    : (cache[pos]);
   // printf("_get_val: gate_idx = %d, CLIdx = %d, g_c = %u, pos = %u, val = %u\n", gate_idx, CLIdx, g_c, pos, ret);
   return ret;
 }
@@ -511,7 +533,6 @@ __device__ __forceinline__ void _wb_val(const int gate_idx, const uint32_t wb_va
   uint32_t *wb = (g_c == 0) ? (_pi_gate_po_output_res_gpu) : (cache);
   const uint32_t wb_pos = (g_c == 0) ? (gate_idx) : (pos);
   wb[wb_pos] = wb_val;
-  // printf("gate_idx = %d, g_c = %d, pos = %d, wb_val = %u, wb[%d] = %d\n", gate_idx, g_c, pos, wb_val, wb_pos, wb[wb_pos]);
 }
 
 __device__ __forceinline__ void _wb_neg_val(const int gate_idx, const uint32_t wb_val, 
@@ -523,7 +544,6 @@ __device__ __forceinline__ void _wb_neg_val(const int gate_idx, const uint32_t w
   uint32_t *wb = (g_c == 0) ? (_pi_gate_po_output_res_gpu) : (cache);
   const uint32_t wb_pos = (g_c == 0) ? (gate_idx) : (pos);
   wb[wb_pos] = ~wb_val;
-  // printf("gate_idx = %d, g_c = %d, pos = %d, wb_val = %d, wb[%d] = %d\n", gate_idx, g_c, pos, wb_val, wb_pos, wb[wb_pos]);
 }
 
 
@@ -703,8 +723,10 @@ __device__ void _run_gate_MA_thd(const int real_g_idx, const int num_gates_per_l
                                 const int *_st_ld_CLIdxs_gpu,
                                 const int *_st_ld_positi_gpu,
                                 const int *_st_ld_CLs_index_table_gpu,
-                                uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table) {
-  if ((num_gates_per_level+num_accumGates) > real_g_idx) {
+                                uint32_t *cache, const uint32_t *g_c_table, const uint32_t *pos_table,
+                                int *bibicheck) {
+  if (real_g_idx < (num_gates_per_level+num_accumGates)) {
+    // bibicheck[real_g_idx]++;
     int type = _pi_gate_po_gate_type_gpu[real_g_idx];
     switch (type) { 
       case 0:
@@ -757,15 +779,14 @@ __device__ __forceinline__ int _CLIdx_to_idx(const int CLIdx, const int lane_idx
 // }
 
 __device__ __forceinline__ void _modify_bits(uint32_t *a, const int p, const int val) {
-  uint32_t mask = 0xFF << (p * 8);  // 8-bit 掩碼
-  uint32_t value = (val & 0xFF) << (p * 8);  // 移動新值到對應 bit 位置
-
-  // 原子操作：使用 `atomicCAS` 來安全更新 *a
+  uint32_t mask = 0xFF << (p * 8);
+  uint32_t value = (val & 0xFF) << (p * 8);
+  // *a = (*a & ~mask) | value; // Clear the target bits and set new value
   uint32_t old_val, new_val;
   do {
-    old_val = *a;                        // 讀取當前值
-    new_val = (old_val & ~mask) | value; // 清除對應 bit 並設定新值
-  } while (atomicCAS(a, old_val, new_val) != old_val); // 當 `*a` 變更時重試
+    old_val = *a;
+    new_val = (old_val & ~mask) | value;
+  } while (atomicCAS(a, old_val, new_val) != old_val);
 }
 
 
@@ -780,7 +801,8 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
                             const int *_st_ld_CLIdxs_gpu,
                             const int *_st_ld_positi_gpu,
                             const int *_st_ld_CLs_index_table_gpu,
-                            const uint32_t *_num_needed_blocks_gpu) {
+                            const uint32_t *_num_needed_blocks_gpu,
+                            int * bibicheck) {
   // shared memory allocation 
   __shared__ uint32_t shared_mem[48 * 1024 / sizeof(uint32_t)]; // 48 KB shared memory as int array
   uint32_t *cache = shared_mem;                   // First 32 KB (8192 elements)
@@ -794,16 +816,17 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
   const int lane_idx = threadIdx.x&31; // warp 中的第幾個 thread
   int num_accumGates = 0; 
   const int SA_fault = 0; 
-  // uint32_t num_needed_blocks_acc = 0;
 
   for (int l = 0; l < _total_num_levels; l++) {
-    // ST/LD cachelines 
+    // if (blockIdx.x < 4) {
+      // ST/LD cachelines 
+      const int bi = 1; 
       // ST
       const int st_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 0);
       const int st_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 1);
       const int numST = st_e-st_s;
       const int STrounds = (numST + numWarpsPerBlk - 1)/numWarpsPerBlk;
-      for (int rd = 0; rd < STrounds; rd++) {
+      for (int rd = 0; rd < bi; rd++) {
         const int acc_idx = rd*numWarpsPerBlk+w_idx;
         if (acc_idx < numST) {
           // ST
@@ -823,7 +846,7 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
       const int ld_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 3);    
       const int numLD = ld_e-ld_s;
       const int LDrounds = (numLD + numWarpsPerBlk - 1)/numWarpsPerBlk;
-      for (int rd = 0; rd < LDrounds; rd++) {
+      for (int rd = 0; rd < bi; rd++) {
         const int acc_idx = rd*numWarpsPerBlk+w_idx;
         if (acc_idx < numLD) {
           // LD
@@ -835,11 +858,11 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
             _modify_bits(&pos_table[(LDCLIdx&8191)>>2], LDCLIdx&3, LDCLPos); // update pos_table
           }
         } // if (acc_idx < numLD)
-      } // for loop: rounds      
+      } // for loop: LDrounds  
+    // } // if branch 
     __syncthreads();
 
-    // Do works
-    // since one block may need to do multiple w_rounds of block 
+    // Do works, since one block may need to do multiple w_rounds of block 
     const int totalNumThreads = num_blocks*blockDim.x;
     const int w_rounds = (_numGates_per_level_gpu[l] + totalNumThreads - 1)/totalNumThreads;
     for (int rd = 0; rd < w_rounds; rd++) {
@@ -853,10 +876,12 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
                         _st_ld_CLIdxs_gpu, 
                         _st_ld_positi_gpu, 
                         _st_ld_CLs_index_table_gpu, 
-                        cache, g_c_table, pos_table);
+                        cache, g_c_table, pos_table,
+                        bibicheck);
     }
-    __syncthreadsAllBlocks(&_gpu_sync[3], l, num_blocks);
     num_accumGates += _numGates_per_level_gpu[l];
+    // sync
+    __syncthreadsAllBlocks(&_gpu_sync[3], l, num_blocks);
   } // for loop: _total_num_levels 
 
   // Last WB POs
@@ -871,22 +896,8 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
       _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, lane_idx)] = cache[_CLIdx_to_idx(CLPos, lane_idx)];
     }
   } // if (w_idx < numST_f) 
-
-  // __syncthreads(); 
-  // if (t_idx == 0) {
-  //   printf("cache:\n");
-  //   for (int i = 0; i < 32; i++) {
-  //     printf("CL_%d: ", i);
-  //     for (int j = 0; j < 32; j++) {
-  //       printf("%u, ", cache[32*i+j]);
-  //     }
-  //     printf("\n");
-  //   }
-  //   printf("\n");
-  // }
-  // __syncthreads(); 
-
 }
+
 
 
 // ----------------------------------------------------- MA_DSP ENDS -----------------------------------------------------
