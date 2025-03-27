@@ -778,9 +778,14 @@ void CUDAMAPartitioner::_needed_st_ld_CLs_per_level_per_block(std::vector<bool> 
   }
   size_t s = _num_needed_blocks.size();
   _num_needed_blocks.push_back(_num_needed_blocks[s-1]);
+
   // for (size_t l = 0; l < _num_needed_blocks.size(); l++) {
   //   printf("_num_needed_blocks[%lu] = %d\n", l, _num_needed_blocks[l]);
   // }
+
+  // printf("_used_num_blocks = %d\n", _used_num_blocks);
+  // printf("_total_num_levels = %d, _num_PIs = %d, _num_inner_gates = %d, _num_POs = %d, _sum_pi_gates_pos = %d\n", 
+  //       _total_num_levels, _num_PIs, _num_inner_gates, _num_POs, _sum_pi_gates_pos);
 }
 
 
@@ -832,14 +837,14 @@ void CUDAMAPartitioner::_levelized(std::vector<std::vector<int>> &adj,
     }
   }
   
-  // ------- levelization -------
+  // ------- Levelization -------
   _level_of_gates.resize(_sum_pi_gates_pos, 0);
   _max_level = 0;
   
   for (size_t i = 0; i < order.size(); i++) {
     int gateIdx = order[i];
     
-    // traverse its inputs 
+    // Traverse its inputs 
     for (size_t fmGate = 0; fmGate < invAdj[gateIdx].size(); fmGate++) {
       int fmGateIdx = invAdj[gateIdx][fmGate];
       int new_level = _level_of_gates[fmGateIdx]+1;

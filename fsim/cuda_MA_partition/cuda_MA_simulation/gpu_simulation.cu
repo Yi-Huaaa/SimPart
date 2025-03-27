@@ -431,7 +431,7 @@ __global__ void _run_gate_DSP(const int num_accumGates, const int *_numGates_per
                               const int *_fault_gate_idx_gpu, const size_t *_fault_SA_fault_val_gpu,
                               const size_t fault_num, const size_t bad_case, 
                               const int num_gates_per_level, 
-                              const int _num_PIs) {  
+                              const int _num_PIs) {
   int t_idx = blockDim.x*blockIdx.x + threadIdx.x;
 
   if (num_gates_per_level > t_idx) {
@@ -819,48 +819,50 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
 
   for (int l = 0; l < _total_num_levels; l++) {
     // if (blockIdx.x < 4) {
-      // ST/LD cachelines 
-      const int bi = 1; 
-      // ST
-      const int st_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 0);
-      const int st_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 1);
-      const int numST = st_e-st_s;
-      const int STrounds = (numST + numWarpsPerBlk - 1)/numWarpsPerBlk;
-      for (int rd = 0; rd < bi; rd++) {
-        const int acc_idx = rd*numWarpsPerBlk+w_idx;
-        if (acc_idx < numST) {
-          // ST
-          const int STCLIdx = _st_ld_CLIdxs_gpu[st_s+acc_idx];
-          const int STCLPos = _st_ld_positi_gpu[st_s+acc_idx];
-          if (STCLIdx != -1) {
-            _pi_gate_po_output_res_gpu[_CLIdx_to_idx(STCLIdx, lane_idx)] = cache[_CLIdx_to_idx(STCLPos, lane_idx)];
-            if (lane_idx == 0) {
-              _modify_bits(&g_c_table[(STCLIdx&8191)>>2], STCLIdx&3, 0); // update g_c_table
-            }
-          }
-        } // if (acc_idx < numST)
-      } // for loop: STrounds
+    //   // ST/LD cachelines 
+    //   const int bi = 1; 
+    //   // ST
+    //   const int st_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 0);
+    //   const int st_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 1);
+    //   const int numST = st_e-st_s;
+    //   const int STrounds = (numST + numWarpsPerBlk - 1)/numWarpsPerBlk;
+    //   const int bi2 = (bi < STrounds) ? (bi) : (STrounds);
+    //   for (int rd = 0; rd < bi2; rd++) {
+    //     const int acc_idx = rd*numWarpsPerBlk+w_idx;
+    //     if (acc_idx < numST) {
+    //       // ST
+    //       const int STCLIdx = _st_ld_CLIdxs_gpu[st_s+acc_idx];
+    //       const int STCLPos = _st_ld_positi_gpu[st_s+acc_idx];
+    //       if (STCLIdx != -1) {
+    //         _pi_gate_po_output_res_gpu[_CLIdx_to_idx(STCLIdx, lane_idx)] = cache[_CLIdx_to_idx(STCLPos, lane_idx)];
+    //         if (lane_idx == 0) {
+    //           _modify_bits(&g_c_table[(STCLIdx&8191)>>2], STCLIdx&3, 0); // update g_c_table
+    //         }
+    //       }
+    //     } // if (acc_idx < numST)
+    //   } // for loop: STrounds
 
-      // LD
-      const int ld_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 2);
-      const int ld_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 3);    
-      const int numLD = ld_e-ld_s;
-      const int LDrounds = (numLD + numWarpsPerBlk - 1)/numWarpsPerBlk;
-      for (int rd = 0; rd < bi; rd++) {
-        const int acc_idx = rd*numWarpsPerBlk+w_idx;
-        if (acc_idx < numLD) {
-          // LD
-          const int LDCLIdx = _st_ld_CLIdxs_gpu[ld_s+acc_idx];
-          const int LDCLPos = _st_ld_positi_gpu[ld_e+acc_idx];
-          cache[_CLIdx_to_idx(LDCLPos, lane_idx)] = _pi_gate_po_output_res_gpu[_CLIdx_to_idx(LDCLIdx, lane_idx)];
-          if (lane_idx == 0) {
-            _modify_bits(&g_c_table[(LDCLIdx&8191)>>2], LDCLIdx&3, 1); // update g_c_table
-            _modify_bits(&pos_table[(LDCLIdx&8191)>>2], LDCLIdx&3, LDCLPos); // update pos_table
-          }
-        } // if (acc_idx < numLD)
-      } // for loop: LDrounds  
-    // } // if branch 
-    __syncthreads();
+    //   // LD
+    //   const int ld_s = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 2);
+    //   const int ld_e = _getSLIdx(_st_ld_CLs_index_table_gpu, l, 3);  
+    //   const int numLD = ld_e-ld_s;
+    //   const int LDrounds = (numLD + numWarpsPerBlk - 1)/numWarpsPerBlk;
+    //   const int bi3 = (bi < LDrounds) ? (bi) : (LDrounds);
+    //   for (int rd = 0; rd < bi3; rd++) {
+    //     const int acc_idx = rd*numWarpsPerBlk+w_idx;
+    //     if (acc_idx < numLD) {
+    //       // LD
+    //       const int LDCLIdx = _st_ld_CLIdxs_gpu[ld_s+acc_idx];
+    //       const int LDCLPos = _st_ld_positi_gpu[ld_e+acc_idx];
+    //       cache[_CLIdx_to_idx(LDCLPos, lane_idx)] = _pi_gate_po_output_res_gpu[_CLIdx_to_idx(LDCLIdx, lane_idx)];
+    //       if (lane_idx == 0) {
+    //         _modify_bits(&g_c_table[(LDCLIdx&8191)>>2], LDCLIdx&3, 1); // update g_c_table
+    //         _modify_bits(&pos_table[(LDCLIdx&8191)>>2], LDCLIdx&3, LDCLPos); // update pos_table
+    //       }
+    //     } // if (acc_idx < numLD)
+    //   } // for loop: LDrounds  
+    // // } // if branch 
+    // __syncthreads();
 
     // Do works, since one block may need to do multiple w_rounds of block 
     const int totalNumThreads = num_blocks*blockDim.x;
@@ -884,18 +886,18 @@ __global__ void _run_gate_MA(const int num_blocks, uint32_t *_gpu_sync, const in
     __syncthreadsAllBlocks(&_gpu_sync[3], l, num_blocks);
   } // for loop: _total_num_levels 
 
-  // Last WB POs
-  const int st_s_f = _getSLIdx(_st_ld_CLs_index_table_gpu, _total_num_levels, 0);
-  const int st_e_f = _getSLIdx(_st_ld_CLs_index_table_gpu, _total_num_levels, 1);
-  const int numST_f = st_e_f-st_s_f;
+  // // Last WB POs
+  // const int st_s_f = _getSLIdx(_st_ld_CLs_index_table_gpu, _total_num_levels, 0);
+  // const int st_e_f = _getSLIdx(_st_ld_CLs_index_table_gpu, _total_num_levels, 1);
+  // const int numST_f = st_e_f-st_s_f;
 
-  if (w_idx < numST_f) {
-    const int CLIdx = _st_ld_CLIdxs_gpu[st_s_f+w_idx];
-    const int CLPos = _st_ld_positi_gpu[st_s_f+w_idx];
-    if (_CLIdx_to_idx(CLIdx, lane_idx) < _sum_pi_gates_pos && CLIdx != -1) {
-      _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, lane_idx)] = cache[_CLIdx_to_idx(CLPos, lane_idx)];
-    }
-  } // if (w_idx < numST_f) 
+  // if (w_idx < numST_f) {
+  //   const int CLIdx = _st_ld_CLIdxs_gpu[st_s_f+w_idx];
+  //   const int CLPos = _st_ld_positi_gpu[st_s_f+w_idx];
+  //   if (_CLIdx_to_idx(CLIdx, lane_idx) < _sum_pi_gates_pos && CLIdx != -1) {
+  //     _pi_gate_po_output_res_gpu[_CLIdx_to_idx(CLIdx, lane_idx)] = cache[_CLIdx_to_idx(CLPos, lane_idx)];
+  //   }
+  // } // if (w_idx < numST_f) 
 }
 
 
