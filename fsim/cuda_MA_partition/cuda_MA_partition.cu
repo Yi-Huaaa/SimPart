@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <set>
 #include <ranges>
+#include <random>
 
 
 #include <cuda_runtime_api.h>
@@ -807,8 +808,9 @@ void CUDAMAPartitioner::_MA_simu_preparation() {
 
 
 /* Prepare for GPU simulation */
-void CUDAMAPartitioner::_levelized(std::vector<std::vector<int>> &adj, 
-                                   std::vector<std::vector<int>> &invAdj) {
+void CUDAMAPartitioner::_topological_sort(std::vector<std::vector<int>> &adj, 
+                                          std::vector<std::vector<int>> &invAdj, 
+                                          std::vector<int> &order) {
   // Kahn's algorithm, topological sort
   std::vector<int> indegree; 
   
@@ -817,7 +819,6 @@ void CUDAMAPartitioner::_levelized(std::vector<std::vector<int>> &adj,
   }
 
   std::queue<int> source;
-  std::vector<int> order;
 
   // Since only PIs will be indegree == 0
   for (int i = 0; i < _num_PIs; i++) {
@@ -836,7 +837,40 @@ void CUDAMAPartitioner::_levelized(std::vector<std::vector<int>> &adj,
       }
     }
   }
+}
+
+
+void CUDAMAPartitioner::_sampling() {
+  // construct bucket
+  std::vector<std::vector<int>> level_to_gates(_total_num_levels);
+  for (int gateIdx = 0; gateIdx < _sum_pi_gates_pos; gateIdx++) {
+    int l = _level_of_gates[gateIdx];
+    level_to_gates[l].push_back(gateIdx);
+  }
+
+  // random shuffle order
+  std::random_device rd;
+  std::mt19937 g(rd());
   
+  for (int l = 1; l < _total_num_levels; l++) {
+    std::shuffle(level_to_gates[l].begin(), level_to_gates[l].end(), g);
+  }
+
+  // 重新建構 order
+  _sampled_order.clear();
+  for (int l = 0; l < _total_num_levels; l++) {
+    for (int gateIdx : level_to_gates[l]) {
+      _sampled_order.push_back(gateIdx);
+    }
+  }
+}
+
+void CUDAMAPartitioner::_levelized(std::vector<std::vector<int>> &adj, 
+                                   std::vector<std::vector<int>> &invAdj) {
+  // Run topological sort
+  std::vector<int> order;
+  _topological_sort(adj, invAdj, order); 
+
   // ------- Levelization -------
   _level_of_gates.resize(_sum_pi_gates_pos, 0);
   _max_level = 0;
@@ -860,12 +894,18 @@ void CUDAMAPartitioner::_levelized(std::vector<std::vector<int>> &adj,
   } 
   _total_num_levels = _max_level + 1;
 
+
+  // Sampling....
+  _sampling(); 
+  order = _sampled_order;
+
   // re-index based on the results of topological sort
   _newIndex.resize(_sum_pi_gates_pos);
   for (size_t i = 0; i < order.size(); i++) {
     _newIndex[order[i]] = i;
   } 
 }
+
 
 void CUDAMAPartitioner::_ask_gpu_simulation_memory() {
   // Memory allocation

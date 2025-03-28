@@ -9,11 +9,6 @@
 constexpr size_t TIMES = 1;
 #define NUM_THREADS 16
 #define SIMU_MODE 1
-#define SAMPLING // raise this for running sampling
-#ifdef SAMPLING
-  #define sampling_times 5 // 10000
-#endif
-
 
 constexpr std::chrono::duration<double> chro_zero() {
   return std::chrono::duration<double>::zero();
@@ -22,10 +17,6 @@ constexpr std::chrono::duration<double> chro_zero() {
 double round_to(double value, double precision = 1.0){
   return std::round(value / precision) * precision;
 }
-
-
-
-
 
 int main(int argc, char *argv[]) {
   if (argc < 7) {
@@ -46,7 +37,6 @@ int main(int argc, char *argv[]) {
   // New input for number of simulation rounds
   size_t _NUM_SIMULATION_RDS = std::atoi(argv[6]);
 
-#ifndef SAMPLING
   // user perspective
   CUDAMAPartitioner cudaMAPartitioner;
 
@@ -83,31 +73,6 @@ int main(int argc, char *argv[]) {
 
   // free memory
   cudaMAPartitioner.freeMem();
-
-#else // For sampling 
-  printf("Start to run sampling......\n");
-  for (int t = 0; t < sampling_times; t++) {
-    CUDAMAPartitioner cudaMAPartitioner;
-    cudaMAPartitioner.read(ckt_path, flst_path, ptn_path);
-    cudaMAPartitioner.prepare_gpu_simulation();
-
-    // pre-run
-    cudaMAPartitioner.run_MA(NUM_THREADS, _NUM_SIMULATION_RDS);
-    
-    dur_sim = chro_zero();
-    // Run Simulator
-    for (size_t t = 0; t < TIMES; t++) {
-      auto start = std::chrono::steady_clock::now();
-      cudaMAPartitioner.run_MA(NUM_THREADS, _NUM_SIMULATION_RDS);
-      auto end = std::chrono::steady_clock::now();
-      dur_sim += (end - start);
-    }
-    std::cout << "run MA simulator: " <<  round_to(((dur_sim.count()/TIMES))*1000, 0.001) << "\n";
-
-    // free memory
-    cudaMAPartitioner.freeMem();
-  }
-#endif
   
   return 0;
 }

@@ -215,6 +215,11 @@ private:
   void _read_fault(std::istream &flst);
 
   /* Levelization */
+  std::vector<int> _sampled_order;
+  void _topological_sort(std::vector<std::vector<int>> &adj, 
+                        std::vector<std::vector<int>> &invAdj,
+                        std::vector<int> &order);
+  void _sampling();
   void _levelized(std::vector<std::vector<int>> &adj, 
                   std::vector<std::vector<int>> &invAdj);
   /* GPU Simulator preparation */
