@@ -15,4 +15,4 @@ for name in "${SELECTED[@]}"; do
   done
 done
 
-python3 "$SCRIPTS_DIR/summarize.py" fig8 "$RESULTS_DIR/fig8.csv"
+summarize fig8

@@ -28,6 +28,7 @@ a circuit side by side):
 
 ```bash
 cd benchmark
+mkdir -p extremely_large_circuits
 for c in mgc_edit_dist_iccad mgc_matrix_mult_iccad b19_iccad leon2_iccad_eval; do
   ../tools/scale_benchmark.py 8 large_circuits/${c}_bfs.ckt large_circuits/$c.ptn \
     extremely_large_circuits/8_${c}_bfs.ckt extremely_large_circuits/8_$c.ptn

@@ -70,6 +70,17 @@ def last_row(rows, **match):
     return found
 
 
+def check_same(rows, *columns):
+    """Exits if the rows compared in a table were run with different settings,
+    e.g. after runs with another --batch were appended to the same CSV file."""
+    rows = [r for r in rows if r is not None]
+    for col in columns:
+        values = sorted({r[col] for r in rows})
+        if len(values) > 1:
+            sys.exit(f"summarize.py: the results to compare mix {col} = {', '.join(values)}; "
+                     "rerun them with the same settings or use a separate CSV file")
+
+
 def mean(values):
     values = [v for v in values if v is not None]
     return sum(values) / len(values) if values else None
@@ -83,14 +94,21 @@ def table2(rows):
               "SimPart T_Part", "T_Sim^G", "R|V|", "R|E|"]
     out, ratios = [], {k: [] for k in ("part1", "partn", "sim1", "simn", "simg", "rv", "re", "srv", "sre")}
     threads = None
+    used = {"all": [], "gpu": [], "simpart": [], "repcut_n": []}
     for b in names:
         sp = last_row(rows, benchmark=b, partitioner="simpart")
         rc_gpu = next((r for r in reversed(rows) if r["benchmark"] == b and r["partitioner"] == "repcut"
-                       and r["simulator"] in ("graph", "stream") and r["threads"] != "1"), None)
-        threads = threads or (rc_gpu["threads"] if rc_gpu else None)
+                       and r["simulator"] in ("graph", "stream")), None)
+        n = rc_gpu["threads"] if rc_gpu else None
+        threads = threads or n
         rc_cpun = next((r for r in reversed(rows) if r["benchmark"] == b and r["partitioner"] == "repcut"
-                        and r["simulator"] == "cpu" and r["threads"] != "1"), None)
+                        and r["simulator"] == "cpu" and (r["threads"] == n if n else r["threads"] != "1")),
+                       None)
         rc_cpu1 = last_row(rows, benchmark=b, partitioner="repcut", simulator="cpu", threads=1)
+        used["all"] += [sp, rc_gpu, rc_cpun, rc_cpu1]
+        used["gpu"] += [sp, rc_gpu]
+        used["simpart"].append(sp)
+        used["repcut_n"] += [rc_gpu, rc_cpun]
         nodes = num(sp or rc_gpu, "nodes")
         edges = num(sp or rc_gpu, "edges")
         t_part_sp, t_sim_sp = num(sp, "part_ms"), num(sp, "sim_ms")
@@ -114,6 +132,11 @@ def table2(rows):
         ratios["srv"].append(num(sp, "node_ratio"))
         ratios["sre"].append(num(sp, "edge_ratio"))
 
+    check_same(used["all"], "k")
+    check_same(used["gpu"], "batch")
+    check_same(used["simpart"], "gamma")
+    check_same(used["repcut_n"], "threads")
+
     def avg(key, fmt=value):
         return fmt(mean(ratios[key]))
     out.append(["**Avg. ratio**", "1.000", "1.000", "-", avg("part1"), avg("partn"), avg("sim1"),
@@ -129,13 +152,18 @@ def fig6(rows):
     for b in ordered({r["benchmark"] for r in rows}):
         print(f"\n**{b}**\n")
         ks = sorted({int(r["k"]) for r in rows if r["benchmark"] == b})
-        table = []
+        table, rcs, sps = [], [], []
         for k in ks:
             rc = last_row(rows, benchmark=b, partitioner="repcut", k=k)
             sp = last_row(rows, benchmark=b, partitioner="simpart", k=k)
+            rcs.append(rc)
+            sps.append(sp)
             rep = lambda r: "-" if r is None else value((float(r["node_ratio"]) - 1) * 100)
             table.append([str(k), value(num(rc, "part_ms")), value(num(sp, "part_ms")),
                           value(num(rc, "sim_ms")), value(num(sp, "sim_ms")), rep(rc), rep(sp)])
+        check_same(rcs + sps, "batch")
+        check_same(sps, "gamma")
+        check_same(rcs, "threads")
         print_table(["k", "RepCut T_Part (ms)", "SimPart T_Part (ms)", "RepCut T_Sim^G (ms)",
                      "SimPart T_Sim^G (ms)", "RepCut replication (%)", "SimPart replication (%)"], table)
 
@@ -146,24 +174,33 @@ def fig7(rows):
     for b in ordered({r["benchmark"] for r in rows}):
         print(f"\n**{b}**\n")
         gammas = sorted({r["gamma"] for r in rows if r["benchmark"] == b}, key=gamma_key)
-        table = []
+        table, used = [], []
         for g in gammas:
             r = last_row(rows, benchmark=b, partitioner="simpart", gamma=g)
+            used.append(r)
             table.append([g, r["dsp_levels"] + " / " + r["levels"], value(num(r, "sim_ms")),
                           ratio(num(r, "node_ratio"))])
+        check_same(used, "k", "batch")
         print_table(["gamma", "DSP levels", "T_Sim^G (ms)", "R|V|"], table)
 
 
 def fig8(rows):
-    table = []
+    table, used = [], {"simpart": [], "repcut": []}
     for b in ordered({r["benchmark"] for r in rows}):
-        cell = {(p, s): num(last_row(rows, benchmark=b, partitioner=p, simulator=s), "sim_ms")
-                for p in ("simpart", "repcut") for s in ("stream", "graph")}
+        cell = {}
+        for p in ("simpart", "repcut"):
+            for s in ("stream", "graph"):
+                r = last_row(rows, benchmark=b, partitioner=p, simulator=s)
+                used[p].append(r)
+                cell[(p, s)] = num(r, "sim_ms")
         speedup = (cell[("simpart", "stream")] / cell[("simpart", "graph")]
                    if cell[("simpart", "stream")] and cell[("simpart", "graph")] else None)
         table.append([b, value(cell[("repcut", "stream")]), value(cell[("repcut", "graph")]),
                       value(cell[("simpart", "stream")]), value(cell[("simpart", "graph")]),
                       "-" if speedup is None else value(speedup) + "x"])
+    check_same(used["simpart"] + used["repcut"], "k", "batch")
+    check_same(used["simpart"], "gamma")
+    check_same(used["repcut"], "threads")
     print_table(["Benchmark", "RepCut stream", "RepCut graph", "SimPart w/o graph (stream)",
                  "SimPart w/ graph", "SimPart graph speedup"], table)
     print("\nGPU simulation times in ms.")

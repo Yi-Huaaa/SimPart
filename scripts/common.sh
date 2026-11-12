@@ -49,6 +49,8 @@ check_setup() {
   [[ -x "$SIMPART" ]] || { echo "simpart not found at $SIMPART (run scripts/build.sh first)" >&2; exit 1; }
 }
 
+FAILED_RUNS=0
+
 # run <experiment> <benchmark> <tag> [simpart options...]
 # Runs simpart on a benchmark, appends a CSV row to $RESULTS_DIR/<experiment>.csv and
 # keeps the full output in $RESULTS_DIR/logs/<experiment>/<benchmark>.<tag>.log.
@@ -66,5 +68,19 @@ run() {
   if ! "$SIMPART" "$circuit" "$patterns" --label "$name" --csv "$RESULTS_DIR/$experiment.csv" "$@" \
       > "$log_dir/$name.$tag.log" 2>&1; then
     echo "  FAILED, see $log_dir/$name.$tag.log" >&2
+    FAILED_RUNS=$((FAILED_RUNS + 1))
   fi
+}
+
+# summarize <experiment>
+# Prints the tables of an experiment. Exits with an error instead if a run failed,
+# since the CSV file may still hold older rows that would be taken for this run's.
+summarize() {
+  local experiment=$1 csv=$RESULTS_DIR/$1.csv
+  if (( FAILED_RUNS > 0 )); then
+    echo "$FAILED_RUNS run(s) failed, see the logs in $RESULTS_DIR/logs/$experiment" >&2
+    exit 1
+  fi
+  [[ -f "$csv" ]] || { echo "no results in $csv" >&2; exit 1; }
+  python3 "$SCRIPTS_DIR/summarize.py" "$experiment" "$csv"
 }

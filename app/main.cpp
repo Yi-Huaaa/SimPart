@@ -9,6 +9,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -88,11 +89,13 @@ struct Options {
   std::exit(2);
 }
 
-int64_t parse_int(const std::string& s, const std::string& flag, int64_t min_value) {
+// Parses an integer option value in [min_value, max_value].
+int64_t parse_int(const std::string& s, const std::string& flag, int64_t min_value,
+                  int64_t max_value = std::numeric_limits<int32_t>::max()) {
   try {
     size_t pos = 0;
     const long long v = std::stoll(s, &pos);
-    if (pos != s.size() || v < min_value) throw std::invalid_argument(s);
+    if (pos != s.size() || v < min_value || v > max_value) throw std::invalid_argument(s);
     return v;
   } catch (const std::exception&) {
     usage_error("invalid value '" + s + "' for " + flag);
@@ -120,7 +123,8 @@ Options parse_options(int argc, char** argv) {
       o.partitions = static_cast<int32_t>(parse_int(value(), arg, 1));
     } else if (arg == "-g" || arg == "--gamma") {
       const std::string v = value();
-      o.gamma = (v == "inf") ? SimPartOptions::kInfinity : parse_int(v, arg, 0);
+      o.gamma = (v == "inf") ? SimPartOptions::kInfinity
+                             : parse_int(v, arg, 0, SimPartOptions::kInfinity - 1);
     } else if (arg == "-t" || arg == "--threads") {
       o.threads = static_cast<int32_t>(parse_int(value(), arg, 1));
     } else if (arg == "-s" || arg == "--simulator") {

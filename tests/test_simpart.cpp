@@ -121,6 +121,8 @@ TEST_CASE("reject malformed circuits") {
   CHECK_THROWS(parse_circuit("1 1 1 2\n0 0 1 2 0\n2 0 1 1 0\n9\n"));  // bad gate type
   CHECK_THROWS(parse_circuit("1 1 1 2\n0 0 1 2 0\n"));                // truncated
   CHECK_THROWS(parse_circuit("1 1 1 2\n0 0 1 5 0\n2 0 1 1 0\n0\n"));  // node out of range
+  CHECK_THROWS(parse_circuit("0 0 0 1\n0 0 1 0 0\n"));                // wire without nodes
+  CHECK_THROWS(parse_circuit("0 0 0 0\n"));                           // no nodes
 }
 
 TEST_CASE("levelize and simulate a small circuit") {
@@ -194,3 +196,13 @@ TEST_CASE("RepCut partitions are valid and simulate correctly") {
   }
 }
 #endif
+
+TEST_CASE("simulate zero patterns") {
+  const Circuit c = parse_circuit(kSimpleCircuit);
+  const Patterns patterns = parse_patterns("0\n", c.num_pis);
+  const Testcase t{"zero patterns", c, patterns, simulate_reference(c, patterns)};
+  CHECK(t.reference.node_values.size() == static_cast<size_t>(c.num_nodes()));
+  const Partition p = simpart_partition(c, {16, 1024}).partition;
+  check_gpu(t, p);
+  check_cpu(t, p, 2);
+}

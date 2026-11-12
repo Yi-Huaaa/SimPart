@@ -78,19 +78,21 @@ Circuit parse_circuit(std::string_view text) {
   c.num_gates = static_cast<int32_t>(tok.expect("number of gates", kMaxIndex));
   const uint64_t num_wires = tok.expect("number of wires", kMaxIndex);
   const uint64_t n64 = uint64_t(c.num_pis) + uint64_t(c.num_pos) + uint64_t(c.num_gates);
+  if (n64 == 0) throw std::runtime_error("circuit has no nodes");
   if (n64 > kMaxIndex) throw std::runtime_error("too many nodes");
   const int32_t n = static_cast<int32_t>(n64);
+  const uint64_t max_node = n64 - 1;
 
   // Wires: <driver> <driver pin> <#sinks> (<sink> <sink pin>)*
   std::vector<int32_t> src, dst;
   src.reserve(n);
   dst.reserve(n);
   for (uint64_t w = 0; w < num_wires; ++w) {
-    const auto driver = static_cast<int32_t>(tok.expect("wire driver", n - 1));
+    const auto driver = static_cast<int32_t>(tok.expect("wire driver", max_node));
     tok.expect("wire driver pin");
     const uint64_t num_sinks = tok.expect("wire fanout count", kMaxIndex);
     for (uint64_t s = 0; s < num_sinks; ++s) {
-      const auto sink = static_cast<int32_t>(tok.expect("wire sink", n - 1));
+      const auto sink = static_cast<int32_t>(tok.expect("wire sink", max_node));
       tok.expect("wire sink pin");
       src.push_back(driver);
       dst.push_back(sink);

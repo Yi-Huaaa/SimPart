@@ -352,10 +352,11 @@ std::vector<uint64_t> GpuSimulator::po_values() const { return impl_->po_values.
 std::vector<uint64_t> GpuSimulator::node_values() const {
   const Impl& s = *impl_;
   const std::vector<uint64_t> all = s.values.download();
-  if (s.batch == 1 || s.num_rounds == 0) return all;
+  if (s.batch == 1) return all;
+  std::vector<uint64_t> last(all.size() / s.batch, 0);
+  if (s.num_rounds == 0) return last;
   // The values of the last round sit in word (num_rounds - 1) % batch of the last pass.
   const int32_t word = (s.num_rounds - 1) - (s.num_passes - 1) * s.batch;
-  std::vector<uint64_t> last(all.size() / s.batch);
   for (size_t v = 0; v < last.size(); ++v) last[v] = all[v * s.batch + word];
   return last;
 }
