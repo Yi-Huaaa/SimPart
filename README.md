@@ -238,6 +238,11 @@ If you use SimPart in your research, please cite our paper:
 }
 ```
 
+## Contact
+
+For questions about SimPart, please email Yi-Hua Chung at
+[yihua.chung@wisc.edu](mailto:yihua.chung@wisc.edu).
+
 ## License
 
 SimPart is released under the [Apache License 2.0](LICENSE).
