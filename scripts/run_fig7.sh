@@ -10,7 +10,7 @@ select_benchmarks "$@"
 
 for name in "${SELECTED[@]}"; do
   for gamma in 0 1 2 4 8 16 32 64 128 256 512 1024 2048 inf; do
-    run fig7 "$name" gamma$gamma -p simpart -k "$K" -g "$gamma" -s graph -r "$RUNS" --verify
+    run fig7 "$name" gamma$gamma -p simpart -k "$K" -g "$gamma" -s graph -b "$BATCH" -r "$RUNS" --verify
   done
 done
 

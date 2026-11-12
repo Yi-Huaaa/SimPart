@@ -12,8 +12,8 @@ check_setup
 select_benchmarks "$@"
 
 for name in "${SELECTED[@]}"; do
-  run table2 "$name" simpart -p simpart -k "$K" -g "$GAMMA" -s graph -r "$RUNS" --verify
-  run table2 "$name" repcut-t${THREADS}-gpu -p repcut -k "$K" -t "$THREADS" -s graph \
+  run table2 "$name" simpart -p simpart -k "$K" -g "$GAMMA" -s graph -b "$BATCH" -r "$RUNS" --verify
+  run table2 "$name" repcut-t${THREADS}-gpu -p repcut -k "$K" -t "$THREADS" -s graph -b "$BATCH" \
     --part-runs "$REPCUT_RUNS" --part-warmup 0 --sim-runs "$RUNS" --verify
   run table2 "$name" repcut-t${THREADS}-cpu -p repcut -k "$K" -t "$THREADS" -s cpu \
     --part-runs 1 --part-warmup 0 --sim-runs "$RUNS" --verify

@@ -10,8 +10,8 @@ select_benchmarks "$@"
 
 for name in "${SELECTED[@]}"; do
   for k in 2 4 8 16 32 64 128; do
-    run fig6 "$name" simpart-k$k -p simpart -k "$k" -g "$GAMMA" -s graph -r "$RUNS" --verify
-    run fig6 "$name" repcut-k$k -p repcut -k "$k" -t "$THREADS" -s graph \
+    run fig6 "$name" simpart-k$k -p simpart -k "$k" -g "$GAMMA" -s graph -b "$BATCH" -r "$RUNS" --verify
+    run fig6 "$name" repcut-k$k -p repcut -k "$k" -t "$THREADS" -s graph -b "$BATCH" \
       --part-runs "$REPCUT_RUNS" --part-warmup 0 --sim-runs "$RUNS" --verify
   done
 done

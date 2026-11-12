@@ -210,8 +210,8 @@ struct GpuSimulator::Impl {
     for (int32_t l = 0; l < dsp_levels; ++l) {
       const int32_t count = dsp_offsets[l + 1] - dsp_offsets[l];
       if (count == 0) continue;
-      const int32_t threads = std::min(count, kBlockSize);
-      const int32_t blocks = (count + kBlockSize - 1) / kBlockSize;
+      const int32_t threads = std::min(count, kDspBlockSize);
+      const int32_t blocks = (count + kDspBlockSize - 1) / kDspBlockSize;
       dsp_level_kernel<V, B><<<blocks, threads, 0, s>>>(dsp_records.data() + dsp_offsets[l], count, c,
                                                      pass);
     }

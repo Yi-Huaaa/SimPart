@@ -12,6 +12,7 @@ BENCH_DIR=${BENCH_DIR:-$REPO_DIR/benchmark}
 RESULTS_DIR=${RESULTS_DIR:-$REPO_DIR/results/local}
 K=${K:-16}                     # number of partitions (paper default: 16)
 GAMMA=${GAMMA:-1024}           # SimPart replication threshold (paper default: 1024 = GPU block size)
+BATCH=${BATCH:-4}              # rounds of 64 patterns per GPU simulation pass (simpart --batch)
 RUNS=${RUNS:-10}               # timed repetitions of SimPart and of every simulation
 REPCUT_RUNS=${REPCUT_RUNS:-3}  # timed repetitions of RepCut partitioning (Mt-KaHyPar is slow)
 THREADS=${THREADS:-16}         # CPU threads of Mt-KaHyPar and of the CPU simulator

@@ -9,8 +9,8 @@ select_benchmarks "$@"
 
 for name in "${SELECTED[@]}"; do
   for sim in stream graph; do
-    run fig8 "$name" simpart-$sim -p simpart -k "$K" -g "$GAMMA" -s "$sim" -r "$RUNS" --verify
-    run fig8 "$name" repcut-$sim -p repcut -k "$K" -t "$THREADS" -s "$sim" \
+    run fig8 "$name" simpart-$sim -p simpart -k "$K" -g "$GAMMA" -s "$sim" -b "$BATCH" -r "$RUNS" --verify
+    run fig8 "$name" repcut-$sim -p repcut -k "$K" -t "$THREADS" -s "$sim" -b "$BATCH" \
       --part-runs 1 --part-warmup 0 --sim-runs "$RUNS" --verify
   done
 done

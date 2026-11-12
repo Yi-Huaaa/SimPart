@@ -49,7 +49,7 @@ Simulation
                           cpu:    CPU, OpenMP over the partitions
                           none:   partition only
   -b, --batch N           GPU: rounds of 64 patterns simulated per pass,
-                          1 (default), 2, 4, 8 or 16
+                          1, 2, 4 (default), 8 or 16
 
 Measurement
   -r, --runs N            timed repetitions of partitioning and simulation (default: 10)
@@ -73,7 +73,7 @@ struct Options {
   int64_t gamma = 1024;
   int32_t threads = 16;
   SimulatorKind simulator = SimulatorKind::Graph;
-  int32_t batch = 1;
+  int32_t batch = GpuSimulator::kDefaultBatch;
   int runs = 10;
   std::optional<int> part_runs, sim_runs;
   int warmup = 1;

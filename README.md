@@ -57,9 +57,9 @@ verify      PASSED (16 rounds x 107 POs, 218835 node values of the last round)
    several cones are replicated (RAP: replication-aided partitioning). The
    levels up to the replication level stay disjoint and are simulated level by
    level over the whole GPU (DSP: disjoint set-based partitioning).
-3. **GPU simulation.** Every round of 64 patterns runs one kernel per DSP level
-   and a single kernel for the RAP region, with one thread block per cone. All
-   rounds run inside one conditional (while-loop) CUDA graph.
+3. **GPU simulation.** Every pass, by default 4 rounds of 64 patterns, runs one
+   kernel per DSP level and a single kernel for the RAP region, with one thread
+   block per cone. All passes run inside one conditional (while-loop) CUDA graph.
 
 ## Running SimPart
 
@@ -79,7 +79,7 @@ Simulation
                           cpu:    CPU, OpenMP over the partitions
                           none:   partition only
   -b, --batch N           GPU: rounds of 64 patterns simulated per pass,
-                          1 (default), 2, 4, 8 or 16
+                          1, 2, 4 (default), 8 or 16
 
 Measurement
   -r, --runs N            timed repetitions of partitioning and simulation (default: 10)
@@ -148,6 +148,7 @@ The settings are environment variables; their defaults are the settings of the p
 |---|---|---|
 | `K` | 16 | number of partitions |
 | `GAMMA` | 1024 | SimPart replication threshold γ |
+| `BATCH` | 4 | rounds of 64 patterns per GPU simulation pass (`--batch`) |
 | `RUNS` | 10 | timed repetitions of SimPart and of every simulation |
 | `REPCUT_RUNS` | 3 | timed repetitions of RepCut partitioning (Mt-KaHyPar is slow) |
 | `THREADS` | 16 | CPU threads of Mt-KaHyPar and of the CPU simulator |
