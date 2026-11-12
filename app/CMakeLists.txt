@@ -1,0 +1,5 @@
+add_executable(simpart-bin main.cpp)
+set_target_properties(simpart-bin PROPERTIES OUTPUT_NAME simpart)
+target_link_libraries(simpart-bin PRIVATE simpart)
+target_compile_definitions(simpart-bin PRIVATE SIMPART_VERSION="${PROJECT_VERSION}")
+target_compile_options(simpart-bin PRIVATE -Wall -Wextra -Wshadow)

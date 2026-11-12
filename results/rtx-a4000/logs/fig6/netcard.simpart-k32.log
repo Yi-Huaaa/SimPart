@@ -1,0 +1,10 @@
+SimPart 1.0.0 | GPU: NVIDIA RTX A4000 (sm_86)
+circuit     netcard_iccad_bfs.ckt: 1498565 nodes, 1667059 edges, 1836 PIs, 10 POs
+patterns    1024 patterns (16 rounds), files read in 135.0 ms
+partitioner SimPart, k=32, gamma=1024
+  time      21.611 ms (grouping 14.217 + hybrid 7.392), mean of 10 runs, std 0.864
+  layout    124 levels: DSP [0, 88), RAP [88, 124) x 32 groups (7355 node instances)
+  replication R|V| = 1.00000, R|E| = 1.00000
+simulator   GPU, conditional CUDA graph, 4 rounds per pass (graph setup 1.403 ms)
+  time      3.251 ms, mean of 10 runs, std 0.006
+verify      PASSED (16 rounds x 10 POs, 1498565 node values of the last round)

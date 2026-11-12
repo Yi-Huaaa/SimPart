@@ -1,0 +1,217 @@
+start Thu Nov 12 12:27:37 AM CST 2026
+[table2] edit_dist (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] edit_dist (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] edit_dist (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] edit_dist (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] matrix_mult (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] matrix_mult (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] matrix_mult (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] matrix_mult (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] b19 (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] b19 (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] b19 (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] b19 (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] leon2 (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] leon2 (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] leon2 (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] leon2 (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] leon3mp (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] leon3mp (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] leon3mp (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] leon3mp (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] netcard (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] netcard (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] netcard (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] netcard (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] edit_dist_eval (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] edit_dist_eval (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] edit_dist_eval (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] edit_dist_eval (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] matrix_mult_eval (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] matrix_mult_eval (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] matrix_mult_eval (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] matrix_mult_eval (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] b19_eval (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] b19_eval (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] b19_eval (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] b19_eval (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] leon2_eval (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] leon2_eval (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] leon2_eval (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] leon2_eval (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] leon3_eval (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] leon3_eval (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] leon3_eval (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] leon3_eval (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+[table2] netcard_eval (simpart): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[table2] netcard_eval (repcut-t16-gpu): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[table2] netcard_eval (repcut-t16-cpu): simpart -p repcut -k 16 -t 16 -s cpu --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[table2] netcard_eval (repcut-t1-cpu): simpart -p repcut -k 16 -t 1 -s cpu --part-runs 3 --part-warmup 0 --sim-runs 3 --verify
+Times in ms. Ratios of partitioning/simulation times are relative to SimPart's T_Part/T_Sim^G.
+
+| Benchmark | \|V\| | \|E\| | RepCut T_Build | T_Part^C1 | T_Part^C16 | T_Sim^C1 | T_Sim^C16 | T_Sim^G | R\|V\| | R\|E\| | SimPart T_Part | T_Sim^G | R\|V\| | R\|E\| |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| edit_dist | 164K | 180K | 33.434 | 1116 | 170.741 | 17.871 | 4.696 | 0.669 | 1.01690 | 1.01255 | 3.536 | 1.025 | 1.00000 | 1.00000 |
+| matrix_mult | 176K | 236K | 42.803 | 765.707 | 117.712 | 25.650 | 5.966 | 0.832 | 1.00183 | 1.00126 | 4.316 | 1.074 | 1.00017 | 1.00022 |
+| b19 | 255K | 323K | 83.797 | 3996 | 530.792 | 39.053 | 7.573 | 1.009 | 1.01186 | 1.01007 | 6.097 | 1.315 | 1.00000 | 1.00000 |
+| leon2 | 1.6M | 1.7M | 521.788 | 9364 | 1446 | 378.316 | 73.497 | 4.041 | 1.00168 | 1.00154 | 21.060 | 3.308 | 1.00000 | 1.00000 |
+| leon3mp | 1.2M | 1.4M | 352.969 | 10268 | 1656 | 239.831 | 49.396 | 3.036 | 1.00502 | 1.00453 | 17.635 | 2.814 | 1.00000 | 1.00000 |
+| netcard | 1.5M | 1.7M | 503.743 | 20651 | 3258 | 338.787 | 69.662 | 3.530 | 1.02115 | 1.01994 | 21.205 | 3.252 | 1.00000 | 1.00000 |
+| edit_dist_eval | 1.3M | 1.4M | 396.505 | 4979 | 641.768 | 182.459 | 46.077 | 2.994 | 1.00200 | 1.00149 | 15.630 | 2.673 | 1.00000 | 1.00000 |
+| matrix_mult_eval | 1.4M | 1.9M | 552.493 | 3080 | 458.153 | 271.798 | 70.176 | 3.789 | 1.00004 | 1.00002 | 18.281 | 3.569 | 1.00000 | 1.00000 |
+| b19_eval | 2.0M | 2.6M | 1067 | 29631 | 3738 | 333.774 | 111.196 | 4.863 | 1.00167 | 1.00143 | 27.181 | 4.562 | 1.00000 | 1.00000 |
+| leon2_eval | 12.9M | 13.9M | 6555 | 60959 | 11425 | 4204 | 1785 | 30.047 | 1.00020 | 1.00018 | 180.105 | 28.068 | 1.00000 | 1.00000 |
+| leon3_eval | 20.0M | 22.3M | 10101 | 87750 | 16182 | 3834 | 2715 | 46.085 | 1.00005 | 1.00004 | 273.391 | 43.444 | 1.00000 | 1.00000 |
+| netcard_eval | 24.0M | 26.7M | 13041 | 708765 | 148824 | 5009 | 3136 | 54.503 | 1.00000 | 1.00000 | 335.180 | 49.760 | 1.00000 | 1.00000 |
+| **Avg. ratio** | 1.000 | 1.000 | - | 625.019 | 104.093 | 77.589 | 27.290 | 1.005 | 1.00520 | 1.00442 | 1.000 | 1.000 | 1.00001 | 1.00002 |
+table2 done Thu Nov 12 01:36:31 AM CST 2026
+[fig7] netcard (gamma0): simpart -p simpart -k 16 -g 0 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma1): simpart -p simpart -k 16 -g 1 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma2): simpart -p simpart -k 16 -g 2 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma4): simpart -p simpart -k 16 -g 4 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma8): simpart -p simpart -k 16 -g 8 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma16): simpart -p simpart -k 16 -g 16 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma32): simpart -p simpart -k 16 -g 32 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma64): simpart -p simpart -k 16 -g 64 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma128): simpart -p simpart -k 16 -g 128 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma256): simpart -p simpart -k 16 -g 256 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma512): simpart -p simpart -k 16 -g 512 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma1024): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gamma2048): simpart -p simpart -k 16 -g 2048 -s graph -b 4 -r 10 --verify
+[fig7] netcard (gammainf): simpart -p simpart -k 16 -g inf -s graph -b 4 -r 10 --verify
+
+**netcard**
+
+| gamma | DSP levels | T_Sim^G (ms) | R\|V\| |
+|---|---|---|---|
+| 0 | 124 / 124 | 3.305 | 1.00000 |
+| 1 | 123 / 124 | 3.307 | 1.00000 |
+| 2 | 121 / 124 | 3.304 | 1.00000 |
+| 4 | 118 / 124 | 3.291 | 1.00000 |
+| 8 | 115 / 124 | 3.281 | 1.00000 |
+| 16 | 111 / 124 | 3.275 | 1.00000 |
+| 32 | 109 / 124 | 3.272 | 1.00000 |
+| 64 | 106 / 124 | 3.258 | 1.00000 |
+| 128 | 102 / 124 | 3.242 | 1.00000 |
+| 256 | 98 / 124 | 3.235 | 1.00000 |
+| 512 | 94 / 124 | 3.223 | 1.00000 |
+| 1024 | 88 / 124 | 3.247 | 1.00000 |
+| 2048 | 81 / 124 | 3.369 | 1.00000 |
+| inf | 0 / 124 | 10.555 | 1.18041 |
+[fig6] leon2 (simpart-k2): simpart -p simpart -k 2 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] leon2 (repcut-k2): simpart -p repcut -k 2 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] leon2 (simpart-k4): simpart -p simpart -k 4 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] leon2 (repcut-k4): simpart -p repcut -k 4 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] leon2 (simpart-k8): simpart -p simpart -k 8 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] leon2 (repcut-k8): simpart -p repcut -k 8 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] leon2 (simpart-k16): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] leon2 (repcut-k16): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] leon2 (simpart-k32): simpart -p simpart -k 32 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] leon2 (repcut-k32): simpart -p repcut -k 32 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] leon2 (simpart-k64): simpart -p simpart -k 64 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] leon2 (repcut-k64): simpart -p repcut -k 64 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] leon2 (simpart-k128): simpart -p simpart -k 128 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] leon2 (repcut-k128): simpart -p repcut -k 128 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] netcard (simpart-k2): simpart -p simpart -k 2 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] netcard (repcut-k2): simpart -p repcut -k 2 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] netcard (simpart-k4): simpart -p simpart -k 4 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] netcard (repcut-k4): simpart -p repcut -k 4 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] netcard (simpart-k8): simpart -p simpart -k 8 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] netcard (repcut-k8): simpart -p repcut -k 8 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] netcard (simpart-k16): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] netcard (repcut-k16): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] netcard (simpart-k32): simpart -p simpart -k 32 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] netcard (repcut-k32): simpart -p repcut -k 32 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] netcard (simpart-k64): simpart -p simpart -k 64 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] netcard (repcut-k64): simpart -p repcut -k 64 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+[fig6] netcard (simpart-k128): simpart -p simpart -k 128 -g 1024 -s graph -b 4 -r 10 --verify
+[fig6] netcard (repcut-k128): simpart -p repcut -k 128 -t 16 -s graph -b 4 --part-runs 3 --part-warmup 0 --sim-runs 10 --verify
+
+**leon2**
+
+| k | RepCut T_Part (ms) | SimPart T_Part (ms) | RepCut T_Sim^G (ms) | SimPart T_Sim^G (ms) | RepCut replication (%) | SimPart replication (%) |
+|---|---|---|---|---|---|---|
+| 2 | 993.296 | 20.670 | 15.920 | 3.304 | 0.013 | 0.000 |
+| 4 | 1020 | 20.808 | 8.578 | 3.304 | 0.043 | 0.000 |
+| 8 | 1255 | 20.837 | 4.915 | 3.309 | 0.091 | 0.000 |
+| 16 | 1445 | 21.137 | 4.049 | 3.310 | 0.171 | 0.000 |
+| 32 | 2397 | 21.435 | 3.567 | 3.306 | 0.293 | 0.000 |
+| 64 | 2828 | 22.037 | 3.246 | 3.305 | 0.566 | 0.000 |
+| 128 | 6377 | 23.419 | 2.877 | 3.338 | 1.010 | 0.000 |
+
+**netcard**
+
+| k | RepCut T_Part (ms) | SimPart T_Part (ms) | RepCut T_Sim^G (ms) | SimPart T_Sim^G (ms) | RepCut replication (%) | SimPart replication (%) |
+|---|---|---|---|---|---|---|
+| 2 | 3508 | 20.651 | 14.999 | 3.252 | 0.028 | 0.000 |
+| 4 | 2803 | 20.919 | 8.156 | 3.249 | 0.598 | 0.000 |
+| 8 | 3198 | 21.041 | 4.369 | 3.249 | 1.049 | 0.000 |
+| 16 | 3932 | 21.177 | 3.510 | 3.250 | 2.037 | 0.000 |
+| 32 | 4483 | 21.611 | 3.399 | 3.251 | 3.236 | 0.000 |
+| 64 | 6002 | 22.200 | 3.199 | 3.250 | 4.913 | 0.000 |
+| 128 | 8050 | 23.293 | 2.945 | 3.278 | 7.115 | 0.000 |
+[fig8] edit_dist (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] edit_dist (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] edit_dist (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] edit_dist (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] matrix_mult (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] matrix_mult (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] matrix_mult (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] matrix_mult (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] b19 (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] b19 (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] b19 (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] b19 (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] leon2 (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] leon2 (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] leon2 (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] leon2 (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] leon3mp (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] leon3mp (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] leon3mp (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] leon3mp (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] netcard (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] netcard (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] netcard (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] netcard (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] edit_dist_eval (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] edit_dist_eval (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] edit_dist_eval (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] edit_dist_eval (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] matrix_mult_eval (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] matrix_mult_eval (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] matrix_mult_eval (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] matrix_mult_eval (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] b19_eval (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] b19_eval (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] b19_eval (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] b19_eval (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] leon2_eval (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] leon2_eval (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] leon2_eval (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] leon2_eval (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] leon3_eval (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] leon3_eval (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] leon3_eval (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] leon3_eval (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] netcard_eval (simpart-stream): simpart -p simpart -k 16 -g 1024 -s stream -b 4 -r 10 --verify
+[fig8] netcard_eval (repcut-stream): simpart -p repcut -k 16 -t 16 -s stream -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+[fig8] netcard_eval (simpart-graph): simpart -p simpart -k 16 -g 1024 -s graph -b 4 -r 10 --verify
+[fig8] netcard_eval (repcut-graph): simpart -p repcut -k 16 -t 16 -s graph -b 4 --part-runs 1 --part-warmup 0 --sim-runs 10 --verify
+| Benchmark | RepCut stream | RepCut graph | SimPart w/o graph (stream) | SimPart w/ graph | SimPart graph speedup |
+|---|---|---|---|---|---|
+| edit_dist | 0.623 | 0.668 | 1.129 | 1.025 | 1.101x |
+| matrix_mult | 0.826 | 0.823 | 1.121 | 1.075 | 1.043x |
+| b19 | 0.975 | 0.960 | 1.419 | 1.316 | 1.078x |
+| leon2 | 3.865 | 3.777 | 3.635 | 3.311 | 1.098x |
+| leon3mp | 2.821 | 2.950 | 3.101 | 2.813 | 1.102x |
+| netcard | 3.408 | 3.520 | 3.529 | 3.250 | 1.086x |
+| edit_dist_eval | 2.947 | 2.997 | 2.898 | 2.673 | 1.084x |
+| matrix_mult_eval | 3.785 | 3.822 | 3.749 | 3.574 | 1.049x |
+| b19_eval | 4.858 | 4.810 | 4.754 | 4.557 | 1.043x |
+| leon2_eval | 30.455 | 30.453 | 28.512 | 28.067 | 1.016x |
+| leon3_eval | 45.993 | 46.019 | 43.888 | 43.473 | 1.010x |
+| netcard_eval | 54.403 | 54.451 | 50.160 | 49.770 | 1.008x |
+
+GPU simulation times in ms.
+all done Thu Nov 12 01:50:27 AM CST 2026
