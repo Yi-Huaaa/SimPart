@@ -31,9 +31,9 @@ inline void eval_node(const Circuit& c, const Patterns& p, int32_t round, int32_
   if (type == GateType::PI) {
     value = p.words[int64_t(round) * c.num_pis + v];
   } else {
-    const int32_t begin = c.fanin_offsets[v];
-    value = eval_gate(type, c.fanins.data() + begin, c.fanin_offsets[v + 1] - begin,
-                      RelaxedLoad{values});
+    const int32_t* fanin = c.fanins.data() + c.fanin_offsets[v];
+    const RelaxedLoad load{values};
+    value = eval_gate(type, c.fanin_count(v), [&](int32_t i) { return load(fanin[i]); });
     if (type == GateType::PO) {
       relaxed_store(po_values[int64_t(round) * c.num_pos + (v - c.num_pis)], value);
     }

@@ -12,31 +12,30 @@
 
 namespace simpart {
 
-// Evaluates a (non-PI) node on 64 bit-packed patterns. `load(u)` returns the
-// current value of node u; fanins are visited in CSR order.
-template <typename Load>
-SIMPART_HOST_DEVICE uint64_t eval_gate(GateType type, const int32_t* fanin, int32_t num_fanins,
-                                       const Load& load) {
-  uint64_t r = load(fanin[0]);
+// Evaluates a (non-PI) node on 64 bit-packed patterns. `input(i)` returns the
+// value of the i-th fanin (fanins in CSR order, 0 <= i < num_fanins).
+template <typename Input>
+SIMPART_HOST_DEVICE uint64_t eval_gate(GateType type, int32_t num_fanins, const Input& input) {
+  uint64_t r = input(0);
   switch (type) {
     case GateType::INV: return ~r;
     case GateType::BUF:
     case GateType::PO: return r;
     case GateType::AND:
     case GateType::NAND:
-      for (int32_t i = 1; i < num_fanins; ++i) r &= load(fanin[i]);
+      for (int32_t i = 1; i < num_fanins; ++i) r &= input(i);
       return type == GateType::NAND ? ~r : r;
     case GateType::OR:
     case GateType::NOR:
-      for (int32_t i = 1; i < num_fanins; ++i) r |= load(fanin[i]);
+      for (int32_t i = 1; i < num_fanins; ++i) r |= input(i);
       return type == GateType::NOR ? ~r : r;
     case GateType::XOR:
     case GateType::XNOR:
-      for (int32_t i = 1; i < num_fanins; ++i) r ^= load(fanin[i]);
+      for (int32_t i = 1; i < num_fanins; ++i) r ^= input(i);
       return type == GateType::XNOR ? ~r : r;
     case GateType::MUX: {
-      const uint64_t b = load(fanin[1]);
-      const uint64_t s = load(fanin[2]);
+      const uint64_t b = input(1);
+      const uint64_t s = input(2);
       return (s & b) | (~s & r);
     }
     case GateType::PI: break;  // PIs are assigned from the patterns, never evaluated

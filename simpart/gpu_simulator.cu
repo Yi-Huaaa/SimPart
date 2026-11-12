@@ -16,11 +16,40 @@ const char* to_string(Executor executor) {
 
 namespace {
 
+// One slot of the simulation schedule: a node and its fanins, stored in launch
+// order so that a thread reads everything it needs with one 16-byte load.
+struct alignas(16) NodeRecord {
+  int32_t node;
+  uint8_t type;
+  uint8_t unused;
+  uint16_t num_fanins;
+  int32_t fanin0;  // first fanin, or offset into DeviceCircuit::fanins if num_fanins > 2
+  int32_t fanin1;  // second fanin (== fanin0 if num_fanins == 1)
+};
+static_assert(sizeof(NodeRecord) == 16, "NodeRecord must be 16 bytes");
+
+std::vector<NodeRecord> make_records(const Circuit& c, const std::vector<int32_t>& nodes) {
+  std::vector<NodeRecord> records(nodes.size());
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    const int32_t v = nodes[i];
+    const int32_t n = c.fanin_count(v);
+    const int32_t begin = c.fanin_offsets[v];
+    if (n > UINT16_MAX) throw std::runtime_error("node with more than 65535 fanins");
+    NodeRecord& r = records[i];
+    r = {v, static_cast<uint8_t>(c.types[v]), 0, static_cast<uint16_t>(n), v, v};
+    if (n > 2) {
+      r.fanin0 = begin;
+    } else if (n > 0) {
+      r.fanin0 = c.fanins[begin];
+      r.fanin1 = c.fanins[begin + n - 1];
+    }
+  }
+  return records;
+}
+
 // Device-side view of the circuit and the simulation state.
 struct DeviceCircuit {
-  const GateType* types;
-  const int32_t* fanin_offsets;
-  const int32_t* fanins;
+  const int32_t* fanins;     // CSR fanins, for nodes with more than two fanins
   const uint64_t* patterns;  // [round * num_pis + pi]
   uint64_t* values;          // [node]
   uint64_t* po_values;       // [round * num_pos + po]
@@ -28,44 +57,59 @@ struct DeviceCircuit {
   int32_t num_pos;
 };
 
-struct LoadValue {
-  const uint64_t* values;
-  SIMPART_HOST_DEVICE uint64_t operator()(int32_t u) const { return values[u]; }
-};
+__device__ __forceinline__ NodeRecord load_record(const NodeRecord* p) {
+  const int4 raw = __ldg(reinterpret_cast<const int4*>(p));
+  NodeRecord r;
+  r.node = raw.x;
+  r.type = static_cast<uint8_t>(raw.y & 0xff);
+  r.num_fanins = static_cast<uint16_t>(static_cast<uint32_t>(raw.y) >> 16);
+  r.fanin0 = raw.z;
+  r.fanin1 = raw.w;
+  return r;
+}
 
-// Evaluates node v for the round stored at *round. Replicated nodes are
-// written by several blocks, always with the same value.
-__device__ __forceinline__ void eval_node(int32_t v, const DeviceCircuit& c, const int32_t* round) {
-  const GateType type = c.types[v];
+// Evaluates one schedule slot for the round stored at *round. Replicated nodes
+// are written by several blocks, always with the same value.
+__device__ __forceinline__ void eval_record(const NodeRecord& r, const DeviceCircuit& c,
+                                            const int32_t* round) {
+  const GateType type = static_cast<GateType>(r.type);
   uint64_t value;
   if (type == GateType::PI) {
-    value = c.patterns[int64_t(*round) * c.num_pis + v];
+    value = c.patterns[int64_t(*round) * c.num_pis + r.node];
+  } else if (r.num_fanins <= 2) {
+    const uint64_t a = c.values[r.fanin0];
+    const uint64_t b = c.values[r.fanin1];
+    value = eval_gate(type, r.num_fanins, [&](int32_t i) { return i == 0 ? a : b; });
   } else {
-    const int32_t begin = c.fanin_offsets[v];
-    value = eval_gate(type, c.fanins + begin, c.fanin_offsets[v + 1] - begin, LoadValue{c.values});
-    if (type == GateType::PO) c.po_values[int64_t(*round) * c.num_pos + (v - c.num_pis)] = value;
+    const int32_t* fanin = c.fanins + r.fanin0;
+    value = eval_gate(type, r.num_fanins, [&](int32_t i) { return c.values[fanin[i]]; });
   }
-  c.values[v] = value;
+  if (type == GateType::PO) c.po_values[int64_t(*round) * c.num_pos + (r.node - c.num_pis)] = value;
+  c.values[r.node] = value;
 }
 
 // Algorithm 3: one DSP level, one thread per node (inter-block sync = kernel boundary).
 __global__ void __launch_bounds__(GpuSimulator::kBlockSize)
-    dsp_level_kernel(const int32_t* __restrict__ nodes, int32_t count, DeviceCircuit c,
+    dsp_level_kernel(const NodeRecord* __restrict__ records, int32_t count, DeviceCircuit c,
                      const int32_t* round) {
   const int32_t t = blockIdx.x * blockDim.x + threadIdx.x;
-  if (t < count) eval_node(nodes[t], c, round);
+  if (t < count) eval_record(load_record(records + t), c, round);
 }
 
 // Algorithm 4: one block per group walks the RAP levels of its cone; levels
 // wider than the block take several passes; intra-block sync between levels.
+// The level offsets of the group are first copied to shared memory.
 __global__ void __launch_bounds__(GpuSimulator::kBlockSize)
-    rap_kernel(const int32_t* __restrict__ offsets, const int32_t* __restrict__ nodes,
+    rap_kernel(const int32_t* __restrict__ offsets, const NodeRecord* __restrict__ records,
                int32_t rap_levels, DeviceCircuit c, const int32_t* round) {
+  extern __shared__ int32_t level_offsets[];
   const int32_t* group_offsets = offsets + int64_t(blockIdx.x) * rap_levels;
+  for (int32_t l = threadIdx.x; l <= rap_levels; l += blockDim.x) level_offsets[l] = group_offsets[l];
+  __syncthreads();
   for (int32_t l = 0; l < rap_levels; ++l) {
-    const int32_t end = group_offsets[l + 1];
-    for (int32_t i = group_offsets[l] + threadIdx.x; i < end; i += blockDim.x) {
-      eval_node(nodes[i], c, round);
+    const int32_t end = level_offsets[l + 1];
+    for (int32_t i = level_offsets[l] + threadIdx.x; i < end; i += blockDim.x) {
+      eval_record(load_record(records + i), c, round);
     }
     __syncthreads();
   }
@@ -87,10 +131,10 @@ struct GpuSimulator::Impl {
   int32_t dsp_levels = 0, rap_levels = 0, num_groups = 0;
   std::vector<int32_t> dsp_offsets;  // host copy, for launch configurations
 
-  DeviceBuffer<GateType> types;
-  DeviceBuffer<int32_t> fanin_offsets, fanins;
+  DeviceBuffer<int32_t> fanins;
   DeviceBuffer<uint64_t> patterns, values, po_values;
-  DeviceBuffer<int32_t> dsp_nodes, rap_offsets, rap_nodes;
+  DeviceBuffer<NodeRecord> dsp_records, rap_records;
+  DeviceBuffer<int32_t> rap_offsets;
   DeviceBuffer<int32_t> round_ids;      // 0, 1, ..., num_rounds-1 (stream executor)
   DeviceBuffer<int32_t> round_counter;  // current round (graph executor)
 
@@ -98,8 +142,7 @@ struct GpuSimulator::Impl {
   cudaGraphExec_t graph_exec = nullptr;
 
   DeviceCircuit device_circuit() {
-    return {types.data(),    fanin_offsets.data(), fanins.data(), patterns.data(),
-            values.data(),   po_values.data(),     num_pis,       num_pos};
+    return {fanins.data(), patterns.data(), values.data(), po_values.data(), num_pis, num_pos};
   }
 
   // Enqueues the kernels that simulate one round, reading the round at *round.
@@ -110,12 +153,13 @@ struct GpuSimulator::Impl {
       if (count == 0) continue;
       const int32_t threads = std::min(count, kBlockSize);
       const int32_t blocks = (count + kBlockSize - 1) / kBlockSize;
-      dsp_level_kernel<<<blocks, threads, 0, s>>>(dsp_nodes.data() + dsp_offsets[l], count, c,
+      dsp_level_kernel<<<blocks, threads, 0, s>>>(dsp_records.data() + dsp_offsets[l], count, c,
                                                   round);
     }
     if (rap_levels > 0 && num_groups > 0) {
-      rap_kernel<<<num_groups, kBlockSize, 0, s>>>(rap_offsets.data(), rap_nodes.data(),
-                                                   rap_levels, c, round);
+      const size_t shared_bytes = (static_cast<size_t>(rap_levels) + 1) * sizeof(int32_t);
+      rap_kernel<<<num_groups, kBlockSize, shared_bytes, s>>>(rap_offsets.data(), rap_records.data(),
+                                                              rap_levels, c, round);
     }
     SIMPART_CUDA_CHECK_LAUNCH();
   }
@@ -136,15 +180,16 @@ GpuSimulator::GpuSimulator(const Circuit& circuit, const Partition& partition,
   s.num_groups = partition.num_groups;
   s.dsp_offsets = partition.dsp_offsets;
 
-  s.types.upload(circuit.types);
-  s.fanin_offsets.upload(circuit.fanin_offsets);
   s.fanins.upload(circuit.fanins);
   s.patterns.upload(patterns.words);
   s.values.resize(circuit.num_nodes());
   s.po_values.resize(static_cast<size_t>(s.num_rounds) * s.num_pos);
-  s.dsp_nodes.upload(partition.dsp_nodes);
+  if ((static_cast<size_t>(s.rap_levels) + 1) * sizeof(int32_t) > 48 * 1024) {
+    throw std::runtime_error("too many RAP levels for the shared-memory level table");
+  }
+  s.dsp_records.upload(make_records(circuit, partition.dsp_nodes));
+  s.rap_records.upload(make_records(circuit, partition.rap_nodes));
   s.rap_offsets.upload(partition.rap_offsets);
-  s.rap_nodes.upload(partition.rap_nodes);
 
   std::vector<int32_t> ids(std::max(s.num_rounds, 1));
   std::iota(ids.begin(), ids.end(), 0);
