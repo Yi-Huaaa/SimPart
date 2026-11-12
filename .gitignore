@@ -13,20 +13,12 @@
 # Python
 __pycache__/
 
-# Large benchmark files that are not tracked (see benchmark/README.md)
-/benchmark/large_circuits/*_iccad*.ckt
-/benchmark/large_circuits/b19_iccad.flst
-/benchmark/large_circuits/b19_iccad.ptn
-/benchmark/large_circuits/mgc_edit_dist_iccad.flst
-/benchmark/large_circuits/mgc_edit_dist_iccad.ptn
-/benchmark/large_circuits/mgc_matrix_mult_iccad.flst
-/benchmark/large_circuits/mgc_matrix_mult_iccad.ptn
+# Benchmarks of the paper and other third-party circuits (see benchmark/README.md)
+/benchmark/large_circuits/*
+!/benchmark/large_circuits/random*
 /benchmark/extremely_large_circuits
-/benchmark/opentimer_dump/b19_iccad.txt
-/benchmark/opentimer_dump/leon2_iccad_eval.txt
-/benchmark/opentimer_dump/leon3mp_iccad.txt
-/benchmark/opentimer_dump/netcard_iccad.txt
-/benchmark/opentimer_dump/mgc_edit_dist_iccad.txt
-/benchmark/opentimer_dump/mgc_matrix_mult_iccad.txt
+/benchmark/opentimer_dump/*_iccad*.txt
+/benchmark/opentimer_dump/des_perf.txt
+/benchmark/opentimer_dump/vga_lcd.txt
 /benchmark/pre_construct_hypergraph/
 /benchmark/cc_benchmark/

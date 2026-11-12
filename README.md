@@ -212,6 +212,9 @@ If you use SimPart in your research, please cite our paper:
 
 ## License
 
-SimPart is released under the [BSD 3-Clause License](LICENSE). The bundled
-[doctest](https://github.com/doctest/doctest) header in `3rd-party/` is under the
-MIT License.
+SimPart is released under the [Apache License 2.0](LICENSE).
+Copyright 2025 Yi-Hua Chung, Shui Jiang, Wan-Luan Lee, Yanqing Zhang, Haoxing Ren,
+Tsung-Yi Ho, and Tsung-Wei Huang.
+
+The bundled [doctest](https://github.com/doctest/doctest) header in `3rd-party/`
+is under the MIT License.

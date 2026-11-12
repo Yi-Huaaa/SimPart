@@ -4,13 +4,27 @@
 |---|---|---|
 | `simple_circuits/` | tiny hand-written circuits (unit tests) | yes |
 | `c_circuits/` | ISCAS'85 circuits c17 ... c7552 (unit tests) | yes |
-| `large_circuits/` | `random1-3` (unit tests), and the six circuits of the paper: `mgc_edit_dist_iccad`, `mgc_matrix_mult_iccad`, `b19_iccad`, `leon2_iccad_eval`, `leon3mp_iccad`, `netcard_iccad` (`*_bfs.ckt` + `*.ptn`) | only `random*` and some `.ptn` files |
-| `extremely_large_circuits/` | the `_eval` circuits of the paper: 8 or 16 copies of the circuits above | no, generate them (see below) |
-| `opentimer_dump/` | OpenTimer dumps the `.ckt` files were converted from | small ones only |
+| `large_circuits/` | random circuits `random1-3` (unit tests, quick start); the six circuits of the paper | `random1-3` only |
+| `extremely_large_circuits/` | the `_eval` circuits of the paper | no |
+| `opentimer_dump/` | OpenTimer dumps the small circuits were converted from | yes |
 
-The circuit files of the paper are too large for git. Place the six
-`large_circuits/*_bfs.ckt` files (and the missing `.ptn` files) in
-`large_circuits/`, then generate the `_eval` benchmarks with
+## Benchmarks of the paper
+
+The 12 benchmarks of the paper (table below) are not included in this repository:
+
+- **Size.** The six circuits and their patterns take about 130 MB, and their
+  `_eval` variants about 1.7 GB. Single files are up to 630 MB, far above
+  GitHub's 100 MB file limit.
+- **Origin.** They are converted from third-party timing-contest benchmarks
+  (TAU/ICCAD, as distributed with OpenTimer).
+
+Everything else works without them: the unit tests and the quick start use the
+circuits in this directory, and the experiment scripts skip benchmarks they
+cannot find. Our results on the 12 benchmarks are in [results/](../results/README.md).
+
+If you have the circuit files, put the six `*_bfs.ckt` files and their `.ptn`
+files in `large_circuits/` and generate the `_eval` variants (8 or 16 copies of
+a circuit side by side):
 
 ```bash
 cd benchmark
