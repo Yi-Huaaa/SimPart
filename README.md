@@ -19,7 +19,7 @@ You need an NVIDIA GPU, **CUDA 12.3 or newer**, CMake 3.24 or newer, and a C++20
 compiler supported by your CUDA version (for example GCC 12 with CUDA 12.3).
 
 ```bash
-git clone https://github.com/Yi-Huaaa/fault-simulation.git SimPart
+git clone https://github.com/Yi-Huaaa/SimPart.git
 cd SimPart
 scripts/build.sh                                  # builds build/app/simpart
 ctest --test-dir build --output-on-failure        # optional: unit tests
