@@ -54,8 +54,11 @@ Measurement
       --part-runs N       timed repetitions of partitioning (overrides --runs)
       --sim-runs N        timed repetitions of simulation (overrides --runs)
   -w, --warmup N          untimed warm-up repetitions before timing (default: 1)
+      --part-warmup N     warm-up repetitions of partitioning (overrides --warmup)
+      --sim-warmup N      warm-up repetitions of simulation (overrides --warmup)
       --verify            check the simulation results against a sequential CPU simulation
       --csv FILE          append the results as one CSV row to FILE
+      --label NAME        benchmark name written to the CSV (default: circuit file name)
   -h, --help              show this message
 )";
 
@@ -71,8 +74,10 @@ struct Options {
   int runs = 10;
   std::optional<int> part_runs, sim_runs;
   int warmup = 1;
+  std::optional<int> part_warmup, sim_warmup;
   bool verify = false;
   std::string csv_path;
+  std::string label;
 };
 
 [[noreturn]] void usage_error(const std::string& msg) {
@@ -130,6 +135,12 @@ Options parse_options(int argc, char** argv) {
       o.sim_runs = static_cast<int>(parse_int(value(), arg, 1));
     } else if (arg == "-w" || arg == "--warmup") {
       o.warmup = static_cast<int>(parse_int(value(), arg, 0));
+    } else if (arg == "--part-warmup") {
+      o.part_warmup = static_cast<int>(parse_int(value(), arg, 0));
+    } else if (arg == "--sim-warmup") {
+      o.sim_warmup = static_cast<int>(parse_int(value(), arg, 0));
+    } else if (arg == "--label") {
+      o.label = value();
     } else if (arg == "--verify") {
       o.verify = true;
     } else if (arg == "--csv") {
@@ -143,6 +154,7 @@ Options parse_options(int argc, char** argv) {
   if (positional.size() != 2) usage_error("expected a circuit file and a pattern file");
   o.circuit_path = positional[0];
   o.patterns_path = positional[1];
+  if (o.label.empty()) o.label = std::filesystem::path(o.circuit_path).filename().string();
 #ifndef SIMPART_WITH_REPCUT
   if (o.partitioner == "repcut") usage_error("this build has no RepCut support (Mt-KaHyPar not found)");
 #endif
@@ -201,13 +213,13 @@ void append_csv(const Options& o, const Circuit& c, const Partition& p, const Re
   std::ofstream out(o.csv_path, std::ios::app);
   if (!out) throw std::runtime_error("cannot open " + o.csv_path);
   if (!exists) {
-    out << "circuit,partitioner,k,gamma,threads,simulator,nodes,edges,levels,dsp_levels,"
+    out << "benchmark,partitioner,k,gamma,threads,simulator,nodes,edges,levels,dsp_levels,"
            "part_runs,part_ms,part_std_ms,grouping_ms,hybrid_ms,build_ms,assemble_ms,"
            "hg_vertices,hg_hyperedges,node_ratio,edge_ratio,sim_runs,sim_setup_ms,sim_ms,"
            "sim_std_ms,verified\n";
   }
   auto opt_int = [](int64_t v) { return v < 0 ? std::string() : std::to_string(v); };
-  out << std::filesystem::path(o.circuit_path).filename().string() << ',' << o.partitioner << ','
+  out << o.label << ',' << o.partitioner << ','
       << o.partitions << ',' << (o.partitioner == "simpart" ? gamma_string(o.gamma) : "") << ','
       << o.threads << ',' << simulator_name(o.simulator) << ',' << c.num_nodes() << ','
       << c.num_edges() << ',' << p.num_levels << ',' << p.dsp_levels << ',' << r.part.count << ','
@@ -257,6 +269,8 @@ int run(const Options& o) {
 
   const int part_runs = o.part_runs.value_or(o.runs);
   const int sim_runs = o.sim_runs.value_or(o.runs);
+  const int part_warmup = o.part_warmup.value_or(o.warmup);
+  const int sim_warmup = o.sim_warmup.value_or(o.warmup);
   Report report;
   Partition partition;
 
@@ -266,13 +280,13 @@ int run(const Options& o) {
     so.gamma = o.gamma;
     SimPartResult result;
     std::vector<double> grouping, hybrid;
-    const auto times = measure(o.warmup, part_runs, [&] {
+    const auto times = measure(part_warmup, part_runs, [&] {
       result = simpart_partition(circuit, so);
       grouping.push_back(result.grouping_ms);
       hybrid.push_back(result.hybrid_ms);
     });
-    grouping.erase(grouping.begin(), grouping.begin() + o.warmup);
-    hybrid.erase(hybrid.begin(), hybrid.begin() + o.warmup);
+    grouping.erase(grouping.begin(), grouping.begin() + part_warmup);
+    hybrid.erase(hybrid.begin(), hybrid.begin() + part_warmup);
     report.part = summarize(times);
     report.grouping_ms = summarize(grouping).mean;
     report.hybrid_ms = summarize(hybrid).mean;
@@ -288,13 +302,13 @@ int run(const Options& o) {
     ro.num_threads = o.threads;
     RepCutResult result;
     std::vector<double> build, part, assemble;
-    measure(o.warmup, part_runs, [&] {
+    measure(part_warmup, part_runs, [&] {
       result = repcut_partition(circuit, ro);
       build.push_back(result.hypergraph_ms());
       part.push_back(result.partition_ms);
       assemble.push_back(result.assemble_ms);
     });
-    for (auto* v : {&build, &part, &assemble}) v->erase(v->begin(), v->begin() + o.warmup);
+    for (auto* v : {&build, &part, &assemble}) v->erase(v->begin(), v->begin() + part_warmup);
     report.part = summarize(part);
     report.build_ms = summarize(build).mean;
     report.assemble_ms = summarize(assemble).mean;
@@ -324,7 +338,7 @@ int run(const Options& o) {
     const Executor executor = o.simulator == SimulatorKind::Graph ? Executor::Graph : Executor::Stream;
     GpuSimulator sim(circuit, partition, patterns);
     if (executor == Executor::Graph) report.sim_setup_ms = sim.prepare_graph();
-    report.sim = summarize(measure(o.warmup, sim_runs, [&] { sim.run(executor); }));
+    report.sim = summarize(measure(sim_warmup, sim_runs, [&] { sim.run(executor); }));
     std::cout << "simulator   GPU, " << (executor == Executor::Graph ? "conditional CUDA graph" : "stream launches");
     if (executor == Executor::Graph) std::cout << " (graph setup " << fmt(report.sim_setup_ms) << " ms)";
     std::cout << "\n  time      " << fmt(report.sim.mean) << " ms, mean of " << sim_runs
@@ -335,7 +349,7 @@ int run(const Options& o) {
     }
   } else if (o.simulator == SimulatorKind::Cpu) {
     CpuSimulator sim(circuit, partition, patterns, o.threads);
-    report.sim = summarize(measure(o.warmup, sim_runs, [&] { sim.run(); }));
+    report.sim = summarize(measure(sim_warmup, sim_runs, [&] { sim.run(); }));
     std::cout << "simulator   CPU, " << o.threads << " threads\n"
               << "  time      " << fmt(report.sim.mean) << " ms, mean of " << sim_runs
               << " runs, std " << fmt(report.sim.stddev) << "\n";

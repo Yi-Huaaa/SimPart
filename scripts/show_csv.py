@@ -8,7 +8,7 @@ import csv
 import sys
 
 DEFAULT_COLUMNS = [
-    "circuit", "partitioner", "k", "gamma", "threads", "simulator", "levels", "dsp_levels",
+    "benchmark", "partitioner", "k", "gamma", "threads", "simulator", "levels", "dsp_levels",
     "part_ms", "grouping_ms", "hybrid_ms", "build_ms", "node_ratio", "edge_ratio",
     "sim_setup_ms", "sim_ms", "sim_std_ms", "verified",
 ]

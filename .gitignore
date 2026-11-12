@@ -21,7 +21,7 @@ __pycache__/
 /benchmark/large_circuits/mgc_edit_dist_iccad.ptn
 /benchmark/large_circuits/mgc_matrix_mult_iccad.flst
 /benchmark/large_circuits/mgc_matrix_mult_iccad.ptn
-/benchmark/extremely_large_circuits/
+/benchmark/extremely_large_circuits
 /benchmark/opentimer_dump/b19_iccad.txt
 /benchmark/opentimer_dump/leon2_iccad_eval.txt
 /benchmark/opentimer_dump/leon3mp_iccad.txt
