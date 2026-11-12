@@ -1,42 +1,32 @@
-run.sh
-.vscode
-build
+# Build directories
+/build*/
+
+# Experiment outputs
+/results/
+
+# Editor and tool settings
+.vscode/
+.idea/
 .trunk/
-benchmark/opentimer_dump/b19_iccad.txt
-benchmark/opentimer_dump/leon2_iccad_eval.txt
-benchmark/opentimer_dump/leon3mp_iccad.txt
-benchmark/opentimer_dump/netcard_iccad.txt
-benchmark/opentimer_dump/mgc_edit_dist_iccad.txt
-benchmark/opentimer_dump/mgc_matrix_mult_iccad.txt
+.cache/
 
-benchmark/large_circuits/b19_iccad.ckt
-benchmark/large_circuits/leon2_iccad_eval.ckt
-benchmark/large_circuits/leon3mp_iccad.ckt
-benchmark/large_circuits/mgc_edit_dist_iccad.ckt
-benchmark/large_circuits/mgc_matrix_mult_iccad.ckt
-benchmark/large_circuits/netcard_iccad.ckt
+# Python
+__pycache__/
 
-benchmark/large_circuits/b19_iccad_bfs.ckt
-benchmark/large_circuits/b19_iccad_dfs.ckt
-benchmark/large_circuits/leon2_iccad_eval_bfs.ckt
-benchmark/large_circuits/leon2_iccad_eval_dfs.ckt
-benchmark/large_circuits/leon3mp_iccad_bfs.ckt
-benchmark/large_circuits/leon3mp_iccad_dfs.ckt
-benchmark/large_circuits/mgc_edit_dist_iccad_bfs.ckt
-benchmark/large_circuits/mgc_edit_dist_iccad_dfs.ckt
-benchmark/large_circuits/mgc_matrix_mult_iccad_bfs.ckt
-benchmark/large_circuits/mgc_matrix_mult_iccad_dfs.ckt
-benchmark/large_circuits/netcard_iccad_bfs.ckt
-benchmark/large_circuits/netcard_iccad_dfs.ckt
-
-benchmark/large_circuits/b19_iccad.flst
-benchmark/large_circuits/b19_iccad.ptn
-benchmark/large_circuits/mgc_edit_dist_iccad.flst
-benchmark/large_circuits/mgc_edit_dist_iccad.ptn
-benchmark/large_circuits/mgc_matrix_mult_iccad.flst
-benchmark/large_circuits/mgc_matrix_mult_iccad.ptn
-
-benchmark/pre_construct_hypergraph/*.txt
-benchmark/pre_construct_hypergraph/ok_inputs/*.txt
-
-benchmark/extremely_large_circuits/*
+# Large benchmark files that are not tracked (see benchmark/README.md)
+/benchmark/large_circuits/*_iccad*.ckt
+/benchmark/large_circuits/b19_iccad.flst
+/benchmark/large_circuits/b19_iccad.ptn
+/benchmark/large_circuits/mgc_edit_dist_iccad.flst
+/benchmark/large_circuits/mgc_edit_dist_iccad.ptn
+/benchmark/large_circuits/mgc_matrix_mult_iccad.flst
+/benchmark/large_circuits/mgc_matrix_mult_iccad.ptn
+/benchmark/extremely_large_circuits/
+/benchmark/opentimer_dump/b19_iccad.txt
+/benchmark/opentimer_dump/leon2_iccad_eval.txt
+/benchmark/opentimer_dump/leon3mp_iccad.txt
+/benchmark/opentimer_dump/netcard_iccad.txt
+/benchmark/opentimer_dump/mgc_edit_dist_iccad.txt
+/benchmark/opentimer_dump/mgc_matrix_mult_iccad.txt
+/benchmark/pre_construct_hypergraph/
+/benchmark/cc_benchmark/
