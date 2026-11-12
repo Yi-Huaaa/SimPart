@@ -1,10 +1,10 @@
 SimPart 1.0.0 | GPU: NVIDIA RTX A4000 (sm_86)
 circuit     8_mgc_edit_dist_iccad_bfs.ckt: 1314128 nodes, 1441808 edges, 20496 PIs, 96 POs
-patterns    1024 patterns (16 rounds), files read in 110.4 ms
+patterns    1024 patterns (16 rounds), files read in 111.6 ms
 partitioner SimPart, k=16, gamma=1024
-  time      16.054 ms (grouping 10.259 + hybrid 5.793), mean of 10 runs, std 0.129
+  time      15.659 ms (grouping 10.216 + hybrid 5.441), mean of 10 runs, std 0.168
   layout    77 levels: DSP [0, 64), RAP [64, 77) x 16 groups (4064 node instances)
   replication R|V| = 1.00000, R|E| = 1.00000
-simulator   GPU, stream launches
-  time      15.549 ms, mean of 10 runs, std 0.015
+simulator   GPU, stream launches, 4 rounds per pass
+  time      2.898 ms, mean of 10 runs, std 0.013
 verify      PASSED (16 rounds x 96 POs, 1314128 node values of the last round)

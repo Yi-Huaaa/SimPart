@@ -35,13 +35,13 @@ build/app/simpart benchmark/large_circuits/random3.ckt benchmark/large_circuits/
 ```
 SimPart 1.0.0 | GPU: NVIDIA RTX A4000 (sm_86)
 circuit     random3.ckt: 218835 nodes, 414180 edges, 206 PIs, 107 POs
-patterns    1024 patterns (16 rounds), files read in 18.4 ms
+patterns    1024 patterns (16 rounds), files read in 17.6 ms
 partitioner SimPart, k=16, gamma=1024
-  time      3.388 ms (grouping 2.826 + hybrid 0.561), mean of 10 runs, std 0.183
+  time      3.361 ms (grouping 2.803 + hybrid 0.557), mean of 10 runs, std 0.171
   layout    58 levels: DSP [0, 33), RAP [33, 58) x 16 groups (3694 node instances)
   replication R|V| = 1.00000, R|E| = 1.00000
-simulator   GPU, conditional CUDA graph (graph setup 0.302 ms)
-  time      4.489 ms, mean of 10 runs, std 0.007
+simulator   GPU, conditional CUDA graph, 4 rounds per pass (graph setup 1.015 ms)
+  time      0.974 ms, mean of 10 runs, std 0.001
 verify      PASSED (16 rounds x 107 POs, 218835 node values of the last round)
 ```
 

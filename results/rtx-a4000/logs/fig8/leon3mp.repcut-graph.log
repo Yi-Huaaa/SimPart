@@ -1,11 +1,11 @@
 SimPart 1.0.0 | GPU: NVIDIA RTX A4000 (sm_86)
 circuit     leon3mp_iccad_bfs.ckt: 1248058 nodes, 1391141 edges, 254 PIs, 79 POs
-patterns    1024 patterns (16 rounds), files read in 97.5 ms
+patterns    1024 patterns (16 rounds), files read in 97.7 ms
 partitioner RepCut (Mt-KaHyPar, 16 threads), k=16
-  hypergraph 219970 vertices, 160156 hyperedges, 5105892 pins, built in 400.619 ms
-  time      1643.970 ms (Mt-KaHyPar), mean of 1 runs, std 0.000; cone expansion 22.556 ms
-  layout    123 levels: DSP [0, 0), RAP [0, 123) x 16 groups (1253885 node instances)
-  replication R|V| = 1.00467, R|E| = 1.00430
-simulator   GPU, conditional CUDA graph (graph setup 0.266 ms)
-  time      18.061 ms, mean of 10 runs, std 0.010
+  hypergraph 219970 vertices, 160156 hyperedges, 5105892 pins, built in 365.433 ms
+  time      1825.581 ms (Mt-KaHyPar), mean of 1 runs, std 0.000; cone expansion 21.690 ms
+  layout    123 levels: DSP [0, 0), RAP [0, 123) x 16 groups (1254069 node instances)
+  replication R|V| = 1.00482, R|E| = 1.00443
+simulator   GPU, conditional CUDA graph, 4 rounds per pass (graph setup 1.002 ms)
+  time      2.950 ms, mean of 10 runs, std 0.012
 verify      PASSED (16 rounds x 79 POs, 1248058 node values of the last round)
