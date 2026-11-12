@@ -32,7 +32,18 @@ Partition and simulate a circuit that ships with the repository (218K gates,
 build/app/simpart benchmark/large_circuits/random3.ckt benchmark/large_circuits/random3.ptn --verify
 ```
 
-<!-- EXAMPLE_OUTPUT -->
+```
+SimPart 1.0.0 | GPU: NVIDIA RTX A4000 (sm_86)
+circuit     random3.ckt: 218835 nodes, 414180 edges, 206 PIs, 107 POs
+patterns    1024 patterns (16 rounds), files read in 18.4 ms
+partitioner SimPart, k=16, gamma=1024
+  time      3.388 ms (grouping 2.826 + hybrid 0.561), mean of 10 runs, std 0.183
+  layout    58 levels: DSP [0, 33), RAP [33, 58) x 16 groups (3694 node instances)
+  replication R|V| = 1.00000, R|E| = 1.00000
+simulator   GPU, conditional CUDA graph (graph setup 0.302 ms)
+  time      4.489 ms, mean of 10 runs, std 0.007
+verify      PASSED (16 rounds x 107 POs, 218835 node values of the last round)
+```
 
 ## How SimPart works
 
@@ -141,7 +152,9 @@ The settings are environment variables; their defaults are the settings of the p
 | `BENCH_DIR` | `benchmark` | where the benchmarks are |
 | `RESULTS_DIR` | `results/local` | where the results go |
 
-For example: `GAMMA=2048 scripts/run_table2.sh netcard`. <!-- RUNTIME -->
+For example: `GAMMA=2048 scripts/run_table2.sh netcard`. A full run of
+`scripts/run_table2.sh` takes about 70 minutes on our machine, most of it in
+single-threaded Mt-KaHyPar on the largest benchmarks.
 
 Our results, and the machine and software versions they were measured with, are
 in [results/](results/README.md).
