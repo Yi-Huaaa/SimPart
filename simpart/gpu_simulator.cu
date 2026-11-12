@@ -1,9 +1,6 @@
 #include "simpart/gpu_simulator.hpp"
 
-#include <cooperative_groups.h>
-
 #include <algorithm>
-#include <cstdlib>
 #include <numeric>
 #include <stdexcept>
 
@@ -59,21 +56,6 @@ __global__ void __launch_bounds__(GpuSimulator::kBlockSize)
   if (t < count) eval_node(nodes[t], c, round);
 }
 
-// [experimental] All DSP levels in one cooperative kernel, with a grid-wide
-// barrier between levels instead of a kernel boundary.
-__global__ void __launch_bounds__(GpuSimulator::kBlockSize)
-    dsp_cooperative_kernel(const int32_t* __restrict__ offsets, const int32_t* __restrict__ nodes,
-                           int32_t dsp_levels, DeviceCircuit c, const int32_t* round) {
-  cooperative_groups::grid_group grid = cooperative_groups::this_grid();
-  const int32_t stride = gridDim.x * blockDim.x;
-  const int32_t tid = blockIdx.x * blockDim.x + threadIdx.x;
-  for (int32_t l = 0; l < dsp_levels; ++l) {
-    const int32_t end = offsets[l + 1];
-    for (int32_t i = offsets[l] + tid; i < end; i += stride) eval_node(nodes[i], c, round);
-    grid.sync();
-  }
-}
-
 // Algorithm 4: one block per group walks the RAP levels of its cone; levels
 // wider than the block take several passes; intra-block sync between levels.
 __global__ void __launch_bounds__(GpuSimulator::kBlockSize)
@@ -109,8 +91,6 @@ struct GpuSimulator::Impl {
   DeviceBuffer<int32_t> fanin_offsets, fanins;
   DeviceBuffer<uint64_t> patterns, values, po_values;
   DeviceBuffer<int32_t> dsp_nodes, rap_offsets, rap_nodes;
-  DeviceBuffer<int32_t> dsp_offsets_device;
-  int cooperative_blocks = 0;  // > 0: run the DSP region with dsp_cooperative_kernel
   DeviceBuffer<int32_t> round_ids;      // 0, 1, ..., num_rounds-1 (stream executor)
   DeviceBuffer<int32_t> round_counter;  // current round (graph executor)
 
@@ -125,21 +105,7 @@ struct GpuSimulator::Impl {
   // Enqueues the kernels that simulate one round, reading the round at *round.
   void enqueue_round(cudaStream_t s, const int32_t* round) {
     const DeviceCircuit c = device_circuit();
-    if (cooperative_blocks > 0 && dsp_levels > 0) {
-      cudaLaunchConfig_t config{};
-      config.gridDim = dim3(cooperative_blocks);
-      config.blockDim = dim3(kBlockSize);
-      config.stream = s;
-      cudaLaunchAttribute attribute{};
-      attribute.id = cudaLaunchAttributeCooperative;
-      attribute.val.cooperative = 1;
-      config.attrs = &attribute;
-      config.numAttrs = 1;
-      SIMPART_CUDA_CHECK(cudaLaunchKernelEx(&config, dsp_cooperative_kernel,
-                                            dsp_offsets_device.data(), dsp_nodes.data(),
-                                            dsp_levels, c, round));
-    }
-    for (int32_t l = 0; cooperative_blocks == 0 && l < dsp_levels; ++l) {
+    for (int32_t l = 0; l < dsp_levels; ++l) {
       const int32_t count = dsp_offsets[l + 1] - dsp_offsets[l];
       if (count == 0) continue;
       const int32_t threads = std::min(count, kBlockSize);
@@ -179,15 +145,6 @@ GpuSimulator::GpuSimulator(const Circuit& circuit, const Partition& partition,
   s.dsp_nodes.upload(partition.dsp_nodes);
   s.rap_offsets.upload(partition.rap_offsets);
   s.rap_nodes.upload(partition.rap_nodes);
-  if (const char* env = std::getenv("SIMPART_COOPERATIVE_DSP"); env != nullptr && env[0] == '1') {
-    int device = 0, sms = 0, per_sm = 0;
-    SIMPART_CUDA_CHECK(cudaGetDevice(&device));
-    SIMPART_CUDA_CHECK(cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, device));
-    SIMPART_CUDA_CHECK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-        &per_sm, dsp_cooperative_kernel, kBlockSize, 0));
-    s.cooperative_blocks = sms * per_sm;
-    s.dsp_offsets_device.upload(partition.dsp_offsets);
-  }
 
   std::vector<int32_t> ids(std::max(s.num_rounds, 1));
   std::iota(ids.begin(), ids.end(), 0);
