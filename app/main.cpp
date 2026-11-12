@@ -48,6 +48,8 @@ Simulation
                           stream: GPU, one stream launch per kernel
                           cpu:    CPU, OpenMP over the partitions
                           none:   partition only
+  -b, --batch N           GPU: rounds of 64 patterns simulated per pass,
+                          1 (default), 2, 4, 8 or 16
 
 Measurement
   -r, --runs N            timed repetitions of partitioning and simulation (default: 10)
@@ -71,6 +73,7 @@ struct Options {
   int64_t gamma = 1024;
   int32_t threads = 16;
   SimulatorKind simulator = SimulatorKind::Graph;
+  int32_t batch = 1;
   int runs = 10;
   std::optional<int> part_runs, sim_runs;
   int warmup = 1;
@@ -127,6 +130,11 @@ Options parse_options(int argc, char** argv) {
       else if (v == "cpu") o.simulator = SimulatorKind::Cpu;
       else if (v == "none") o.simulator = SimulatorKind::None;
       else usage_error("unknown simulator '" + v + "'");
+    } else if (arg == "-b" || arg == "--batch") {
+      o.batch = static_cast<int32_t>(parse_int(value(), arg, 1));
+      if (o.batch > GpuSimulator::kMaxBatch || (o.batch & (o.batch - 1)) != 0) {
+        usage_error("batch must be 1, 2, 4, 8 or 16");
+      }
     } else if (arg == "-r" || arg == "--runs") {
       o.runs = static_cast<int>(parse_int(value(), arg, 1));
     } else if (arg == "--part-runs") {
@@ -216,7 +224,7 @@ void append_csv(const Options& o, const Circuit& c, const Partition& p, const Re
     out << "benchmark,partitioner,k,gamma,threads,simulator,nodes,edges,levels,dsp_levels,"
            "part_runs,part_ms,part_std_ms,grouping_ms,hybrid_ms,build_ms,assemble_ms,"
            "hg_vertices,hg_hyperedges,node_ratio,edge_ratio,sim_runs,sim_setup_ms,sim_ms,"
-           "sim_std_ms,verified\n";
+           "sim_std_ms,verified,batch\n";
   }
   auto opt_int = [](int64_t v) { return v < 0 ? std::string() : std::to_string(v); };
   out << o.label << ',' << o.partitioner << ','
@@ -228,7 +236,7 @@ void append_csv(const Options& o, const Circuit& c, const Partition& p, const Re
       << opt_int(r.hg_vertices) << ',' << opt_int(r.hg_hyperedges) << ','
       << fmt(rep.node_ratio, 6) << ',' << fmt(rep.edge_ratio, 6) << ',' << r.sim.count << ','
       << fmt(r.sim_setup_ms) << ',' << (r.sim.count ? fmt(r.sim.mean) : "") << ','
-      << (r.sim.count ? fmt(r.sim.stddev) : "") << ',' << r.verified << '\n';
+      << (r.sim.count ? fmt(r.sim.stddev) : "") << ',' << r.verified << ',' << o.batch << '\n';
 }
 
 // Compares simulation outputs with the sequential reference.
@@ -336,10 +344,11 @@ int run(const Options& o) {
   std::vector<uint64_t> po_values, node_values;
   if (o.simulator == SimulatorKind::Graph || o.simulator == SimulatorKind::Stream) {
     const Executor executor = o.simulator == SimulatorKind::Graph ? Executor::Graph : Executor::Stream;
-    GpuSimulator sim(circuit, partition, patterns);
+    GpuSimulator sim(circuit, partition, patterns, o.batch);
     if (executor == Executor::Graph) report.sim_setup_ms = sim.prepare_graph();
     report.sim = summarize(measure(sim_warmup, sim_runs, [&] { sim.run(executor); }));
     std::cout << "simulator   GPU, " << (executor == Executor::Graph ? "conditional CUDA graph" : "stream launches");
+    if (o.batch > 1) std::cout << ", " << o.batch << " rounds per pass";
     if (executor == Executor::Graph) std::cout << " (graph setup " << fmt(report.sim_setup_ms) << " ms)";
     std::cout << "\n  time      " << fmt(report.sim.mean) << " ms, mean of " << sim_runs
               << " runs, std " << fmt(report.sim.stddev) << "\n";

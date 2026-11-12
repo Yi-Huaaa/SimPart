@@ -76,13 +76,15 @@ const std::vector<Testcase>& testcases() {
 }
 
 void check_gpu(const Testcase& t, const Partition& p) {
-  GpuSimulator sim(t.circuit, p, t.patterns);
-  for (Executor e : {Executor::Stream, Executor::Graph}) {
-    INFO("executor = " << to_string(e));
-    for (int repeat = 0; repeat < 2; ++repeat) {
-      sim.run(e);
-      CHECK(sim.po_values() == t.reference.po_values);
-      CHECK(sim.node_values() == t.reference.node_values);
+  for (int32_t batch : {1, 2, 4, 16}) {
+    GpuSimulator sim(t.circuit, p, t.patterns, batch);
+    for (Executor e : {Executor::Stream, Executor::Graph}) {
+      INFO("batch = " << batch << ", executor = " << to_string(e));
+      for (int repeat = 0; repeat < 2; ++repeat) {
+        sim.run(e);
+        CHECK(sim.po_values() == t.reference.po_values);
+        CHECK(sim.node_values() == t.reference.node_values);
+      }
     }
   }
 }

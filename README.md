@@ -78,6 +78,8 @@ Simulation
                           stream: GPU, one stream launch per kernel
                           cpu:    CPU, OpenMP over the partitions
                           none:   partition only
+  -b, --batch N           GPU: rounds of 64 patterns simulated per pass,
+                          1 (default), 2, 4, 8 or 16
 
 Measurement
   -r, --runs N            timed repetitions of partitioning and simulation (default: 10)

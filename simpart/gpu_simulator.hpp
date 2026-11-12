@@ -21,14 +21,18 @@ const char* to_string(Executor executor);
 
 // Simulates all pattern rounds of a circuit on the GPU on top of a partition.
 //
-// Per round, the DSP levels are evaluated one kernel launch per level
-// (Algorithm 3) and the RAP region by a single launch with one thread block
-// per group (Algorithm 4). The value of every PO is recorded for every round.
+// The rounds are simulated in passes of `batch` rounds (1, 2, 4, 8 or 16; the
+// paper uses 1). Per pass, the DSP levels are evaluated one kernel launch per
+// level (Algorithm 3) and the RAP region by a single launch with one thread
+// block per group (Algorithm 4); every thread evaluates its node for all rounds
+// of the pass. The value of every PO is recorded for every round.
 class GpuSimulator {
  public:
   static constexpr int kBlockSize = 1024;
+  static constexpr int kMaxBatch = 16;
 
-  GpuSimulator(const Circuit& circuit, const Partition& partition, const Patterns& patterns);
+  GpuSimulator(const Circuit& circuit, const Partition& partition, const Patterns& patterns,
+               int32_t batch = 1);
   ~GpuSimulator();
   GpuSimulator(const GpuSimulator&) = delete;
   GpuSimulator& operator=(const GpuSimulator&) = delete;
