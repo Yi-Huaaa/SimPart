@@ -9,7 +9,7 @@ REPO_DIR=$(cd "$SCRIPTS_DIR/.." && pwd)
 
 SIMPART=${SIMPART:-$REPO_DIR/build/app/simpart}
 BENCH_DIR=${BENCH_DIR:-$REPO_DIR/benchmark}
-RESULTS_DIR=${RESULTS_DIR:-$REPO_DIR/results}
+RESULTS_DIR=${RESULTS_DIR:-$REPO_DIR/results/local}
 K=${K:-16}                     # number of partitions (paper default: 16)
 GAMMA=${GAMMA:-1024}           # SimPart replication threshold (paper default: 1024 = GPU block size)
 RUNS=${RUNS:-10}               # timed repetitions of SimPart and of every simulation
@@ -49,8 +49,8 @@ check_setup() {
 }
 
 # run <experiment> <benchmark> <tag> [simpart options...]
-# Runs simpart on a benchmark, appends a CSV row to results/<experiment>.csv and
-# keeps the full output in results/logs/<experiment>/<benchmark>.<tag>.log.
+# Runs simpart on a benchmark, appends a CSV row to $RESULTS_DIR/<experiment>.csv and
+# keeps the full output in $RESULTS_DIR/logs/<experiment>/<benchmark>.<tag>.log.
 run() {
   local experiment=$1 name=$2 tag=$3
   shift 3

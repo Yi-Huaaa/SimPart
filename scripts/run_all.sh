@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs every experiment of the paper (Table 2, Figures 6-8). Results are written
-# to results/*.csv, full logs to results/logs/.
+# to results/local/*.csv, full logs to results/local/logs/.
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 "$SCRIPTS_DIR/run_table2.sh"

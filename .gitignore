@@ -1,8 +1,8 @@
 # Build directories
 /build*/
 
-# Experiment outputs
-/results/
+# Output of the experiment scripts (reference results live in results/<machine>/)
+/results/local/
 
 # Editor and tool settings
 .vscode/
