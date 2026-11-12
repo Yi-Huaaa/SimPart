@@ -70,10 +70,14 @@ def last_row(rows, **match):
     return found
 
 
-def check_same(rows, *columns):
-    """Exits if the rows compared in a table were run with different settings,
-    e.g. after runs with another --batch were appended to the same CSV file."""
+def check_comparable(rows, *columns):
+    """Exits if a row in a table failed verification, or if the rows compared in
+    a table were run with different settings (e.g. after runs with another
+    --batch were appended to the same CSV file)."""
     rows = [r for r in rows if r is not None]
+    failed = sorted({r["benchmark"] for r in rows if r.get("verified") == "failed"})
+    if failed:
+        sys.exit(f"summarize.py: results of {', '.join(failed)} failed verification")
     for col in columns:
         values = sorted({r[col] for r in rows})
         if len(values) > 1:
@@ -132,10 +136,10 @@ def table2(rows):
         ratios["srv"].append(num(sp, "node_ratio"))
         ratios["sre"].append(num(sp, "edge_ratio"))
 
-    check_same(used["all"], "k")
-    check_same(used["gpu"], "batch")
-    check_same(used["simpart"], "gamma")
-    check_same(used["repcut_n"], "threads")
+    check_comparable(used["all"], "k")
+    check_comparable(used["gpu"], "batch")
+    check_comparable(used["simpart"], "gamma")
+    check_comparable(used["repcut_n"], "threads")
 
     def avg(key, fmt=value):
         return fmt(mean(ratios[key]))
@@ -150,7 +154,6 @@ def table2(rows):
 
 def fig6(rows):
     for b in ordered({r["benchmark"] for r in rows}):
-        print(f"\n**{b}**\n")
         ks = sorted({int(r["k"]) for r in rows if r["benchmark"] == b})
         table, rcs, sps = [], [], []
         for k in ks:
@@ -161,9 +164,10 @@ def fig6(rows):
             rep = lambda r: "-" if r is None else value((float(r["node_ratio"]) - 1) * 100)
             table.append([str(k), value(num(rc, "part_ms")), value(num(sp, "part_ms")),
                           value(num(rc, "sim_ms")), value(num(sp, "sim_ms")), rep(rc), rep(sp)])
-        check_same(rcs + sps, "batch")
-        check_same(sps, "gamma")
-        check_same(rcs, "threads")
+        check_comparable(rcs + sps, "batch")
+        check_comparable(sps, "gamma")
+        check_comparable(rcs, "threads")
+        print(f"\n**{b}**\n")
         print_table(["k", "RepCut T_Part (ms)", "SimPart T_Part (ms)", "RepCut T_Sim^G (ms)",
                      "SimPart T_Sim^G (ms)", "RepCut replication (%)", "SimPart replication (%)"], table)
 
@@ -172,7 +176,6 @@ def fig7(rows):
     def gamma_key(g):
         return float("inf") if g == "inf" else float(g)
     for b in ordered({r["benchmark"] for r in rows}):
-        print(f"\n**{b}**\n")
         gammas = sorted({r["gamma"] for r in rows if r["benchmark"] == b}, key=gamma_key)
         table, used = [], []
         for g in gammas:
@@ -180,7 +183,8 @@ def fig7(rows):
             used.append(r)
             table.append([g, r["dsp_levels"] + " / " + r["levels"], value(num(r, "sim_ms")),
                           ratio(num(r, "node_ratio"))])
-        check_same(used, "k", "batch")
+        check_comparable(used, "k", "batch")
+        print(f"\n**{b}**\n")
         print_table(["gamma", "DSP levels", "T_Sim^G (ms)", "R|V|"], table)
 
 
@@ -198,9 +202,9 @@ def fig8(rows):
         table.append([b, value(cell[("repcut", "stream")]), value(cell[("repcut", "graph")]),
                       value(cell[("simpart", "stream")]), value(cell[("simpart", "graph")]),
                       "-" if speedup is None else value(speedup) + "x"])
-    check_same(used["simpart"] + used["repcut"], "k", "batch")
-    check_same(used["simpart"], "gamma")
-    check_same(used["repcut"], "threads")
+    check_comparable(used["simpart"] + used["repcut"], "k", "batch")
+    check_comparable(used["simpart"], "gamma")
+    check_comparable(used["repcut"], "threads")
     print_table(["Benchmark", "RepCut stream", "RepCut graph", "SimPart w/o graph (stream)",
                  "SimPart w/ graph", "SimPart graph speedup"], table)
     print("\nGPU simulation times in ms.")

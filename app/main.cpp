@@ -247,6 +247,12 @@ void append_csv(const Options& o, const Circuit& c, const Partition& p, const Re
 std::string verify(const Circuit& c, const Patterns& patterns, const std::vector<uint64_t>& po_values,
                    const std::vector<uint64_t>& node_values) {
   const SimulationResult ref = simulate_reference(c, patterns);
+  if (po_values.size() != ref.po_values.size() || node_values.size() != ref.node_values.size()) {
+    std::cout << "verify      FAILED (" << po_values.size() << " PO values and " << node_values.size()
+              << " node values, expected " << ref.po_values.size() << " and " << ref.node_values.size()
+              << ")\n";
+    return "failed";
+  }
   size_t bad_po = 0, bad_nodes = 0;
   for (size_t i = 0; i < ref.po_values.size(); ++i) bad_po += (po_values[i] != ref.po_values[i]);
   for (size_t i = 0; i < ref.node_values.size(); ++i) bad_nodes += (node_values[i] != ref.node_values[i]);
