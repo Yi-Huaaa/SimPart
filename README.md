@@ -1,22 +1,47 @@
 # SimPart
 
-**SimPart** partitions a circuit graph for GPU-parallel logic simulation and
+**Fast replication-aided circuit partitioning for GPU logic simulation**
+
+[![Paper](https://img.shields.io/badge/paper-Euro--Par%202025-blue)](https://doi.org/10.1007/978-3-031-99872-0_14)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green)](LICENSE)
+[![CUDA](https://img.shields.io/badge/CUDA-12.3%2B-76B900?logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
+
+SimPart partitions a circuit graph for GPU-parallel logic simulation and
 simulates it on the GPU. It replicates a small part of the circuit so that most
 of the simulation runs in independent thread blocks, and it computes this
 partition on the GPU in milliseconds instead of solving a hypergraph
 partitioning problem.
 
-This repository contains SimPart, the RepCut baseline it is compared with, and
-the scripts that reproduce the experiments of our Euro-Par 2025 paper
-*SimPart: A Simple Yet Effective Replication-Aided Partitioning Algorithm for
-Logic Simulation on GPU*
-([PDF](https://yi-huaaa.github.io/uploads/publications/2025-simpart-paper.pdf),
-[DOI](https://doi.org/10.1007/978-3-031-99872-0_14)).
+This repository is the artifact of our Euro-Par 2025 paper
+[*SimPart: A Simple Yet Effective Replication-Aided Partitioning Algorithm for
+Logic Simulation on GPU*](https://doi.org/10.1007/978-3-031-99872-0_14)
+([PDF](https://yi-huaaa.github.io/uploads/publications/2025-simpart-paper.pdf)).
+It contains SimPart, the RepCut baseline it is compared with, and the scripts
+that reproduce the experiments of the paper.
+
+## Highlights
+
+- **Millisecond partitioning on the GPU.** On the 12 benchmarks of the paper,
+  SimPart partitions about 100× faster than RepCut with 16-thread Mt-KaHyPar.
+- **Almost no replication.** At most 0.02% extra nodes (R|V| ≤ 1.0002),
+  against up to 2.1% for RepCut (k = 16).
+- **One CUDA graph per simulation.** All simulation passes run inside a single
+  conditional (while-loop) CUDA graph.
+- **Verified results.** `--verify` checks every simulation against a sequential
+  CPU simulation.
+
+Measured on an NVIDIA RTX A4000; see [results/](results/README.md) for the full
+tables.
+
+## Requirements
+
+- An NVIDIA GPU and **CUDA 12.3 or newer** (for conditional CUDA graphs)
+- CMake 3.24 or newer and a C++20 compiler with OpenMP that your CUDA version
+  supports (for example GCC 12 with CUDA 12.3)
+- Optional: [Mt-KaHyPar](https://github.com/kahypar/mt-kahypar) for the RepCut
+  baseline, and Python 3 for the experiment scripts
 
 ## Quick start
-
-You need an NVIDIA GPU, **CUDA 12.3 or newer**, CMake 3.24 or newer, and a C++20
-compiler supported by your CUDA version (for example GCC 12 with CUDA 12.3).
 
 ```bash
 git clone https://github.com/Yi-Huaaa/SimPart.git
@@ -61,7 +86,7 @@ verify      PASSED (16 rounds x 107 POs, 218835 node values of the last round)
    kernel per DSP level and a single kernel for the RAP region, with one thread
    block per cone. All passes run inside one conditional (while-loop) CUDA graph.
 
-## Running SimPart
+## Usage
 
 ```
 usage: simpart <circuit.ckt> <patterns.ptn> [options]
@@ -104,7 +129,7 @@ into the DSP region. The default γ = 1024 is the GPU block size. γ = 0 gives a
 pure level-by-level (DSP) simulation and `inf` a pure replication-based (RAP)
 one.
 
-**What the numbers mean.**
+**Reported metrics.**
 
 - *SimPart partitioning time* covers both partitioning stages: uploading the
   graph, grouping and levelizing it on the GPU, downloading the result, and
