@@ -6,37 +6,12 @@ of the simulation runs in independent thread blocks, and it computes this
 partition on the GPU in milliseconds instead of solving a hypergraph
 partitioning problem.
 
-This repository is the artifact of our Euro-Par 2025 paper (see [Paper](#paper)).
-It contains SimPart, the RepCut baseline it is compared with, and the scripts
-that reproduce the experiments of the paper.
-
-## Paper
-
-Yi-Hua Chung, Shui Jiang, Wan-Luan Lee, Yanqing Zhang, Haoxing Ren, Tsung-Yi Ho,
-and Tsung-Wei Huang. **SimPart: A Simple Yet Effective Replication-Aided
-Partitioning Algorithm for Logic Simulation on GPU.** In *Euro-Par 2025: Parallel
-Processing*, LNCS 15902, pp. 197-210, Springer, 2026.
-
-- Publisher version: [doi:10.1007/978-3-031-99872-0_14](https://doi.org/10.1007/978-3-031-99872-0_14)
-- PDF: [yi-huaaa.github.io/uploads/publications/2025-simpart-paper.pdf](https://yi-huaaa.github.io/uploads/publications/2025-simpart-paper.pdf)
-
-If you use SimPart in your research, please cite the paper:
-
-```bibtex
-@inproceedings{simpart2025,
-  author    = {Chung, Yi-Hua and Jiang, Shui and Lee, Wan-Luan and Zhang, Yanqing and
-               Ren, Haoxing and Ho, Tsung-Yi and Huang, Tsung-Wei},
-  title     = {{SimPart}: A Simple Yet Effective Replication-Aided Partitioning
-               Algorithm for Logic Simulation on {GPU}},
-  booktitle = {Euro-Par 2025: Parallel Processing},
-  series    = {Lecture Notes in Computer Science},
-  volume    = {15902},
-  pages     = {197--210},
-  publisher = {Springer},
-  year      = {2026},
-  doi       = {10.1007/978-3-031-99872-0_14}
-}
-```
+This repository contains SimPart, the RepCut baseline it is compared with, and
+the scripts that reproduce the experiments of our Euro-Par 2025 paper
+*SimPart: A Simple Yet Effective Replication-Aided Partitioning Algorithm for
+Logic Simulation on GPU*
+([PDF](https://yi-huaaa.github.io/uploads/publications/2025-simpart-paper.pdf),
+[DOI](https://doi.org/10.1007/978-3-031-99872-0_14)).
 
 ## Quick start
 
@@ -200,6 +175,26 @@ tools/        benchmark conversion and generation
 benchmark/    circuits and input patterns
 results/      results of the experiments on our machine
 3rd-party/    doctest (unit test framework)
+```
+
+## Citation
+
+If you use SimPart in your research, please cite our paper:
+
+```bibtex
+@inproceedings{simpart2025,
+  author    = {Chung, Yi-Hua and Jiang, Shui and Lee, Wan-Luan and Zhang, Yanqing and
+               Ren, Haoxing and Ho, Tsung-Yi and Huang, Tsung-Wei},
+  title     = {{SimPart}: A Simple Yet Effective Replication-Aided Partitioning
+               Algorithm for Logic Simulation on {GPU}},
+  booktitle = {Euro-Par 2025: Parallel Processing},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {15902},
+  pages     = {197--210},
+  publisher = {Springer},
+  year      = {2026},
+  doi       = {10.1007/978-3-031-99872-0_14}
+}
 ```
 
 ## License
