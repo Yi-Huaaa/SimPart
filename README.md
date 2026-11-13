@@ -72,6 +72,11 @@ verify      PASSED (16 rounds x 107 POs, 218835 node values of the last round)
 
 ## How SimPart works
 
+![SimPart workflow: majority-based grouping, DSP-RAP hybrid partitioning, and GPU simulation.](docs/images/simpart-overview.png)
+
+*Overview of SimPart with k = 2 and γ = 3. Node 8 is replicated across the two
+RAP groups. From [Figure 2 of the paper](https://yi-huaaa.github.io/uploads/publications/2025-simpart-paper.pdf#page=5).*
+
 1. **Majority-based grouping (GPU).** A level-by-level BFS over the circuit
    assigns each primary input the majority of `successor index mod k`, and each
    other node the majority group of its fanins. The same traversal levelizes the
